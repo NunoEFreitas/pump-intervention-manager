@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                      String         @id @default(uuid())
+  email                   String         @unique
+  password                String
+  name                    String
+  role                    UserRole       @default(TECHNICIAN)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  assignedInterventions   Intervention[] @relation("AssignedInterventions")
+  createdInterventions    Intervention[] @relation("CreatedInterventions")
+}
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  TECHNICIAN
+}
+
+model Client {
+  id            String         @id @default(uuid())
+  name          String
+  address       String?
+  city          String?
+  postalCode    String?
+  phone         String?
+  email         String?
+  contactPerson String?
+  notes         String?        @db.Text
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  interventions Intervention[]
+}
+
+model Intervention {
+  id               String             @id @default(uuid())
+  clientId         String
+  client           Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  assignedToId     String
+  assignedTo       User               @relation("AssignedInterventions", fields: [assignedToId], references: [id])
+  createdById      String?
+  createdBy        User?              @relation("CreatedInterventions", fields: [createdById], references: [id])
+  status           InterventionStatus @default(OPEN)
+  scheduledDate    DateTime
+  scheduledTime    String
+  workDone         String?            @db.Text
+  timeSpent        Float?             // in hours
+  description      String?            @db.Text
+  partsUsed        String?            @db.Text // JSON string with parts information
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+}
+
+enum InterventionStatus {
+  OPEN
+  IN_PROGRESS
+  QUALITY_ASSESSMENT
+  COMPLETED
+  CANCELED
+}
