@@ -17,7 +17,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('dashboard')
-  const tStatus = useTranslations('interventions.status')
+  const tStatus = useTranslations('interventions')
   const tCommon = useTranslations('common')
   
   const [stats, setStats] = useState<Stats>({
@@ -84,31 +84,31 @@ export default function DashboardPage() {
       link: `/${locale}/dashboard/interventions`,
     },
     {
-      title: tStatus('open'),
+      title: tStatus('statusOpen'),
       value: stats.openInterventions,
       color: 'bg-yellow-500',
       link: `/${locale}/dashboard/interventions?status=OPEN`,
     },
     {
-      title: tStatus('inProgress'),
+      title: tStatus('statusInProgress'),
       value: stats.inProgressInterventions,
       color: 'bg-blue-600',
       link: `/${locale}/dashboard/interventions?status=IN_PROGRESS`,
     },
     {
-      title: tStatus('qualityAssessment'),
+      title: tStatus('statusQualityAssessment'),
       value: stats.qualityAssessmentInterventions,
       color: 'bg-purple-500',
       link: `/${locale}/dashboard/interventions?status=QUALITY_ASSESSMENT`,
     },
     {
-      title: tStatus('completed'),
+      title: tStatus('statusCompleted'),
       value: stats.completedInterventions,
       color: 'bg-green-500',
       link: `/${locale}/dashboard/interventions?status=COMPLETED`,
     },
     {
-      title: tStatus('canceled'),
+      title: tStatus('statusCanceled'),
       value: stats.canceledInterventions,
       color: 'bg-red-500',
       link: `/${locale}/dashboard/interventions?status=CANCELED`,

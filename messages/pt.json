@@ -76,7 +76,8 @@
     "saveButton": "Guardar Alterações",
     "loadingClients": "A carregar clientes...",
     "addFirstClient": " + Adicionar Primeiro Cliente",
-    "Loading client...": "A carregar cliente..."
+    "loadingClient": "A carregar cliente...",
+    "clientNotFound": "Cliente não encontrado"
   },
   "interventions": {
     "title": "Intervenções",
