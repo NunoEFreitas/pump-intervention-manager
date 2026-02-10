@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 
 interface Stats {
   totalInterventions: number
@@ -14,6 +15,11 @@ interface Stats {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const locale = useLocale()
+  const t = useTranslations('dashboard')
+  const tStatus = useTranslations('interventions.status')
+  const tCommon = useTranslations('common')
+  
   const [stats, setStats] = useState<Stats>({
     totalInterventions: 0,
     openInterventions: 0,
@@ -37,14 +43,11 @@ export default function DashboardPage() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token')
-
-      // Fetch interventions (already filtered by role on backend)
       const interventionsRes = await fetch('/api/interventions', {
         headers: { Authorization: `Bearer ${token}` },
       })
       const interventions = await interventionsRes.json()
 
-      // Ensure interventions is an array
       if (!Array.isArray(interventions)) {
         console.error('Invalid interventions data:', interventions)
         setStats({
@@ -75,47 +78,47 @@ export default function DashboardPage() {
 
   const statCards = [
     {
-      title: 'Total Interventions',
+      title: t('totalInterventions'),
       value: stats.totalInterventions,
       color: 'bg-blue-500',
-      link: '/dashboard/interventions',
+      link: `/${locale}/dashboard/interventions`,
     },
     {
-      title: 'Open',
+      title: tStatus('open'),
       value: stats.openInterventions,
       color: 'bg-yellow-500',
-      link: '/dashboard/interventions?status=OPEN',
+      link: `/${locale}/dashboard/interventions?status=OPEN`,
     },
     {
-      title: 'In Progress',
+      title: tStatus('inProgress'),
       value: stats.inProgressInterventions,
       color: 'bg-blue-600',
-      link: '/dashboard/interventions?status=IN_PROGRESS',
+      link: `/${locale}/dashboard/interventions?status=IN_PROGRESS`,
     },
     {
-      title: 'Quality Assessment',
+      title: tStatus('qualityAssessment'),
       value: stats.qualityAssessmentInterventions,
       color: 'bg-purple-500',
-      link: '/dashboard/interventions?status=QUALITY_ASSESSMENT',
+      link: `/${locale}/dashboard/interventions?status=QUALITY_ASSESSMENT`,
     },
     {
-      title: 'Completed',
+      title: tStatus('completed'),
       value: stats.completedInterventions,
       color: 'bg-green-500',
-      link: '/dashboard/interventions?status=COMPLETED',
+      link: `/${locale}/dashboard/interventions?status=COMPLETED`,
     },
     {
-      title: 'Canceled',
+      title: tStatus('canceled'),
       value: stats.canceledInterventions,
       color: 'bg-red-500',
-      link: '/dashboard/interventions?status=CANCELED',
+      link: `/${locale}/dashboard/interventions?status=CANCELED`,
     },
   ]
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading...</div>
+        <div className="text-gray-600">{tCommon('loading')}</div>
       </div>
     )
   }
@@ -123,11 +126,9 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="px-4 sm:px-0">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('title')}</h1>
         <p className="text-gray-600 mb-8">
-          {userRole === 'TECHNICIAN' 
-            ? 'Overview of your assigned interventions' 
-            : 'Overview of all pump station interventions'}
+          {userRole === 'TECHNICIAN' ? t('overviewTechnician') : t('overview')}
         </p>
       </div>
 
@@ -166,28 +167,26 @@ export default function DashboardPage() {
       {userRole !== 'TECHNICIAN' && (
         <div className="mt-8 grid grid-cols-1 gap-5 lg:grid-cols-2">
           <div className="card">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{t('quickActions')}</h2>
             <div className="space-y-3">
               <button
-                onClick={() => router.push('/dashboard/clients/new')}
+                onClick={() => router.push(`/${locale}/dashboard/clients/new`)}
                 className="btn btn-primary w-full"
               >
-                + Add New Client
+                {t('addClient')}
               </button>
               <button
-                onClick={() => router.push('/dashboard/interventions/new')}
+                onClick={() => router.push(`/${locale}/dashboard/interventions/new`)}
                 className="btn btn-primary w-full"
               >
-                + Create Intervention
+                {t('createIntervention')}
               </button>
             </div>
           </div>
 
           <div className="card">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-            <p className="text-gray-600 text-sm">
-              View your recent interventions and client updates in the respective sections.
-            </p>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">{t('recentActivity')}</h2>
+            <p className="text-gray-600 text-sm">{t('activityMessage')}</p>
           </div>
         </div>
       )}

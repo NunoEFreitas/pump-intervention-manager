@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import { NextIntlClientProvider } from 'next-intl'
 import { getMessages } from 'next-intl/server'
-import { notFound } from 'next/navigation'
 import { setRequestLocale } from 'next-intl/server'
+import { routing } from '@/i18n/routing'
 import '../globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 }
 
 export function generateStaticParams() {
-  return [{ locale: 'en' }, { locale: 'pt' }, { locale: 'es' }]
+  return routing.locales.map((locale) => ({ locale }))
 }
 
 export default async function LocaleLayout({
@@ -29,12 +29,8 @@ export default async function LocaleLayout({
   // Enable static rendering
   setRequestLocale(locale)
   
-  let messages
-  try {
-    messages = await getMessages()
-  } catch (error) {
-    notFound()
-  }
+  // Get messages for the locale
+  const messages = await getMessages()
 
   return (
     <html lang={locale}>
