@@ -34,6 +34,7 @@ function NewInterventionContent() {
     description: '',
     partsUsed: '',
   })
+  console.log('ola')
 
   useEffect(() => {
     fetchClients()
