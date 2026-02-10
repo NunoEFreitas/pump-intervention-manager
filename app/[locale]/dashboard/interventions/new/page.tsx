@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 interface Client {
@@ -14,7 +14,8 @@ interface Technician {
   email: string
 }
 
-export default function NewInterventionPage() {
+// 1. Logic moved to a sub-component
+function NewInterventionContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const preSelectedClientId = searchParams.get('clientId')
@@ -283,5 +284,14 @@ export default function NewInterventionPage() {
         </div>
       </form>
     </div>
+  )
+}
+
+// 2. Exported page with Suspense wrapper
+export default function NewInterventionPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-600">Loading form...</div>}>
+      <NewInterventionContent />
+    </Suspense>
   )
 }
