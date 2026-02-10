@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 interface User {
   id: string
@@ -19,6 +20,10 @@ export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
+  const tAdmin = useTranslations('admin')
+  const tAuth = useTranslations('auth')
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
 
   useEffect(() => {
     // Check if user is admin
@@ -125,14 +130,14 @@ export default function AdminPage() {
     <div>
       <div className="px-4 sm:px-0 flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Admin Panel</h1>
-          <p className="text-gray-600">Manage users and system settings</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{tAdmin('title')}</h1>
+          <p className="text-gray-600">{tAdmin('subtitle')}</p>
         </div>
         <button
           onClick={() => router.push('/dashboard/admin/users/new')}
           className="btn btn-primary"
         >
-          + Add User
+          {tAdmin('addUser')}
         </button>
       </div>
 
@@ -145,7 +150,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Users</p>
+              <p className="text-sm font-medium text-gray-600">{tAdmin('totalUsers')}</p>
               <p className="text-2xl font-bold text-gray-900">{users.length}</p>
             </div>
           </div>
@@ -159,7 +164,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Admins</p>
+              <p className="text-sm font-medium text-gray-600">{tAdmin('admins')}</p>
               <p className="text-2xl font-bold text-gray-900">
                 {users.filter(u => u.role === 'ADMIN').length}
               </p>
@@ -175,7 +180,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Supervisors</p>
+              <p className="text-sm font-medium text-gray-600">{tAdmin('supervisors')}</p>
               <p className="text-2xl font-bold text-gray-900">
                 {users.filter(u => u.role === 'SUPERVISOR').length}
               </p>
@@ -192,7 +197,7 @@ export default function AdminPage() {
               </svg>
             </div>
             <div>
-              <p className="text-sm font-medium text-gray-600">Technicians</p>
+              <p className="text-sm font-medium text-gray-600">{tAdmin('technicians')}</p>
               <p className="text-2xl font-bold text-gray-900">
                 {users.filter(u => u.role === 'TECHNICIAN').length}
               </p>
@@ -202,29 +207,29 @@ export default function AdminPage() {
       </div>
 
       <div className="card">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">User Management</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">{tAdmin('userManagement')}</h2>
         
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Name
+                  {tAuth('name')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
+                  {tAuth('email')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Role
+                  {tAdmin('role')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Interventions
+                  {tNav('interventions')}
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Joined
+                   {tAdmin('joined')}
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
+                  {tCommon('actions')}
                 </th>
               </tr>
             </thead>
@@ -255,13 +260,13 @@ export default function AdminPage() {
                       onClick={() => router.push(`/dashboard/admin/users/${user.id}`)}
                       className="text-blue-600 hover:text-blue-900 mr-4"
                     >
-                      Edit
+                      {tCommon('edit')}
                     </button>
                     <button
                       onClick={() => handleDeleteUser(user.id)}
                       className="text-red-600 hover:text-red-900"
                     >
-                      Delete
+                      {tCommon('delete')}
                     </button>
                   </td>
                 </tr>

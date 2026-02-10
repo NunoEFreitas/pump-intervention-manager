@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 interface User {
   id: string
@@ -27,6 +28,12 @@ export default function EditUserPage() {
     password: '',
     role: 'TECHNICIAN',
   })
+
+  const tAdmin = useTranslations('admin')
+  const tAuth = useTranslations('auth')
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
+
 
   useEffect(() => {
     // Check if user is admin
@@ -115,7 +122,7 @@ export default function EditUserPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading user...</div>
+        <div className="text-gray-600">{tAdmin('loadingUser')}</div>
       </div>
     )
   }
@@ -123,7 +130,7 @@ export default function EditUserPage() {
   if (!user) {
     return (
       <div className="card text-center py-12">
-        <p className="text-gray-600">User not found</p>
+        <p className="text-gray-600">{tAdmin('userNotFound')}</p>
       </div>
     )
   }
@@ -135,24 +142,24 @@ export default function EditUserPage() {
           onClick={() => router.push('/dashboard/admin')}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
-          ← Back to Admin Panel
+          {tNav('backToAdmin')}
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Edit User</h1>
-        <p className="text-gray-600">Update user account details</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{tNav('editUser')}</h1>
+        <p className="text-gray-600">{tNav('updateUser')}</p>
       </div>
 
       <div className="card mb-6">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <span className="font-medium text-gray-700">User ID:</span>
+            <span className="font-medium text-gray-700">{tNav('userId')}:</span>
             <p className="text-gray-600">{user.id}</p>
           </div>
           <div>
-            <span className="font-medium text-gray-700">Assigned Interventions:</span>
+            <span className="font-medium text-gray-700">{tNav('assignedInterventions')}:</span>
             <p className="text-gray-600">{user._count?.assignedInterventions || 0}</p>
           </div>
           <div>
-            <span className="font-medium text-gray-700">Joined:</span>
+            <span className="font-medium text-gray-700">{tNav('joined')}:</span>
             <p className="text-gray-600">{new Date(user.createdAt).toLocaleDateString()}</p>
           </div>
         </div>
@@ -161,7 +168,7 @@ export default function EditUserPage() {
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Full Name *
+            {tAdmin('fullName')} *
           </label>
           <input
             type="text"
@@ -175,7 +182,7 @@ export default function EditUserPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email *
+            {tAuth('email')} *
           </label>
           <input
             type="email"
@@ -189,7 +196,7 @@ export default function EditUserPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            New Password
+            {tAuth('newPassword')}
           </label>
           <input
             type="password"
@@ -197,17 +204,17 @@ export default function EditUserPage() {
             className="input text-gray-800"
             value={formData.password}
             onChange={handleChange}
-            placeholder="Leave blank to keep current password"
+            placeholder={tAuth('passwordPlaceholder')}
             minLength={6}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Leave blank to keep current password. Minimum 6 characters if changing.
+            {tAuth('passwordNote')}
           </p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Role *
+            {tAdmin('role')} *
           </label>
           <select
             name="role"
@@ -216,9 +223,9 @@ export default function EditUserPage() {
             onChange={handleChange}
             required
           >
-            <option value="TECHNICIAN">Technician</option>
-            <option value="SUPERVISOR">Supervisor</option>
-            <option value="ADMIN">Admin</option>
+            <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
+            <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
+            <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
           </select>
         </div>
 
@@ -234,7 +241,7 @@ export default function EditUserPage() {
             className="btn btn-primary flex-1"
             disabled={saving}
           >
-            {saving ? 'Saving...' : 'Save Changes'}
+            {saving ? tAdmin('saving') : tAdmin('saveButton')}
           </button>
           <button
             type="button"
@@ -242,7 +249,7 @@ export default function EditUserPage() {
             className="btn btn-secondary"
             disabled={saving}
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
         </div>
       </form>

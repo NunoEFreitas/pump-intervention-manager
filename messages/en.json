@@ -13,13 +13,22 @@
     "filter": "Filter",
     "all": "All",
     "actions": "Actions",
-    "retry": "Retry"
+    "retry": "Retry",
+    "creating": "Creating...",
+    "updating": "Updating...",
+    "deleting": "Deleting...",
+    "saving": "Saving..."
   },
   "nav": {
     "dashboard": "Dashboard",
     "clients": "Clients",
     "interventions": "Interventions",
-    "admin": "Admin"
+    "admin": "Admin",
+    "backToAdmin": "← Back to Admin Panel",
+    "back": "← Back",
+    "backToClients": "← Back to Clients",
+    "backToInterventions": "← Back to Interventions",
+    "backToDashboard": "← Back to Dashboard"
   },
   "auth": {
     "login": "Login",
@@ -64,7 +73,11 @@
     "interventions": "interventions",
     "viewDetails": "View Client Details →",
     "createButton": "Create Client",
-    "saveButton": "Save Changes"
+    "saveButton": "Save Changes",
+    "loadingClients": "Loading clients...",
+    "addFirstClient": " + Add Your First Client",
+    "loading client...": "Loading client...",
+    "clientNotFound": "Client not found"
   },
   "interventions": {
     "title": "Interventions",
@@ -76,32 +89,26 @@
     "details": "Intervention Details",
     "noInterventions": "No interventions found.",
     "createFirst": "+ Create First Intervention",
-    "status": {
-      "open": "Open",
-      "inProgress": "In Progress",
-      "qualityAssessment": "Quality Assessment",
-      "completed": "Completed",
-      "canceled": "Canceled"
-    },
-    "fields": {
-      "client": "Client",
-      "assignedTo": "Assign to Technician",
-      "scheduledDate": "Scheduled Date",
-      "scheduledTime": "Scheduled Time",
-      "workDone": "Work Done",
-      "timeSpent": "Time Spent (hours)",
-      "description": "Description",
-      "partsUsed": "Parts Used",
-      "status": "Status"
-    },
-    "placeholders": {
-      "selectClient": "Select a client",
-      "selectTechnician": "Select a technician",
-      "workDone": "e.g., Pump maintenance, Valve replacement",
-      "timeSpent": "e.g., 2.5",
-      "description": "Detailed description of the work to be performed...",
-      "partsUsed": "List parts used (one per line)\ne.g.,\nPump seal - Model XYZ\nO-ring 50mm\nValve actuator"
-    },
+    "statusOpen": "Open",
+    "statusInProgress": "In Progress",
+    "statusQualityAssessment": "Quality Assessment",
+    "statusCompleted": "Completed",
+    "statusCanceled": "Canceled",
+    "fieldsClient": "Client",
+    "fieldsAssignedTo": "Assign to Technician",
+    "fieldsScheduledDate": "Scheduled Date",
+    "fieldsScheduledTime": "Scheduled Time",
+    "fieldsWorkDone": "Work Done",
+    "fieldsTimeSpent": "Time Spent (hours)",
+    "fieldsDescription": "Description",
+    "fieldsPartsUsed": "Parts Used",
+    "fieldsStatus": "Status",
+    "placeholdersSelectClient": "Select a client",
+    "placeholdersSelectTechnician": "Select a technician",
+    "placeholdersWorkDone": "e.g., Pump maintenance, Valve replacement",
+    "placeholdersTimeSpent": "e.g., 2.5",
+    "placeholdersDescription": "Detailed description of the work to be performed...",
+    "placeholdersPartsUsed": "List parts used (one per line)\ne.g.,\nPump seal - Model XYZ\nO-ring 50mm\nValve actuator",
     "requiredFields": "Required fields: Client, Assigned Technician, Date, and Time",
     "optionalDetails": "Optional Details",
     "partsUsedNote": "Enter one part per line",
@@ -118,7 +125,8 @@
     "technicianNote": "Technicians can only move interventions to In Progress or Quality Assessment",
     "createButton": "Create Intervention",
     "saveButton": "Save Changes",
-    "scheduledIntervention": "Intervention Scheduled"
+    "scheduledIntervention": "Intervention Scheduled",
+    "noInterventionsYet": "No interventions yet"
   },
   "admin": {
     "title": "Admin Panel",
@@ -136,23 +144,24 @@
     "assignedInterventions": "Assigned Interventions",
     "joined": "Joined",
     "userId": "User ID",
-    "roles": {
-      "admin": "Admin",
-      "supervisor": "Supervisor",
-      "technician": "Technician",
-      "adminDesc": "Full system access including user management",
-      "supervisorDesc": "Can view and manage all interventions",
-      "technicianDesc": "Can view and create interventions"
-    },
+    "rolesAdmin": "Admin",
+    "rolesSupervisor": "Supervisor",
+    "rolesTechnician": "Technician",
+    "rolesAdminDesc": "Full system access including user management",
+    "rolesSupervisorDesc": "Can view and manage all interventions",
+    "rolesTechnicianDesc": "Can view and edit interventions",
     "fullName": "Full Name",
     "role": "Role",
     "newPassword": "New Password",
+    "passwordPlaceholder": "Leave blank to keep current password",
     "passwordNote": "Leave blank to keep current password. Minimum 6 characters if changing.",
     "passwordMinLength": "Minimum 6 characters",
     "createButton": "Create User",
     "saveButton": "Save Changes",
     "deleteConfirm": "Are you sure you want to delete this user?",
-    "cannotDelete": "Cannot delete user with assigned interventions"
+    "cannotDelete": "Cannot delete user with assigned interventions",
+    "loadingUser": "Loading user...",
+    "userNotFound": "User not found"
   },
   "errors": {
     "unauthorized": "Unauthorized",

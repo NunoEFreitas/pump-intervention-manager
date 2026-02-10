@@ -13,13 +13,22 @@
     "filter": "Filtrar",
     "all": "Todos",
     "actions": "Acciones",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "creating": "Creando...",
+    "updating": "Actualizando...",
+    "deleting": "Eliminando...",
+    "saving": "Guardando..."
   },
   "nav": {
     "dashboard": "Panel",
     "clients": "Clientes",
     "interventions": "Intervenciones",
-    "admin": "Administración"
+    "admin": "Administración",
+    "backToAdmin": "← Volver a Panel de Administración",
+    "back": "← Volver",
+    "backToClients": "← Volver a Clientes",
+    "backToInterventions": "← Volver a Intervenciones",
+    "backToDashboard": "← Volver a Panel"
   },
   "auth": {
     "login": "Iniciar sesión",
@@ -64,7 +73,10 @@
     "interventions": "intervenciones",
     "viewDetails": "Ver Detalles del Cliente →",
     "createButton": "Crear Cliente",
-    "saveButton": "Guardar Cambios"
+    "saveButton": "Guardar Cambios",
+    "loadingClients": "Cargando clientes...",
+    "addFirstClient": " + Añadir Primer Cliente",
+    "Loading client...": "Cargando cliente..."
   },
   "interventions": {
     "title": "Intervenciones",
@@ -76,32 +88,26 @@
     "details": "Detalles de la Intervención",
     "noInterventions": "No se encontraron intervenciones.",
     "createFirst": "+ Crear Primera Intervención",
-    "status": {
-      "open": "Abierta",
-      "inProgress": "En Progreso",
-      "qualityAssessment": "Evaluación de Calidad",
-      "completed": "Completada",
-      "canceled": "Cancelada"
-    },
-    "fields": {
-      "client": "Cliente",
-      "assignedTo": "Asignar al Técnico",
-      "scheduledDate": "Fecha Programada",
-      "scheduledTime": "Hora Programada",
-      "workDone": "Trabajo Realizado",
-      "timeSpent": "Tiempo Empleado (horas)",
-      "description": "Descripción",
-      "partsUsed": "Piezas Utilizadas",
-      "status": "Estado"
-    },
-    "placeholders": {
-      "selectClient": "Seleccione un cliente",
-      "selectTechnician": "Seleccione un técnico",
-      "workDone": "ej: Mantenimiento de bomba, Reemplazo de válvula",
-      "timeSpent": "ej: 2.5",
-      "description": "Descripción detallada del trabajo a realizar...",
-      "partsUsed": "Liste las piezas utilizadas (una por línea)\nej:\nSello de bomba - Modelo XYZ\nJunta tórica 50mm\nActuador de válvula"
-    },
+    "statusOpen": "Abierta",
+    "statusInProgress": "En Progreso",
+    "statusQualityAssessment": "Evaluación de Calidad",
+    "statusCompleted": "Completada",
+    "statusCanceled": "Cancelada",
+    "fieldsClient": "Cliente",
+    "fieldsAssignedTo": "Asignar al Técnico",
+    "fieldsScheduledDate": "Fecha Programada",
+    "fieldsScheduledTime": "Hora Programada",
+    "fieldsWorkDone": "Trabajo Realizado",
+    "fieldsTimeSpent": "Tiempo Empleado (horas)",
+    "fieldsDescription": "Descripción",
+    "fieldsPartsUsed": "Piezas Utilizadas",
+    "fieldsStatus": "Estado",
+    "placeholdersSelectClient": "Seleccione un cliente",
+    "placeholdersSelectTechnician": "Seleccione un técnico",
+    "placeholdersWorkDone": "ej: Mantenimiento de bomba, Reemplazo de válvula",
+    "placeholdersTimeSpent": "ej: 2.5",
+    "placeholdersDescription": "Descripción detallada del trabajo a realizar...",
+    "placeholdersPartsUsed": "Liste las piezas utilizadas (una por línea)\nej:\nSello de bomba - Modelo XYZ\nJunta tórica 50mm\nActuador de válvula",
     "requiredFields": "Campos obligatorios: Cliente, Técnico Asignado, Fecha y Hora",
     "optionalDetails": "Detalles Opcionales",
     "partsUsedNote": "Ingrese una pieza por línea",
@@ -118,7 +124,8 @@
     "technicianNote": "Los técnicos solo pueden mover intervenciones a En Progreso o Evaluación de Calidad",
     "createButton": "Crear Intervención",
     "saveButton": "Guardar Cambios",
-    "scheduledIntervention": "Intervención Programada"
+    "scheduledIntervention": "Intervención Programada",
+    "noInterventionsYet": "No hay intervenciones programadas"
   },
   "admin": {
     "title": "Panel de Administración",
@@ -136,23 +143,24 @@
     "assignedInterventions": "Intervenciones Asignadas",
     "joined": "Registrado",
     "userId": "ID del Usuario",
-    "roles": {
-      "admin": "Administrador",
-      "supervisor": "Supervisor",
-      "technician": "Técnico",
-      "adminDesc": "Acceso completo al sistema incluyendo gestión de usuarios",
-      "supervisorDesc": "Puede ver y gestionar todas las intervenciones",
-      "technicianDesc": "Puede ver y crear intervenciones"
-    },
+    "rolesAdmin": "Administrador",
+    "rolesSupervisor": "Supervisor",
+    "rolesTechnician": "Técnico",
+    "rolesAdminDesc": "Acceso completo al sistema incluyendo gestión de usuarios",
+    "rolesSupervisorDesc": "Puede ver y gestionar todas las intervenciones",
+    "rolesTechnicianDesc": "Puede ver y crear intervenciones",
     "fullName": "Nombre Completo",
     "role": "Función",
     "newPassword": "Nueva Contraseña",
+    "passwordPlaceholder": "Dejar en blanco para mantener la contraseña actual",
     "passwordNote": "Dejar en blanco para mantener la contraseña actual. Mínimo 6 caracteres si cambia.",
     "passwordMinLength": "Mínimo 6 caracteres",
     "createButton": "Crear Usuario",
     "saveButton": "Guardar Cambios",
     "deleteConfirm": "¿Está seguro de que desea eliminar este usuario?",
-    "cannotDelete": "No se puede eliminar usuario con intervenciones asignadas"
+    "cannotDelete": "No se puede eliminar usuario con intervenciones asignadas",
+    "loadingUser": "Cargando usuario...",
+    "userNotFound": "Usuario no encontrado"
   },
   "errors": {
     "unauthorized": "No autorizado",

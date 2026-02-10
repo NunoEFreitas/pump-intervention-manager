@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 interface Client {
   id: string
@@ -19,6 +20,8 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+
+  const tClients = useTranslations('clients')
 
   useEffect(() => {
     fetchClients()
@@ -47,7 +50,7 @@ export default function ClientsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading clients...</div>
+        <div className="text-gray-600">{tClients('loadingClients')}</div>
       </div>
     )
   }
@@ -56,14 +59,14 @@ export default function ClientsPage() {
     <div>
       <div className="px-4 sm:px-0 flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Clients</h1>
-          <p className="text-gray-600">Manage your pump station clients</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{tClients('title')}</h1>
+          <p className="text-gray-600">{tClients('subtitle')}</p>
         </div>
         <button
           onClick={() => router.push('/dashboard/clients/new')}
           className="btn btn-primary"
         >
-          + Add Client
+          {tClients('addClient')}
         </button>
       </div>
 
@@ -87,7 +90,7 @@ export default function ClientsPage() {
               onClick={() => router.push('/dashboard/clients/new')}
               className="btn btn-primary"
             >
-              + Add Your First Client
+              {tClients('addFirstClient')}
             </button>
           )}
         </div>
@@ -104,7 +107,7 @@ export default function ClientsPage() {
                   {client.name}
                 </h3>
                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                  {client._count?.interventions || 0} interventions
+                  {client._count?.interventions || 0} {tClients('interventions')}
                 </span>
               </div>
               

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 export default function NewUserPage() {
   const router = useRouter()
@@ -13,6 +14,11 @@ export default function NewUserPage() {
     password: '',
     role: 'TECHNICIAN',
   })
+
+  const tNav = useTranslations('nav')
+  const tAdmin = useTranslations('admin')
+  const tAuth = useTranslations('auth')
+  const tCommon = useTranslations('common')
 
   useEffect(() => {
     // Check if user is admin
@@ -68,16 +74,16 @@ export default function NewUserPage() {
           onClick={() => router.push('/dashboard/admin')}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
-          ← Back to Admin Panel
+          {tNav('backToAdmin')}
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Add New User</h1>
-        <p className="text-gray-600">Create a new user account</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{tAdmin('newUser')}</h1>
+        <p className="text-gray-600">{tAdmin('createUser')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Full Name *
+            {tAdmin('fullName')} *
           </label>
           <input
             type="text"
@@ -91,7 +97,7 @@ export default function NewUserPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email *
+            {tAuth('email')} *
           </label>
           <input
             type="email"
@@ -105,7 +111,7 @@ export default function NewUserPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Password *
+            {tAuth('password')} *
           </label>
           <input
             type="password"
@@ -116,12 +122,12 @@ export default function NewUserPage() {
             required
             minLength={6}
           />
-          <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+          <p className="text-xs text-gray-500 mt-1">{tAdmin('passwordMinLength')}</p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Role *
+            {tAdmin('role')} *
           </label>
           <select
             name="role"
@@ -130,14 +136,14 @@ export default function NewUserPage() {
             onChange={handleChange}
             required
           >
-            <option value="TECHNICIAN">Technician</option>
-            <option value="SUPERVISOR">Supervisor</option>
-            <option value="ADMIN">Admin</option>
+            <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
+            <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
+            <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
           </select>
           <div className="mt-2 text-sm text-gray-600">
-            <p className="mb-1"><strong>Technician:</strong> Can view and create interventions</p>
-            <p className="mb-1"><strong>Supervisor:</strong> Can view and manage all interventions</p>
-            <p><strong>Admin:</strong> Full system access including user management</p>
+            <p className="mb-1"><strong>{tAdmin('rolesTechnician')}:</strong> {tAdmin('rolesTechnicianDesc')}</p>
+            <p className="mb-1"><strong>{tAdmin('rolesSupervisor')}:</strong> {tAdmin('rolesSupervisorDesc')}</p>
+            <p><strong>{tAdmin('rolesAdmin')}:</strong> {tAdmin('rolesAdminDesc')}</p>
           </div>
         </div>
 
@@ -153,7 +159,7 @@ export default function NewUserPage() {
             className="btn btn-primary flex-1"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create User'}
+            {loading ? tAdmin('saving') : tAdmin('createButton')}
           </button>
           <button
             type="button"
@@ -161,7 +167,7 @@ export default function NewUserPage() {
             className="btn btn-secondary"
             disabled={loading}
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
         </div>
       </form>

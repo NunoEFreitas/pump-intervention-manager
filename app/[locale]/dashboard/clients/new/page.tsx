@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 
 export default function NewClientPage() {
   const router = useRouter()
@@ -17,6 +18,11 @@ export default function NewClientPage() {
     contactPerson: '',
     notes: '',
   })
+
+  const tAuth = useTranslations('auth')
+  const tCommon = useTranslations('common')
+  const tClients = useTranslations('clients')
+  const tNav = useTranslations('nav')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -59,16 +65,16 @@ export default function NewClientPage() {
           onClick={() => router.back()}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
-          ← Back
+          {tNav('back')}
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Add New Client</h1>
-        <p className="text-gray-600">Create a new pump station client</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{tClients('addClient')}</h1>
+        <p className="text-gray-600">{tClients('createClient')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Client Name *
+            {tClients('clientName')} *
           </label>
           <input
             type="text"
@@ -82,7 +88,7 @@ export default function NewClientPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Address
+            {tClients('address')}
           </label>
           <input
             type="text"
@@ -96,7 +102,7 @@ export default function NewClientPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              City
+              {tClients('city')}
             </label>
             <input
               type="text"
@@ -108,7 +114,7 @@ export default function NewClientPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Postal Code
+              {tClients('postalCode')}
             </label>
             <input
               type="text"
@@ -123,7 +129,7 @@ export default function NewClientPage() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone
+              {tClients('phone')}
             </label>
             <input
               type="tel"
@@ -135,7 +141,7 @@ export default function NewClientPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Email
+              {tAuth('email')}
             </label>
             <input
               type="email"
@@ -149,7 +155,7 @@ export default function NewClientPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Contact Person
+            {tClients('contactPerson')}
           </label>
           <input
             type="text"
@@ -162,7 +168,7 @@ export default function NewClientPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Notes
+            {tClients('notes')}
           </label>
           <textarea
             name="notes"
@@ -185,7 +191,7 @@ export default function NewClientPage() {
             className="btn btn-primary flex-1"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Client'}
+            {loading ? tCommon('creating') : tClients('createButton')}
           </button>
           <button
             type="button"
@@ -193,7 +199,7 @@ export default function NewClientPage() {
             className="btn btn-secondary"
             disabled={loading}
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
         </div>
       </form>
