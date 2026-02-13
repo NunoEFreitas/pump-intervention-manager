@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
 interface User {
@@ -17,6 +17,8 @@ interface User {
 
 export default function AdminPage() {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
@@ -33,7 +35,7 @@ export default function AdminPage() {
       setCurrentUserRole(user.role)
       
       if (user.role !== 'ADMIN') {
-        router.push('/dashboard')
+        router.push(`/${locale}/dashboard`)
         return
       }
     }
@@ -49,7 +51,7 @@ export default function AdminPage() {
       })
       
       if (response.status === 403) {
-        router.push('/dashboard')
+        router.push(`/${locale}/dashboard`)
         return
       }
       
@@ -134,7 +136,7 @@ export default function AdminPage() {
           <p className="text-gray-600">{tAdmin('subtitle')}</p>
         </div>
         <button
-          onClick={() => router.push('/dashboard/admin/users/new')}
+          onClick={() => router.push(`/${locale}/dashboard/admin/users/new`)}
           className="btn btn-primary"
         >
           {tAdmin('addUser')}

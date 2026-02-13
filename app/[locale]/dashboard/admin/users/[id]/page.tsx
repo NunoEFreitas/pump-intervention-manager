@@ -18,6 +18,7 @@ interface User {
 export default function EditUserPage() {
   const router = useRouter()
   const params = useParams()
+  const locale = params.locale as string
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -41,7 +42,7 @@ export default function EditUserPage() {
     if (userStr) {
       const currentUser = JSON.parse(userStr)
       if (currentUser.role !== 'ADMIN') {
-        router.push('/dashboard')
+        router.push(`/${locale}/dashboard`)
         return
       }
     }
@@ -105,7 +106,7 @@ export default function EditUserPage() {
         throw new Error(data.error || 'Failed to update user')
       }
 
-      router.push('/dashboard/admin')
+      router.push(`/${locale}/dashboard/admin`)
     } catch (err: any) {
       setError(err.message || 'Failed to update user. Please try again.')
       setSaving(false)
@@ -139,7 +140,7 @@ export default function EditUserPage() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <button
-          onClick={() => router.push('/dashboard/admin')}
+          onClick={() => router.push(`/${locale}/dashboard/admin`)}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
           {tNav('backToAdmin')}
@@ -245,7 +246,7 @@ export default function EditUserPage() {
           </button>
           <button
             type="button"
-            onClick={() => router.push('/dashboard/admin')}
+            onClick={() => router.push(`/${locale}/dashboard/admin`)}
             className="btn btn-secondary"
             disabled={saving}
           >

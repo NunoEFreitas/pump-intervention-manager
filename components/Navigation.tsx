@@ -1,3 +1,4 @@
+// FILE: components/Navigation.tsx (UPDATED - Replace existing file)
 'use client'
 
 import { useRouter, usePathname } from 'next/navigation'
@@ -33,6 +34,9 @@ export default function Navigation() {
 
   if (user?.role === 'ADMIN' || user?.role === 'SUPERVISOR') {
     navItems.splice(1, 0, { name: t('clients'), path: `/${locale}/dashboard/clients` })
+    // Add Warehouse and Technicians links
+    navItems.push({ name: t('warehouse'), path: `/${locale}/dashboard/warehouse` })
+    navItems.push({ name: t('technicians'), path: `/${locale}/dashboard/warehouse/technicians` })
   }
 
   if (user?.role === 'ADMIN') {

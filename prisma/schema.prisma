@@ -20,6 +20,11 @@ model User {
   updatedAt               DateTime       @updatedAt
   assignedInterventions   Intervention[] @relation("AssignedInterventions")
   createdInterventions    Intervention[] @relation("CreatedInterventions")
+  warehouseItems          TechnicianStock[] @relation("TechnicianWarehouse")
+  serialNumbers           SerialNumberStock[] @relation("TechnicianSerialNumbers")
+  itemMovementsFrom       ItemMovement[] @relation("MovementFrom")
+  itemMovementsTo         ItemMovement[] @relation("MovementTo")
+  itemMovementsCreated    ItemMovement[] @relation("MovementCreatedBy")
 }
 
 enum UserRole {
@@ -54,12 +59,28 @@ model Intervention {
   status           InterventionStatus @default(OPEN)
   scheduledDate    DateTime
   scheduledTime    String
+  breakdown        String             @default("") @db.Text // Description of the breakdown/issue
   workDone         String?            @db.Text
   timeSpent        Float?             // in hours
   description      String?            @db.Text
-  partsUsed        String?            @db.Text // JSON string with parts information
+  partsUsed        InterventionPart[] // Parts used in this intervention
   createdAt        DateTime           @default(now())
   updatedAt        DateTime           @updatedAt
+}
+
+// Track parts used in interventions
+model InterventionPart {
+  id              String        @id @default(uuid())
+  interventionId  String
+  intervention    Intervention  @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            WarehouseItem @relation(fields: [itemId], references: [id])
+  quantity        Int
+  serialNumberIds String[]      // Array of serial number IDs if item tracks SNs
+  createdAt       DateTime      @default(now())
+
+  @@index([interventionId])
+  @@index([itemId])
 }
 
 enum InterventionStatus {
@@ -68,4 +89,99 @@ enum InterventionStatus {
   QUALITY_ASSESSMENT
   COMPLETED
   CANCELED
+}
+
+model WarehouseItem {
+  id                  String              @id @default(uuid())
+  itemName            String
+  partNumber          String
+  serialNumber        String?             // Template/example for serialized items
+  value               Float
+  mainWarehouse       Int                 @default(0)  // Count for non-serialized items
+  tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  movements           ItemMovement[]
+  technicianStocks    TechnicianStock[]
+  serialNumbers       SerialNumberStock[]
+  interventionParts   InterventionPart[]
+}
+
+model TechnicianStock {
+  id              String          @id @default(uuid())
+  itemId          String
+  item            WarehouseItem   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  technicianId    String
+  technician      User            @relation("TechnicianWarehouse", fields: [technicianId], references: [id], onDelete: Cascade)
+  quantity        Int             @default(0)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@unique([itemId, technicianId])
+}
+
+model ItemMovement {
+  id              String                  @id @default(uuid())
+  itemId          String
+  item            WarehouseItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  movementType    MovementType
+  quantity        Int
+  fromUserId      String?
+  fromUser        User?                   @relation("MovementFrom", fields: [fromUserId], references: [id])
+  toUserId        String?
+  toUser          User?                   @relation("MovementTo", fields: [toUserId], references: [id])
+  notes           String?                 @db.Text
+  createdById     String
+  createdBy       User                    @relation("MovementCreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime                @default(now())
+  serialNumbers   MovementSerialNumber[]  // Track which SNs were moved
+}
+
+enum MovementType {
+  ADD_STOCK           // Add to main warehouse
+  REMOVE_STOCK        // Remove from main warehouse (loss, damage, etc)
+  TRANSFER_TO_TECH    // Transfer from main to technician
+  TRANSFER_FROM_TECH  // Return from technician to main
+  USE                 // Used in intervention
+}
+
+// Track individual serial numbers for items
+model SerialNumberStock {
+  id              String                  @id @default(uuid())
+  itemId          String
+  item            WarehouseItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  serialNumber    String                  // The actual serial number
+  location        StockLocation           @default(MAIN_WAREHOUSE)
+  technicianId    String?
+  technician      User?                   @relation("TechnicianSerialNumbers", fields: [technicianId], references: [id])
+  status          SerialStatus            @default(AVAILABLE)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  movements       MovementSerialNumber[]
+
+  @@unique([itemId, serialNumber]) // Serial number must be unique per item
+}
+
+enum StockLocation {
+  MAIN_WAREHOUSE
+  TECHNICIAN
+  USED
+}
+
+enum SerialStatus {
+  AVAILABLE
+  IN_USE
+  DAMAGED
+  LOST
+}
+
+// Join table for movements and serial numbers
+model MovementSerialNumber {
+  id              String            @id @default(uuid())
+  movementId      String
+  movement        ItemMovement      @relation(fields: [movementId], references: [id], onDelete: Cascade)
+  serialNumberId  String
+  serialNumber    SerialNumberStock @relation(fields: [serialNumberId], references: [id], onDelete: Cascade)
+
+  @@unique([movementId, serialNumberId])
 }

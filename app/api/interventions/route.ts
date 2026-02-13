@@ -79,9 +79,9 @@ export async function POST(request: NextRequest) {
     const data = await request.json()
 
     // Validate required fields
-    if (!data.clientId || !data.assignedToId || !data.scheduledDate || !data.scheduledTime) {
+    if (!data.clientId || !data.assignedToId || !data.scheduledDate || !data.scheduledTime || !data.breakdown) {
       return NextResponse.json(
-        { error: 'Client, assigned technician, date and time are required' },
+        { error: 'Client, assigned technician, date, time and breakdown description are required' },
         { status: 400 }
       )
     }
@@ -94,10 +94,10 @@ export async function POST(request: NextRequest) {
         status: 'OPEN',
         scheduledDate: new Date(data.scheduledDate),
         scheduledTime: data.scheduledTime,
+        breakdown: data.breakdown,
         workDone: data.workDone || null,
         timeSpent: data.timeSpent || null,
         description: data.description || null,
-        partsUsed: data.partsUsed ? JSON.stringify(data.partsUsed) : null,
       },
       include: {
         client: {

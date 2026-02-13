@@ -135,10 +135,10 @@ export async function PUT(
         status: data.status,
         scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : undefined,
         scheduledTime: data.scheduledTime,
+        breakdown: data.breakdown,
         workDone: data.workDone,
         timeSpent: data.timeSpent,
         description: data.description,
-        partsUsed: data.partsUsed ? JSON.stringify(data.partsUsed) : null,
       },
       include: {
         client: {

@@ -2,7 +2,25 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
+import PartsSelector from './PartsSelector'
+
+interface InterventionPart {
+  id: string
+  quantity: number
+  item: {
+    id: string
+    itemName: string
+    partNumber: string
+    value: number
+    tracksSerialNumbers: boolean
+  }
+  serialNumbers?: Array<{
+    id: string
+    serialNumber: string
+  }>
+}
 
 interface Intervention {
   id: string
@@ -10,7 +28,7 @@ interface Intervention {
   workDone: string | null
   timeSpent: number | null
   description: string | null
-  partsUsed: string | null
+  breakdown: string
   scheduledDate: string
   scheduledTime: string
   createdAt: string
@@ -36,16 +54,23 @@ interface Intervention {
 export default function InterventionDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const locale = params.locale as string
+  const t = useTranslations('interventions')
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
+
   const [intervention, setIntervention] = useState<Intervention | null>(null)
+  const [parts, setParts] = useState<InterventionPart[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  const [showPartsSelector, setShowPartsSelector] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [editData, setEditData] = useState({
     status: '',
     workDone: '',
     timeSpent: '',
     description: '',
-    partsUsed: '',
+    breakdown: '',
     scheduledDate: '',
     scheduledTime: '',
   })
@@ -56,9 +81,10 @@ export default function InterventionDetailPage() {
       const user = JSON.parse(userStr)
       setUserRole(user.role)
     }
-    
+
     if (params.id) {
       fetchIntervention()
+      fetchParts()
     }
   }, [params.id])
 
@@ -69,24 +95,23 @@ export default function InterventionDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
-      
+
       if (response.status === 403) {
         alert('You do not have permission to view this intervention')
-        router.push('/dashboard/interventions')
+        router.push(`/${locale}/dashboard/interventions`)
         return
       }
-      
+
       setIntervention(data)
-      
+
       // Set edit data
-      const parts = data.partsUsed ? JSON.parse(data.partsUsed) : []
       const schedDate = new Date(data.scheduledDate).toISOString().split('T')[0]
       setEditData({
         status: data.status,
         workDone: data.workDone || '',
         timeSpent: data.timeSpent?.toString() || '',
         description: data.description || '',
-        partsUsed: Array.isArray(parts) ? parts.join('\n') : '',
+        breakdown: data.breakdown || '',
         scheduledDate: schedDate,
         scheduledTime: data.scheduledTime,
       })
@@ -97,9 +122,22 @@ export default function InterventionDetailPage() {
     }
   }
 
+  const fetchParts = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/interventions/${params.id}/parts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      setParts(data)
+    } catch (error) {
+      console.error('Error fetching parts:', error)
+    }
+  }
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/interventions/${params.id}`, {
@@ -111,14 +149,13 @@ export default function InterventionDetailPage() {
         body: JSON.stringify({
           ...editData,
           timeSpent: editData.timeSpent ? parseFloat(editData.timeSpent) : null,
-          partsUsed: editData.partsUsed ? editData.partsUsed.split('\n').filter(p => p.trim()) : [],
           clientId: intervention?.client.id,
           assignedToId: intervention?.assignedTo.id,
         }),
       })
 
       const data = await response.json()
-      
+
       if (!response.ok) {
         alert(data.error || 'Failed to update intervention')
         return
@@ -135,7 +172,7 @@ export default function InterventionDetailPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">Loading intervention...</div>
+        <div className="text-gray-600">{tCommon('loading')}</div>
       </div>
     )
   }
@@ -143,23 +180,23 @@ export default function InterventionDetailPage() {
   if (!intervention) {
     return (
       <div className="card text-center py-12">
-        <p className="text-gray-600">Intervention not found</p>
+        <p className="text-gray-600">{t('noInterventions')}</p>
       </div>
     )
   }
 
-  const parts = intervention.partsUsed ? JSON.parse(intervention.partsUsed) : []
   const canEdit = canEditIntervention(userRole as any, intervention.status as any)
   const availableStatuses = getAvailableStatuses(userRole as any, intervention.status as any)
+  const totalPartsValue = parts.reduce((sum, part) => sum + (part.quantity * part.item.value), 0)
 
   return (
     <div>
       <div className="mb-6">
         <button
-          onClick={() => router.push('/dashboard/interventions')}
+          onClick={() => router.push(`/${locale}/dashboard/interventions`)}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
-          ← Back to Interventions
+          {tNav('backToInterventions')}
         </button>
       </div>
 
@@ -219,7 +256,7 @@ export default function InterventionDetailPage() {
                     </div>
                   )}
                   <button
-                    onClick={() => router.push(`/dashboard/clients/${intervention.client.id}`)}
+                    onClick={() => router.push(`/${locale}/dashboard/clients/${intervention.client.id}`)}
                     className="text-blue-600 hover:text-blue-800 text-sm"
                   >
                     View Client Details →
@@ -258,22 +295,82 @@ export default function InterventionDetailPage() {
               </div>
             </div>
 
+            <div className="border-t pt-4 mb-4">
+              <h3 className="font-semibold text-gray-700 mb-2">Breakdown Description</h3>
+              <p className="text-gray-900 whitespace-pre-wrap">{intervention.breakdown}</p>
+            </div>
+
             {intervention.description && (
               <div className="border-t pt-4">
-                <h3 className="font-semibold text-gray-700 mb-2">Description</h3>
+                <h3 className="font-semibold text-gray-700 mb-2">Additional Notes</h3>
                 <p className="text-gray-900 whitespace-pre-wrap">{intervention.description}</p>
               </div>
             )}
+          </div>
 
-            {parts.length > 0 && (
-              <div className="border-t pt-4 mt-4">
-                <h3 className="font-semibold text-gray-700 mb-2">Parts Used</h3>
-                <ul className="list-disc list-inside space-y-1">
-                  {parts.map((part: string, index: number) => (
-                    <li key={index} className="text-gray-900">{part}</li>
+          {/* Parts Used Section */}
+          <div className="card mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Parts Used</h2>
+              {canEdit && (
+                <button
+                  onClick={() => setShowPartsSelector(true)}
+                  className="btn btn-primary"
+                >
+                  + Add Parts
+                </button>
+              )}
+            </div>
+
+            {parts.length === 0 ? (
+              <p className="text-gray-600">No parts have been used yet.</p>
+            ) : (
+              <>
+                <div className="space-y-3 mb-4">
+                  {parts.map((part) => (
+                    <div key={part.id} className="p-4 bg-gray-50 rounded-lg border">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{part.item.itemName}</h4>
+                          <p className="text-sm text-gray-600">Part #: {part.item.partNumber}</p>
+                          <div className="mt-2 flex items-center gap-4">
+                            <span className="text-sm text-gray-600">
+                              Quantity: <span className="font-semibold text-gray-900">{part.quantity}</span>
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              Unit Value: <span className="font-semibold text-gray-900">€{part.item.value.toFixed(2)}</span>
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              Total: <span className="font-semibold text-green-900">€{(part.quantity * part.item.value).toFixed(2)}</span>
+                            </span>
+                          </div>
+                          {part.item.tracksSerialNumbers && part.serialNumbers && part.serialNumbers.length > 0 && (
+                            <div className="mt-3">
+                              <p className="text-xs text-gray-500 mb-1">Serial Numbers:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {part.serialNumbers.map((sn) => (
+                                  <span
+                                    key={sn.id}
+                                    className="px-2 py-1 bg-purple-100 text-purple-900 rounded text-xs font-mono"
+                                  >
+                                    {sn.serialNumber}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </ul>
-              </div>
+                </div>
+                <div className="border-t pt-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">Total Parts Value:</span>
+                    <span className="text-xl font-bold text-green-900">€{totalPartsValue.toFixed(2)}</span>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </>
@@ -332,6 +429,19 @@ export default function InterventionDetailPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              Breakdown Description
+            </label>
+            <textarea
+              rows={3}
+              className="input text-gray-800"
+              value={editData.breakdown}
+              onChange={(e) => setEditData({ ...editData, breakdown: e.target.value })}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Work Done
             </label>
             <input
@@ -357,25 +467,13 @@ export default function InterventionDetailPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Description
+              Additional Notes
             </label>
             <textarea
               rows={4}
               className="input text-gray-800"
               value={editData.description}
               onChange={(e) => setEditData({ ...editData, description: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Parts Used (one per line)
-            </label>
-            <textarea
-              rows={4}
-              className="input text-gray-800"
-              value={editData.partsUsed}
-              onChange={(e) => setEditData({ ...editData, partsUsed: e.target.value })}
             />
           </div>
 
@@ -392,6 +490,18 @@ export default function InterventionDetailPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {showPartsSelector && intervention && (
+        <PartsSelector
+          technicianId={intervention.assignedTo.id}
+          interventionId={intervention.id}
+          onClose={() => setShowPartsSelector(false)}
+          onPartAdded={() => {
+            fetchParts()
+            setShowPartsSelector(false)
+          }}
+        />
       )}
     </div>
   )

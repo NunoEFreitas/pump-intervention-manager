@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
 export default function NewUserPage() {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
@@ -26,7 +28,7 @@ export default function NewUserPage() {
     if (userStr) {
       const user = JSON.parse(userStr)
       if (user.role !== 'ADMIN') {
-        router.push('/dashboard')
+        router.push(`/${locale}/dashboard`)
       }
     }
   }, [router])
@@ -53,7 +55,7 @@ export default function NewUserPage() {
         throw new Error(data.error || 'Failed to create user')
       }
 
-      router.push('/dashboard/admin')
+      router.push(`/${locale}/dashboard/admin`)
     } catch (err: any) {
       setError(err.message || 'Failed to create user. Please try again.')
       setLoading(false)
@@ -71,7 +73,7 @@ export default function NewUserPage() {
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <button
-          onClick={() => router.push('/dashboard/admin')}
+          onClick={() => router.push(`/${locale}/dashboard/admin`)}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
           {tNav('backToAdmin')}
@@ -163,7 +165,7 @@ export default function NewUserPage() {
           </button>
           <button
             type="button"
-            onClick={() => router.push('/dashboard/admin')}
+            onClick={() => router.push(`/${locale}/dashboard/admin`)}
             className="btn btn-secondary"
             disabled={loading}
           >

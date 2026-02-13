@@ -1,11 +1,14 @@
 'use client'
 
 import { useState, useEffect, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, useParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import ClientSelector from './ClientSelector'
 
 interface Client {
   id: string
   name: string
+  city?: string | null
 }
 
 interface Technician {
@@ -17,8 +20,14 @@ interface Technician {
 // 1. Logic moved to a sub-component
 function NewInterventionContent() {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
   const searchParams = useSearchParams()
   const preSelectedClientId = searchParams.get('clientId')
+
+  const t = useTranslations('interventions')
+  const tCommon = useTranslations('common')
+  const tNav = useTranslations('nav')
   
   const [loading, setLoading] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
@@ -29,12 +38,11 @@ function NewInterventionContent() {
     assignedToId: '',
     scheduledDate: '',
     scheduledTime: '',
+    breakdown: '',
     workDone: '',
     timeSpent: '',
     description: '',
-    partsUsed: '',
   })
-  console.log('ola')
 
   useEffect(() => {
     fetchClients()
@@ -83,7 +91,6 @@ function NewInterventionContent() {
         body: JSON.stringify({
           ...formData,
           timeSpent: formData.timeSpent ? parseFloat(formData.timeSpent) : null,
-          partsUsed: formData.partsUsed ? formData.partsUsed.split('\n').filter(p => p.trim()) : [],
         }),
       })
 
@@ -93,7 +100,7 @@ function NewInterventionContent() {
         throw new Error(data.error || 'Failed to create intervention')
       }
 
-      router.push('/dashboard/interventions')
+      router.push(`/${locale}/dashboard/interventions`)
     } catch (err: any) {
       setError(err.message || 'Failed to create intervention. Please try again.')
       setLoading(false)
@@ -114,42 +121,30 @@ function NewInterventionContent() {
           onClick={() => router.back()}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
-          ← Back
+          {tNav('back')}
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">New Intervention</h1>
-        <p className="text-gray-600">Schedule a new pump station intervention</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('createTitle')}</h1>
+        <p className="text-gray-600">{t('createSubtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
           <p className="text-sm text-blue-800">
-            <strong>Required fields:</strong> Client, Assigned Technician, Date, and Time
+            {t('requiredFields')}
           </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Client *
-          </label>
-          <select
-            name="clientId"
-            className="input text-gray-800"
-            value={formData.clientId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">Select a client</option>
-            {clients.map((client) => (
-              <option key={client.id} value={client.id}>
-                {client.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <ClientSelector
+          clients={clients}
+          value={formData.clientId}
+          onChange={(clientId) => setFormData({ ...formData, clientId })}
+          label={t('fieldsClient')}
+          required
+        />
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Assign to Technician *
+            {t('fieldsAssignedTo')} *
           </label>
           <select
             name="assignedToId"
@@ -158,7 +153,7 @@ function NewInterventionContent() {
             onChange={handleChange}
             required
           >
-            <option value="">Select a technician</option>
+            <option value="">{t('placeholdersSelectTechnician')}</option>
             {technicians.map((tech) => (
               <option key={tech.id} value={tech.id}>
                 {tech.name} ({tech.email})
@@ -170,7 +165,7 @@ function NewInterventionContent() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Scheduled Date *
+              {t('fieldsScheduledDate')} *
             </label>
             <input
               type="date"
@@ -183,7 +178,7 @@ function NewInterventionContent() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Scheduled Time *
+              {t('fieldsScheduledTime')} *
             </label>
             <input
               type="time"
@@ -196,19 +191,35 @@ function NewInterventionContent() {
           </div>
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Breakdown Description *
+          </label>
+          <textarea
+            name="breakdown"
+            rows={3}
+            className="input text-gray-800"
+            placeholder="Describe the issue or breakdown..."
+            value={formData.breakdown}
+            onChange={handleChange}
+            required
+          />
+          <p className="text-xs text-gray-500 mt-1">Describe what is broken or needs repair</p>
+        </div>
+
         <div className="border-t pt-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">Optional Details</h3>
-          
+          <h3 className="text-sm font-medium text-gray-700 mb-3">{t('optionalDetails')}</h3>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Work Done
+                {t('fieldsWorkDone')}
               </label>
               <input
                 type="text"
                 name="workDone"
                 className="input text-gray-800"
-                placeholder="e.g., Pump maintenance, Valve replacement"
+                placeholder={t('placeholdersWorkDone')}
                 value={formData.workDone}
                 onChange={handleChange}
               />
@@ -216,14 +227,14 @@ function NewInterventionContent() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Time Spent (hours)
+                {t('fieldsTimeSpent')}
               </label>
               <input
                 type="number"
                 step="0.5"
                 name="timeSpent"
                 className="input text-gray-800"
-                placeholder="e.g., 2.5"
+                placeholder={t('placeholdersTimeSpent')}
                 value={formData.timeSpent}
                 onChange={handleChange}
               />
@@ -231,33 +242,21 @@ function NewInterventionContent() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
+                {t('fieldsDescription')}
               </label>
               <textarea
                 name="description"
                 rows={4}
                 className="input text-gray-800"
-                placeholder="Detailed description of the work to be performed..."
+                placeholder={t('placeholdersDescription')}
                 value={formData.description}
                 onChange={handleChange}
               />
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Parts Used
-              </label>
-              <textarea
-                name="partsUsed"
-                rows={4}
-                className="input text-gray-800"
-                placeholder="List parts used (one per line)&#10;e.g.,&#10;Pump seal - Model XYZ&#10;O-ring 50mm&#10;Valve actuator"
-                value={formData.partsUsed}
-                onChange={handleChange}
-              />
-              <p className="text-xs text-gray-500 mt-1">Enter one part per line</p>
-            </div>
           </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Note: Parts used during the intervention can be tracked after creation in the intervention details.
+          </p>
         </div>
 
         {error && (
@@ -272,7 +271,7 @@ function NewInterventionContent() {
             className="btn btn-primary flex-1"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Intervention'}
+            {loading ? tCommon('creating') : t('createButton')}
           </button>
           <button
             type="button"
@@ -280,7 +279,7 @@ function NewInterventionContent() {
             className="btn btn-secondary"
             disabled={loading}
           >
-            Cancel
+            {tCommon('cancel')}
           </button>
         </div>
       </form>
@@ -290,8 +289,10 @@ function NewInterventionContent() {
 
 // 2. Exported page with Suspense wrapper
 export default function NewInterventionPage() {
+  const tCommon = useTranslations('common')
+
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-600">Loading form...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-600">{tCommon('loading')}</div>}>
       <NewInterventionContent />
     </Suspense>
   )

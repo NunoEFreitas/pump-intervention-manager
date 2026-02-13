@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
 export default function NewClientPage() {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
@@ -44,7 +46,7 @@ export default function NewClientPage() {
         throw new Error('Failed to create client')
       }
 
-      router.push('/dashboard/clients')
+      router.push(`/${locale}/dashboard/clients`)
     } catch (err) {
       setError('Failed to create client. Please try again.')
       setLoading(false)

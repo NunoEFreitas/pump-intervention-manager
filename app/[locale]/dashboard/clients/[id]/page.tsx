@@ -35,6 +35,7 @@ interface Intervention {
 export default function ClientDetailPage() {
   const router = useRouter()
   const params = useParams()
+  const locale = params.locale as string
   const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -81,11 +82,15 @@ export default function ClientDetailPage() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case 'OPEN':
-        return 'Open'
+        return tInterventions('statusOpen')
       case 'IN_PROGRESS':
-        return 'In Progress'
+        return tInterventions('statusInProgress')
+      case 'QUALITY_ASSESSMENT':
+        return tInterventions('statusQualityAssessment')
       case 'COMPLETED':
-        return 'Completed'
+        return tInterventions('statusCompleted')
+      case 'CANCELED':
+        return tInterventions('statusCanceled')
       default:
         return status
     }
@@ -111,7 +116,7 @@ export default function ClientDetailPage() {
     <div>
       <div className="mb-6">
         <button
-          onClick={() => router.push('/dashboard/clients')}
+          onClick={() => router.push(`/${locale}/dashboard/clients`)}
           className="text-blue-600 hover:text-blue-800 mb-4"
         >
           {tNav('backToClients')}

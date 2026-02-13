@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
 interface Client {
@@ -17,6 +17,8 @@ interface Client {
 
 export default function ClientsPage() {
   const router = useRouter()
+  const params = useParams()
+  const locale = params.locale as string
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -63,7 +65,7 @@ export default function ClientsPage() {
           <p className="text-gray-600">{tClients('subtitle')}</p>
         </div>
         <button
-          onClick={() => router.push('/dashboard/clients/new')}
+          onClick={() => router.push(`/${locale}/dashboard/clients/new`)}
           className="btn btn-primary"
         >
           {tClients('addClient')}
@@ -73,7 +75,7 @@ export default function ClientsPage() {
       <div className="card mb-6">
         <input
           type="text"
-          placeholder="Search clients by name or city..."
+          placeholder={tClients('searchPlaceholder')}
           className="input"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -83,11 +85,11 @@ export default function ClientsPage() {
       {filteredClients.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-gray-600 mb-4">
-            {searchTerm ? 'No clients found matching your search.' : 'No clients yet. Add your first client to get started!'}
+            {searchTerm ? tClients('noClientsFound') : tClients('noClients')}
           </p>
           {!searchTerm && (
             <button
-              onClick={() => router.push('/dashboard/clients/new')}
+              onClick={() => router.push(`/${locale}/dashboard/clients/new`)}
               className="btn btn-primary"
             >
               {tClients('addFirstClient')}
