@@ -17,7 +17,10 @@
     "creating": "Creating...",
     "updating": "Updating...",
     "deleting": "Deleting...",
-    "saving": "Saving..."
+    "saving": "Saving...",
+    "adding": "Adding...",
+    "hours": "hours",
+    "name": "Name"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -81,7 +84,27 @@
     "loadingClients": "Loading clients...",
     "addFirstClient": " + Add Your First Client",
     "loadingClient": "Loading client...",
-    "clientNotFound": "Client not found"
+    "clientNotFound": "Client not found",
+    "clientType": "Client Type",
+    "private": "Private",
+    "company": "Company",
+    "locations": "Locations",
+    "addLocation": "+ Add Location",
+    "locationName": "Location Name",
+    "noLocations": "No locations yet. Add a location to get started.",
+    "editLocation": "Edit Location",
+    "deleteLocation": "Delete Location",
+    "saveLocation": "Save Location",
+    "location": "Location",
+    "equipment": "Equipment",
+    "addEquipment": "+ Add Equipment",
+    "editEquipment": "Edit Equipment",
+    "deleteEquipment": "Delete Equipment",
+    "equipmentType": "Equipment Type",
+    "equipmentBrand": "Brand",
+    "equipmentModel": "Model",
+    "noEquipment": "No equipment registered.",
+    "saveEquipment": "Save Equipment"
   },
   "interventions": {
     "title": "Interventions",
@@ -99,6 +122,8 @@
     "statusCompleted": "Completed",
     "statusCanceled": "Canceled",
     "fieldsClient": "Client",
+    "fieldsLocation": "Location",
+    "placeholdersSelectLocation": "Select a location",
     "fieldsAssignedTo": "Assign to Technician",
     "fieldsScheduledDate": "Scheduled Date",
     "fieldsScheduledTime": "Scheduled Time",
@@ -130,7 +155,31 @@
     "createButton": "Create Intervention",
     "saveButton": "Save Changes",
     "scheduledIntervention": "Intervention Scheduled",
-    "noInterventionsYet": "No interventions yet"
+    "noInterventionsYet": "No interventions yet",
+    "viewClientDetails": "View Client Details →",
+    "breakdownDescription": "Breakdown Description",
+    "additionalNotes": "Additional Notes",
+    "addParts": "+ Add Parts",
+    "noPartsUsed": "No parts have been used yet.",
+    "unitValue": "Unit Value",
+    "partTotal": "Total",
+    "serialNumbers": "Serial Numbers",
+    "totalPartsValue": "Total Parts Value",
+    "navigateTo": "Navigate",
+    "fieldsBreakdown": "Breakdown Description",
+    "placeholdersBreakdown": "Describe the issue or breakdown...",
+    "breakdownHint": "Describe what is broken or needs repair",
+    "noLocationsWarning": "No locations found. Add locations from the client page first.",
+    "partsTrackingNote": "Parts used can be tracked after creation in the intervention details.",
+    "addPartsUsed": "Add Parts Used",
+    "selectPartsFromStock": "Select parts from technician's stock",
+    "loadingStock": "Loading stock...",
+    "noStockAvailable": "No stock available",
+    "selectItem": "Select Item",
+    "changePart": "Change",
+    "howManyUnits": "How many units to use?",
+    "addPart": "Add Part",
+    "selected": "Selected"
   },
   "admin": {
     "title": "Admin Panel",
@@ -165,7 +214,19 @@
     "deleteConfirm": "Are you sure you want to delete this user?",
     "cannotDelete": "Cannot delete user with assigned interventions",
     "loadingUser": "Loading user...",
-    "userNotFound": "User not found"
+    "userNotFound": "User not found",
+    "equipmentTypes": "Equipment Types",
+    "equipmentBrands": "Equipment Brands",
+    "addType": "+ Add Type",
+    "addBrand": "+ Add Brand",
+    "typeName": "Type Name",
+    "brandName": "Brand Name",
+    "noTypes": "No equipment types yet.",
+    "noBrands": "No equipment brands yet.",
+    "editType": "Edit Type",
+    "editBrand": "Edit Brand",
+    "typeInUse": "Cannot delete: type is in use",
+    "brandInUse": "Cannot delete: brand is in use"
   },
   "errors": {
     "unauthorized": "Unauthorized",
@@ -228,6 +289,7 @@
     "selectedSerialNumbers": "Selected Serial Numbers",
     "noSerialNumbersAvailable": "No serial numbers available",
     "serialNumbersToMove": "Serial Numbers to Move",
-    "bulkItem": "Bulk Item (No Serial Numbers)"
+    "bulkItem": "Bulk Item (No Serial Numbers)",
+    "available": "Available"
   }
 }

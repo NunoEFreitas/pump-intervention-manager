@@ -33,8 +33,14 @@ enum UserRole {
   TECHNICIAN
 }
 
+enum ClientType {
+  PRIVATE
+  COMPANY
+}
+
 model Client {
-  id            String         @id @default(uuid())
+  id            String            @id @default(uuid())
+  clientType    ClientType        @default(PRIVATE)
   name          String
   address       String?
   city          String?
@@ -42,30 +48,77 @@ model Client {
   phone         String?
   email         String?
   contactPerson String?
-  notes         String?        @db.Text
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  notes         String?           @db.Text
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
   interventions Intervention[]
+  locations     CompanyLocation[]
+}
+
+model CompanyLocation {
+  id            String              @id @default(uuid())
+  clientId      String
+  client        Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  name          String
+  address       String?
+  city          String?
+  postalCode    String?
+  phone         String?
+  contactPerson String?
+  notes         String?             @db.Text
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  interventions Intervention[]
+  equipment     LocationEquipment[]
+}
+
+model EquipmentType {
+  id        String              @id @default(uuid())
+  name      String              @unique
+  createdAt DateTime            @default(now())
+  equipment LocationEquipment[]
+}
+
+model EquipmentBrand {
+  id        String              @id @default(uuid())
+  name      String              @unique
+  createdAt DateTime            @default(now())
+  equipment LocationEquipment[]
+}
+
+model LocationEquipment {
+  id              String          @id @default(uuid())
+  locationId      String
+  location        CompanyLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  equipmentTypeId String
+  equipmentType   EquipmentType   @relation(fields: [equipmentTypeId], references: [id])
+  brandId         String
+  brand           EquipmentBrand  @relation(fields: [brandId], references: [id])
+  model           String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 }
 
 model Intervention {
-  id               String             @id @default(uuid())
+  id               String              @id @default(uuid())
   clientId         String
-  client           Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client           Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  locationId       String?
+  location         CompanyLocation?    @relation(fields: [locationId], references: [id])
   assignedToId     String
-  assignedTo       User               @relation("AssignedInterventions", fields: [assignedToId], references: [id])
+  assignedTo       User                @relation("AssignedInterventions", fields: [assignedToId], references: [id])
   createdById      String?
-  createdBy        User?              @relation("CreatedInterventions", fields: [createdById], references: [id])
-  status           InterventionStatus @default(OPEN)
+  createdBy        User?               @relation("CreatedInterventions", fields: [createdById], references: [id])
+  status           InterventionStatus  @default(OPEN)
   scheduledDate    DateTime
   scheduledTime    String
-  breakdown        String             @default("") @db.Text // Description of the breakdown/issue
-  workDone         String?            @db.Text
-  timeSpent        Float?             // in hours
-  description      String?            @db.Text
-  partsUsed        InterventionPart[] // Parts used in this intervention
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  breakdown        String              @default("") @db.Text // Description of the breakdown/issue
+  workDone         String?             @db.Text
+  timeSpent        Float?              // in hours
+  description      String?             @db.Text
+  partsUsed        InterventionPart[]  // Parts used in this intervention
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 }
 
 // Track parts used in interventions

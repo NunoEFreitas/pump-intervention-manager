@@ -19,6 +19,18 @@ export async function GET(
     const client = await prisma.client.findUnique({
       where: { id },
       include: {
+        locations: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            equipment: {
+              include: {
+                equipmentType: { select: { name: true } },
+                brand: { select: { name: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
         interventions: {
           include: {
             assignedTo: {
@@ -26,6 +38,13 @@ export async function GET(
                 id: true,
                 name: true,
                 email: true,
+              },
+            },
+            location: {
+              select: {
+                id: true,
+                name: true,
+                city: true,
               },
             },
           },
@@ -66,6 +85,7 @@ export async function PUT(
     const client = await prisma.client.update({
       where: { id },
       data: {
+        clientType: data.clientType,
         name: data.name,
         address: data.address,
         city: data.city,

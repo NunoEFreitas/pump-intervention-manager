@@ -9,6 +9,13 @@ interface Client {
   id: string
   name: string
   city?: string | null
+  clientType: 'PRIVATE' | 'COMPANY'
+}
+
+interface CompanyLocation {
+  id: string
+  name: string
+  city: string | null
 }
 
 interface Technician {
@@ -28,13 +35,16 @@ function NewInterventionContent() {
   const t = useTranslations('interventions')
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
-  
+
   const [loading, setLoading] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [locations, setLocations] = useState<CompanyLocation[]>([])
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     clientId: preSelectedClientId || '',
+    locationId: '',
     assignedToId: '',
     scheduledDate: '',
     scheduledTime: '',
@@ -48,6 +58,19 @@ function NewInterventionContent() {
     fetchClients()
     fetchTechnicians()
   }, [])
+
+  // When clients are loaded and we have a preselected client, load that client's locations
+  useEffect(() => {
+    if (preSelectedClientId && clients.length > 0) {
+      const client = clients.find((c) => c.id === preSelectedClientId)
+      if (client) {
+        setSelectedClient(client)
+        if (client.clientType === 'COMPANY') {
+          fetchLocations(client.id)
+        }
+      }
+    }
+  }, [clients, preSelectedClientId])
 
   const fetchClients = async () => {
     try {
@@ -72,6 +95,29 @@ function NewInterventionContent() {
       setTechnicians(data)
     } catch (error) {
       console.error('Error fetching technicians:', error)
+    }
+  }
+
+  const fetchLocations = async (clientId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/clients/${clientId}/locations`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      setLocations(data)
+    } catch (error) {
+      console.error('Error fetching locations:', error)
+    }
+  }
+
+  const handleClientChange = (clientId: string) => {
+    const client = clients.find((c) => c.id === clientId) || null
+    setSelectedClient(client)
+    setFormData({ ...formData, clientId, locationId: '' })
+    setLocations([])
+    if (client?.clientType === 'COMPANY') {
+      fetchLocations(clientId)
     }
   }
 
@@ -114,6 +160,8 @@ function NewInterventionContent() {
     })
   }
 
+  const isCompany = selectedClient?.clientType === 'COMPANY'
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
@@ -123,7 +171,7 @@ function NewInterventionContent() {
         >
           {tNav('back')}
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('createTitle')}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{t('createTitle')}</h1>
         <p className="text-gray-600">{t('createSubtitle')}</p>
       </div>
 
@@ -137,10 +185,38 @@ function NewInterventionContent() {
         <ClientSelector
           clients={clients}
           value={formData.clientId}
-          onChange={(clientId) => setFormData({ ...formData, clientId })}
+          onChange={handleClientChange}
           label={t('fieldsClient')}
           required
         />
+
+        {/* Location dropdown — only for company clients */}
+        {isCompany && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('fieldsLocation')} *
+            </label>
+            <select
+              name="locationId"
+              className="input text-gray-800"
+              value={formData.locationId}
+              onChange={handleChange}
+              required
+            >
+              <option value="">{t('placeholdersSelectLocation')}</option>
+              {locations.map((loc) => (
+                <option key={loc.id} value={loc.id}>
+                  {loc.name}{loc.city ? ` — ${loc.city}` : ''}
+                </option>
+              ))}
+            </select>
+            {locations.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">
+                {t('noLocationsWarning')}
+              </p>
+            )}
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -162,7 +238,7 @@ function NewInterventionContent() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t('fieldsScheduledDate')} *
@@ -193,18 +269,18 @@ function NewInterventionContent() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Breakdown Description *
+            {t('fieldsBreakdown')} *
           </label>
           <textarea
             name="breakdown"
             rows={3}
             className="input text-gray-800"
-            placeholder="Describe the issue or breakdown..."
+            placeholder={t('placeholdersBreakdown')}
             value={formData.breakdown}
             onChange={handleChange}
             required
           />
-          <p className="text-xs text-gray-500 mt-1">Describe what is broken or needs repair</p>
+          <p className="text-xs text-gray-500 mt-1">{t('breakdownHint')}</p>
         </div>
 
         <div className="border-t pt-4">
@@ -255,7 +331,7 @@ function NewInterventionContent() {
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Note: Parts used during the intervention can be tracked after creation in the intervention details.
+            {t('partsTrackingNote')}
           </p>
         </div>
 

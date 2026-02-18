@@ -17,7 +17,10 @@
     "creating": "Criando...",
     "updating": "Atualizando...",
     "deleting": "Eliminando...",
-    "saving": "Guardando..."
+    "saving": "Guardando...",
+    "adding": "A adicionar...",
+    "hours": "horas",
+    "name": "Nome"
   },
   "nav": {
     "dashboard": "Painel",
@@ -81,7 +84,27 @@
     "loadingClients": "A carregar clientes...",
     "addFirstClient": " + Adicionar Primeiro Cliente",
     "loadingClient": "A carregar cliente...",
-    "clientNotFound": "Cliente não encontrado"
+    "clientNotFound": "Cliente não encontrado",
+    "clientType": "Tipo de Cliente",
+    "private": "Privado",
+    "company": "Empresa",
+    "locations": "Localizações",
+    "addLocation": "+ Adicionar Localização",
+    "locationName": "Nome da Localização",
+    "noLocations": "Sem localizações. Adicione uma localização para começar.",
+    "editLocation": "Editar Localização",
+    "deleteLocation": "Eliminar Localização",
+    "saveLocation": "Guardar Localização",
+    "location": "Localização",
+    "equipment": "Equipamentos",
+    "addEquipment": "+ Adicionar Equipamento",
+    "editEquipment": "Editar Equipamento",
+    "deleteEquipment": "Eliminar Equipamento",
+    "equipmentType": "Tipo de Equipamento",
+    "equipmentBrand": "Marca",
+    "equipmentModel": "Modelo",
+    "noEquipment": "Nenhum equipamento registado.",
+    "saveEquipment": "Guardar Equipamento"
   },
   "interventions": {
     "title": "Intervenções",
@@ -99,6 +122,8 @@
     "statusCompleted": "Concluída",
     "statusCanceled": "Cancelada",
     "fieldsClient": "Cliente",
+    "fieldsLocation": "Localização",
+    "placeholdersSelectLocation": "Selecione uma localização",
     "fieldsAssignedTo": "Atribuir ao Técnico",
     "fieldsScheduledDate": "Data Agendada",
     "fieldsScheduledTime": "Hora Agendada",
@@ -130,7 +155,31 @@
     "createButton": "Criar Intervenção",
     "saveButton": "Guardar Alterações",
     "scheduledIntervention": "Intervenção Agendada",
-    "noInterventionsYet": "Nenhuma intervenção agendada"
+    "noInterventionsYet": "Nenhuma intervenção agendada",
+    "viewClientDetails": "Ver Detalhes do Cliente →",
+    "breakdownDescription": "Descrição da Avaria",
+    "additionalNotes": "Notas Adicionais",
+    "addParts": "+ Adicionar Peças",
+    "noPartsUsed": "Ainda não foram utilizadas peças.",
+    "unitValue": "Valor Unitário",
+    "partTotal": "Total",
+    "serialNumbers": "Números de Série",
+    "totalPartsValue": "Valor Total das Peças",
+    "navigateTo": "Navegar",
+    "fieldsBreakdown": "Descrição da Avaria",
+    "placeholdersBreakdown": "Descreva o problema ou avaria...",
+    "breakdownHint": "Descreva o que está avariado ou precisa de reparação",
+    "noLocationsWarning": "Sem localizações. Adicione localizações na página do cliente primeiro.",
+    "partsTrackingNote": "As peças utilizadas podem ser registadas após a criação nos detalhes da intervenção.",
+    "addPartsUsed": "Adicionar Peças Utilizadas",
+    "selectPartsFromStock": "Selecione peças do stock do técnico",
+    "loadingStock": "A carregar stock...",
+    "noStockAvailable": "Sem stock disponível",
+    "selectItem": "Selecionar Item",
+    "changePart": "Alterar",
+    "howManyUnits": "Quantas unidades utilizar?",
+    "addPart": "Adicionar Peça",
+    "selected": "Selecionado"
   },
   "admin": {
     "title": "Painel de Administração",
@@ -165,7 +214,19 @@
     "deleteConfirm": "Tem a certeza que deseja eliminar este utilizador?",
     "cannotDelete": "Não é possível eliminar utilizador com intervenções atribuídas",
     "loadingUser": "A carregar utilizador...",
-    "userNotFound": "Utilizador não encontrado"
+    "userNotFound": "Utilizador não encontrado",
+    "equipmentTypes": "Tipos de Equipamento",
+    "equipmentBrands": "Marcas de Equipamento",
+    "addType": "+ Adicionar Tipo",
+    "addBrand": "+ Adicionar Marca",
+    "typeName": "Nome do Tipo",
+    "brandName": "Nome da Marca",
+    "noTypes": "Ainda não há tipos de equipamento.",
+    "noBrands": "Ainda não há marcas de equipamento.",
+    "editType": "Editar Tipo",
+    "editBrand": "Editar Marca",
+    "typeInUse": "Não é possível eliminar: tipo em uso",
+    "brandInUse": "Não é possível eliminar: marca em uso"
   },
   "errors": {
     "unauthorized": "Não autorizado",
@@ -228,6 +289,7 @@
     "selectedSerialNumbers": "Números de Série Selecionados",
     "noSerialNumbersAvailable": "Nenhum número de série disponível",
     "serialNumbersToMove": "Números de Série a Mover",
-    "bulkItem": "Item a Granel (Sem Números de Série)"
+    "bulkItem": "Item a Granel (Sem Números de Série)",
+    "available": "Disponível"
   }
 }

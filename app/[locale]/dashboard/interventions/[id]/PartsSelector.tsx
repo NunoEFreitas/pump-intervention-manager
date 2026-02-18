@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 
 interface StockItem {
   itemId: string
@@ -23,6 +24,10 @@ interface PartsSelectorProps {
 }
 
 export default function PartsSelector({ technicianId, onClose, onPartAdded, interventionId }: PartsSelectorProps) {
+  const t = useTranslations('interventions')
+  const tCommon = useTranslations('common')
+  const tWarehouse = useTranslations('warehouse')
+
   const [loading, setLoading] = useState(true)
   const [stock, setStock] = useState<StockItem[]>([])
   const [selectedItem, setSelectedItem] = useState<StockItem | null>(null)
@@ -110,38 +115,38 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-6 border-b">
-          <h2 className="text-2xl font-bold text-gray-900">Add Parts Used</h2>
-          <p className="text-sm text-gray-600 mt-1">Select parts from technicians stock</p>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="p-4 sm:p-6 border-b">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('addPartsUsed')}</h2>
+          <p className="text-sm text-gray-600 mt-1">{t('selectPartsFromStock')}</p>
         </div>
 
         {loading ? (
-          <div className="p-8 text-center text-gray-600">Loading stock...</div>
+          <div className="p-8 text-center text-gray-600">{t('loadingStock')}</div>
         ) : stock.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">No stock available</div>
+          <div className="p-8 text-center text-gray-600">{t('noStockAvailable')}</div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {!selectedItem ? (
                 <div className="space-y-2">
-                  <h3 className="font-semibold text-gray-700 mb-3">Select Item:</h3>
+                  <h3 className="font-semibold text-gray-700 mb-3">{t('selectItem')}:</h3>
                   {stock.map((item) => (
                     <div
                       key={item.itemId}
-                      className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer transition-colors"
+                      className="p-4 border rounded-lg hover:bg-blue-50 active:bg-blue-100 cursor-pointer transition-colors"
                       onClick={() => handleItemSelect(item)}
                     >
-                      <div className="flex justify-between items-start">
-                        <div>
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-gray-900">{item.itemName}</h4>
-                          <p className="text-sm text-gray-600">Part #: {item.partNumber}</p>
+                          <p className="text-sm text-gray-600">{tWarehouse('partNumber')}: {item.partNumber}</p>
                           <p className="text-sm text-gray-600">
-                            Available: {item.tracksSerialNumbers ? `${item.serialNumbers?.length || 0} units` : `${item.quantity} units`}
+                            {tWarehouse('available')}: {item.tracksSerialNumbers ? `${item.serialNumbers?.length || 0} units` : `${item.quantity} units`}
                           </p>
                         </div>
-                        <span className="text-lg font-bold text-blue-600">€{item.value.toFixed(2)}</span>
+                        <span className="text-base sm:text-lg font-bold text-blue-600 shrink-0">€{item.value.toFixed(2)}</span>
                       </div>
                     </div>
                   ))}
@@ -149,17 +154,17 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex justify-between items-start">
-                      <div>
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-gray-900">{selectedItem.itemName}</h4>
-                        <p className="text-sm text-gray-600">Part #: {selectedItem.partNumber}</p>
+                        <p className="text-sm text-gray-600">{tWarehouse('partNumber')}: {selectedItem.partNumber}</p>
                       </div>
                       <button
                         type="button"
                         onClick={() => setSelectedItem(null)}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
+                        className="text-blue-600 hover:text-blue-800 text-sm shrink-0 py-1 px-2"
                       >
-                        Change
+                        {t('changePart')}
                       </button>
                     </div>
                   </div>
@@ -167,7 +172,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                   {!selectedItem.tracksSerialNumbers ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Quantity
+                        {tWarehouse('quantity')}
                       </label>
                       <input
                         type="number"
@@ -179,13 +184,13 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                         required
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        Available: {selectedItem.quantity} units
+                        {tWarehouse('available')}: {selectedItem.quantity} units
                       </p>
                     </div>
                   ) : (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Select {quantity} Serial Number(s)
+                        {tWarehouse('selectSerialNumbers')} ({quantity})
                       </label>
                       <div className="mb-3">
                         <input
@@ -201,7 +206,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                           required
                         />
                         <p className="text-xs text-gray-500 mt-1">
-                          How many units to use?
+                          {t('howManyUnits')}
                         </p>
                       </div>
                       <div className="border rounded-lg p-3 max-h-48 overflow-y-auto">
@@ -219,17 +224,18 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                                   checked={selectedSerialNumbers.includes(sn.id)}
                                   onChange={() => toggleSerialNumber(sn.id)}
                                   disabled={!selectedSerialNumbers.includes(sn.id) && selectedSerialNumbers.length >= quantity}
+                                  className="w-4 h-4"
                                 />
                                 <span className="font-mono text-sm">{sn.serialNumber}</span>
                               </label>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-sm text-gray-500">No serial numbers available</p>
+                          <p className="text-sm text-gray-500">{tWarehouse('noSerialNumbersAvailable')}</p>
                         )}
                       </div>
                       <p className="text-xs text-gray-500 mt-2">
-                        Selected: {selectedSerialNumbers.length} / {quantity}
+                        {t('selected')}: {selectedSerialNumbers.length} / {quantity}
                       </p>
                     </div>
                   )}
@@ -237,13 +243,13 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
               )}
             </div>
 
-            <div className="p-6 border-t flex gap-3">
+            <div className="p-4 sm:p-6 border-t flex gap-3">
               <button
                 type="submit"
                 className="btn btn-primary flex-1"
                 disabled={!selectedItem || submitting || (selectedItem.tracksSerialNumbers && selectedSerialNumbers.length !== quantity)}
               >
-                {submitting ? 'Adding...' : 'Add Part'}
+                {submitting ? tCommon('adding') : t('addPart')}
               </button>
               <button
                 type="button"
@@ -251,7 +257,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                 className="btn btn-secondary"
                 disabled={submitting}
               >
-                Cancel
+                {tCommon('cancel')}
               </button>
             </div>
           </form>

@@ -105,12 +105,12 @@ function InterventionsContent() {
 
   return (
     <div>
-      <div className="px-4 sm:px-0 flex justify-between items-center mb-6">
+      <div className="px-4 sm:px-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('title')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{t('title')}</h1>
           <p className="text-gray-600">{t('subtitle')}</p>
         </div>
-        <button onClick={() => router.push(`/${locale}/dashboard/interventions/new`)} className="btn btn-primary">{t('newIntervention')}</button>
+        <button onClick={() => router.push(`/${locale}/dashboard/interventions/new`)} className="btn btn-primary w-full sm:w-auto">{t('newIntervention')}</button>
       </div>
 
       <div className="card mb-6">
@@ -128,7 +128,7 @@ function InterventionsContent() {
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
-              className={`px-4 py-2 rounded-lg ${
+              className={`px-2 py-1.5 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-medium ${
                 statusFilter === status
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 text-gray-700 hover:bg-gray-300'

@@ -43,6 +43,7 @@ export async function POST(request: NextRequest) {
 
     const client = await prisma.client.create({
       data: {
+        clientType: data.clientType || 'PRIVATE',
         name: data.name,
         address: data.address,
         city: data.city,

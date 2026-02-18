@@ -10,6 +10,7 @@ interface Client {
   city: string
   phone: string
   email: string
+  clientType: 'PRIVATE' | 'COMPANY'
   _count?: {
     interventions: number
   }
@@ -59,14 +60,14 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <div className="px-4 sm:px-0 flex justify-between items-center mb-6">
+      <div className="px-4 sm:px-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{tClients('title')}</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{tClients('title')}</h1>
           <p className="text-gray-600">{tClients('subtitle')}</p>
         </div>
         <button
           onClick={() => router.push(`/${locale}/dashboard/clients/new`)}
-          className="btn btn-primary"
+          className="btn btn-primary w-full sm:w-auto"
         >
           {tClients('addClient')}
         </button>
@@ -102,12 +103,17 @@ export default function ClientsPage() {
             <div
               key={client.id}
               className="card hover:shadow-lg transition-shadow cursor-pointer"
-              onClick={() => router.push(`/dashboard/clients/${client.id}`)}
+              onClick={() => router.push(`/${locale}/dashboard/clients/${client.id}`)}
             >
               <div className="flex justify-between items-start mb-3">
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {client.name}
-                </h3>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {client.name}
+                  </h3>
+                  <span className={`text-xs px-2 py-0.5 rounded-full ${client.clientType === 'COMPANY' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'}`}>
+                    {client.clientType === 'COMPANY' ? tClients('company') : tClients('private')}
+                  </span>
+                </div>
                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                   {client._count?.interventions || 0} {tClients('interventions')}
                 </span>

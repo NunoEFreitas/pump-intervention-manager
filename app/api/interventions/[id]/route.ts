@@ -22,6 +22,17 @@ export async function GET(
       where: { id },
       include: {
         client: true,
+        location: {
+          include: {
+            equipment: {
+              include: {
+                equipmentType: { select: { name: true } },
+                brand: { select: { name: true } },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          },
+        },
         assignedTo: {
           select: {
             id: true,
@@ -131,6 +142,7 @@ export async function PUT(
       where: { id },
       data: {
         clientId: data.clientId,
+        locationId: data.locationId !== undefined ? (data.locationId || null) : undefined,
         assignedToId: data.assignedToId,
         status: data.status,
         scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : undefined,
@@ -142,6 +154,13 @@ export async function PUT(
       },
       include: {
         client: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+          },
+        },
+        location: {
           select: {
             id: true,
             name: true,

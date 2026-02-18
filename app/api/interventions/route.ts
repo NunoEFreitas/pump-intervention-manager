@@ -45,6 +45,13 @@ export async function GET(request: NextRequest) {
             city: true,
           },
         },
+        location: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+          },
+        },
         assignedTo: {
           select: {
             id: true,
@@ -86,9 +93,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // If client is COMPANY, locationId is required
+    const client = await prisma.client.findUnique({ where: { id: data.clientId }, select: { clientType: true } })
+    if (client?.clientType === 'COMPANY' && !data.locationId) {
+      return NextResponse.json(
+        { error: 'Location is required for company clients' },
+        { status: 400 }
+      )
+    }
+
     const intervention = await prisma.intervention.create({
       data: {
         clientId: data.clientId,
+        locationId: data.locationId || null,
         assignedToId: data.assignedToId,
         createdById: payload.userId,
         status: 'OPEN',
@@ -101,6 +118,13 @@ export async function POST(request: NextRequest) {
       },
       include: {
         client: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+          },
+        },
+        location: {
           select: {
             id: true,
             name: true,
