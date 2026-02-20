@@ -8,7 +8,6 @@ interface StockItem {
   itemId: string
   itemName: string
   partNumber: string
-  serialNumber: string | null
   value: number
   quantity: number
   totalValue: number
@@ -181,12 +180,6 @@ export default function TechnicianStockPage() {
                         <span className="text-gray-600">{t('partNumber')}:</span>
                         <p className="font-medium text-gray-900">{stock.partNumber}</p>
                       </div>
-                      {stock.serialNumber && (
-                        <div>
-                          <span className="text-gray-600">{t('serialNumber')}:</span>
-                          <p className="font-medium text-gray-900">{stock.serialNumber}</p>
-                        </div>
-                      )}
                       <div>
                         <span className="text-gray-600">{t('value')}:</span>
                         <p className="font-medium text-gray-900">€{stock.value.toFixed(2)}</p>

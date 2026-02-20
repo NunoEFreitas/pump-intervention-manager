@@ -31,9 +31,16 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
+    // Fetch new fields not yet in Prisma client via raw SQL
+    const extraFields = await prisma.$queryRaw<Array<{ id: string; autoSn: boolean; snExample: string | null }>>`
+      SELECT id, "autoSn", "snExample" FROM "WarehouseItem"
+    `
+    const extraMap = new Map(extraFields.map(f => [f.id, f]))
+
     // Calculate total technician stock for each item
     const itemsWithTotals = items.map(item => ({
       ...item,
+      ...extraMap.get(item.id),
       totalTechnicianStock: item.technicianStocks.reduce((sum, ts) => sum + ts.quantity, 0),
       totalStock: item.mainWarehouse + item.technicianStocks.reduce((sum, ts) => sum + ts.quantity, 0),
     }))
@@ -78,18 +85,33 @@ export async function POST(request: NextRequest) {
     }
 
     const tracksSerialNumbers = data.tracksSerialNumbers === true || data.tracksSerialNumbers === 'true'
+    const autoSn = tracksSerialNumbers && (data.autoSn === true || data.autoSn === 'true')
+    const snExample = autoSn ? (data.snExample?.trim() || null) : null
+
+    if (autoSn && !snExample) {
+      return NextResponse.json(
+        { error: 'SN example is required when automatic SN generation is enabled' },
+        { status: 400 }
+      )
+    }
+
     const initialStock = tracksSerialNumbers ? 0 : (parseInt(data.mainWarehouse) || 0)
 
+    // Create without new fields (Prisma client binary not yet updated)
     const item = await prisma.warehouseItem.create({
       data: {
         itemName: data.itemName,
         partNumber: data.partNumber,
-        serialNumber: data.serialNumber || null,
         value: parseFloat(data.value),
         mainWarehouse: initialStock,
         tracksSerialNumbers,
       },
     })
+
+    // Set new fields via raw SQL
+    await prisma.$executeRaw`
+      UPDATE "WarehouseItem" SET "autoSn" = ${autoSn}, "snExample" = ${snExample} WHERE id = ${item.id}
+    `
 
     // If initial stock is added (only for non-serialized items), create a movement record
     if (initialStock > 0 && !tracksSerialNumbers) {
@@ -104,7 +126,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json(item, { status: 201 })
+    return NextResponse.json({ ...item, autoSn, snExample }, { status: 201 })
   } catch (error) {
     console.error('Error creating warehouse item:', error)
     return NextResponse.json(

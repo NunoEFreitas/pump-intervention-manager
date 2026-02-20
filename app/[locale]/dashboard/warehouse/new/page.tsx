@@ -17,10 +17,11 @@ export default function NewWarehouseItemPage() {
   const [formData, setFormData] = useState({
     itemName: '',
     partNumber: '',
-    serialNumber: '',
     value: '',
     mainWarehouse: '0',
     tracksSerialNumbers: false,
+    autoSn: false,
+    snExample: '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -69,7 +70,7 @@ export default function NewWarehouseItemPage() {
           ← {tCommon('back')}
         </button>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('newItem')}</h1>
-        <p className="text-gray-600">Add a new item to warehouse inventory</p>
+        <p className="text-gray-600">{t('newItemSubtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
@@ -103,30 +104,13 @@ export default function NewWarehouseItemPage() {
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('serialNumber')}
-          </label>
-          <input
-            type="text"
-            name="serialNumber"
-            className="input text-gray-800"
-            value={formData.serialNumber}
-            onChange={handleChange}
-            placeholder="Optional - Example or template"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            This is just an example/template, not used for tracking
-          </p>
-        </div>
-
-        <div className="border-t pt-4">
+        <div className="border-t pt-4 space-y-3">
           <div className="flex items-start gap-3">
             <input
               type="checkbox"
               id="tracksSerialNumbers"
               checked={formData.tracksSerialNumbers}
-              onChange={(e) => setFormData({...formData, tracksSerialNumbers: e.target.checked})}
+              onChange={(e) => setFormData({...formData, tracksSerialNumbers: e.target.checked, autoSn: false, snExample: ''})}
               className="mt-1"
             />
             <div className="flex-1">
@@ -134,18 +118,55 @@ export default function NewWarehouseItemPage() {
                 {t('tracksSerialNumbers')}
               </label>
               <p className="text-xs text-gray-500 mt-1">
-                Enable if each unit has a unique serial number (e.g., pumps, motors).
-                Leave unchecked for bulk items (e.g., bolts, washers).
+                {t('tracksSnHelp')}
               </p>
-              {formData.tracksSerialNumbers && (
-                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <p className="text-xs text-blue-800">
-                    <strong>Note:</strong> With serial number tracking enabled, youll need to enter individual serial numbers when adding stock. Each unit will be tracked separately.
-                  </p>
-                </div>
-              )}
             </div>
           </div>
+
+          {formData.tracksSerialNumbers && (
+            <div className="ml-6 flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="autoSn"
+                checked={formData.autoSn}
+                onChange={(e) => setFormData({...formData, autoSn: e.target.checked, snExample: ''})}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <label htmlFor="autoSn" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  {t('autoSnGeneration')}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('autoSnGenerationHelp')}
+                </p>
+                {formData.autoSn && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      {t('snExample')} *
+                    </label>
+                    <input
+                      type="text"
+                      className="input text-gray-800"
+                      value={formData.snExample}
+                      onChange={(e) => setFormData({...formData, snExample: e.target.value})}
+                      placeholder="e.g. PTT"
+                      required={formData.autoSn}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {t('snExampleHelp', { example: formData.snExample || 'PTT' })}
+                    </p>
+                  </div>
+                )}
+                {!formData.autoSn && (
+                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                    <p className="text-xs text-blue-800">
+                      {t('manualSnNote')}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
@@ -167,7 +188,7 @@ export default function NewWarehouseItemPage() {
         {!formData.tracksSerialNumbers && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('mainWarehouse')} (Initial Stock)
+              {t('mainWarehouse')}
             </label>
             <input
               type="number"
@@ -179,7 +200,7 @@ export default function NewWarehouseItemPage() {
               min="0"
             />
             <p className="text-xs text-gray-500 mt-1">
-              You can add more stock later using stock operations
+              {t('initialStockHelp')}
             </p>
           </div>
         )}
@@ -187,7 +208,7 @@ export default function NewWarehouseItemPage() {
         {formData.tracksSerialNumbers && (
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
             <p className="text-sm text-yellow-800">
-              Initial stock must be 0 for serial number tracked items. Add stock with serial numbers using Add Stock operation after creating the item.
+              {t('snInitialStockNote')}
             </p>
           </div>
         )}

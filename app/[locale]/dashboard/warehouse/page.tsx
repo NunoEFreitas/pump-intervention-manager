@@ -9,7 +9,6 @@ interface WarehouseItem {
   id: string
   itemName: string
   partNumber: string
-  serialNumber: string | null
   value: number
   mainWarehouse: number
   tracksSerialNumbers: boolean
@@ -127,12 +126,7 @@ export default function WarehousePage() {
                       <span className="font-medium text-gray-600">{t('partNumber')}:</span>
                       <p className="text-gray-900">{item.partNumber}</p>
                     </div>
-                    {item.serialNumber && (
-                      <div>
-                        <span className="font-medium text-gray-600">{t('serialNumber')}:</span>
-                        <p className="text-gray-900">{item.serialNumber}</p>
-                      </div>
-                    )}
+
                     <div>
                       <span className="font-medium text-gray-600">{t('value')}:</span>
                       <p className="text-gray-900">€{item.value.toFixed(2)}</p>

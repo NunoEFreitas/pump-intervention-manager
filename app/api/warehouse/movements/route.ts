@@ -127,12 +127,17 @@ export async function POST(request: NextRequest) {
           )
         }
         
-        // Update technician stock
-        await prisma.technicianStock.update({
-          where: { id: techStock.id },
-          data: { quantity: techStock.quantity - quantity },
-        })
-        
+        // Update technician stock — delete record if it reaches 0
+        const newTechQty = techStock.quantity - quantity
+        if (newTechQty <= 0) {
+          await prisma.technicianStock.delete({ where: { id: techStock.id } })
+        } else {
+          await prisma.technicianStock.update({
+            where: { id: techStock.id },
+            data: { quantity: newTechQty },
+          })
+        }
+
         // Update main warehouse
         await prisma.warehouseItem.update({
           where: { id: data.itemId },
@@ -141,34 +146,16 @@ export async function POST(request: NextRequest) {
         break
         
       case 'USE':
-        if (!data.fromUserId) {
+        // Deduct directly from main warehouse — createdById records who consumed it
+        if (item.mainWarehouse < quantity) {
           return NextResponse.json(
-            { error: 'Technician ID required for usage' },
+            { error: 'Insufficient stock in main warehouse' },
             { status: 400 }
           )
         }
-        
-        const useTechStock = await prisma.technicianStock.findUnique({
-          where: {
-            itemId_technicianId: {
-              itemId: data.itemId,
-              technicianId: data.fromUserId,
-            },
-          },
-        })
-        
-        if (!useTechStock || useTechStock.quantity < quantity) {
-          return NextResponse.json(
-            { error: 'Insufficient stock with technician' },
-            { status: 400 }
-          )
+        updateData = {
+          mainWarehouse: item.mainWarehouse - quantity,
         }
-        
-        // Update technician stock
-        await prisma.technicianStock.update({
-          where: { id: useTechStock.id },
-          data: { quantity: useTechStock.quantity - quantity },
-        })
         break
         
       default:

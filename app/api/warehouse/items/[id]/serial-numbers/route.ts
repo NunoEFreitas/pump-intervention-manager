@@ -78,14 +78,7 @@ export async function POST(
     }
 
     const data = await request.json()
-    const { serialNumbers, location, technicianId } = data
-
-    if (!serialNumbers || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
-      return NextResponse.json(
-        { error: 'Serial numbers array is required' },
-        { status: 400 }
-      )
-    }
+    const { serialNumbers, location, technicianId, autoGenerate, quantity } = data
 
     // Check if item tracks serial numbers
     const item = await prisma.warehouseItem.findUnique({
@@ -99,6 +92,65 @@ export async function POST(
     if (!item.tracksSerialNumbers) {
       return NextResponse.json(
         { error: 'This item does not track serial numbers' },
+        { status: 400 }
+      )
+    }
+
+    // Auto-generate serial numbers using snExample prefix
+    if (autoGenerate) {
+      // Fetch snExample via raw SQL (Prisma client binary not yet updated)
+      const [extra] = await prisma.$queryRaw<Array<{ snExample: string | null }>>`
+        SELECT "snExample" FROM "WarehouseItem" WHERE id = ${id}
+      `
+      const snExamplePrefix = extra?.snExample ?? null
+      if (!snExamplePrefix) {
+        return NextResponse.json(
+          { error: 'This item has no SN example prefix configured' },
+          { status: 400 }
+        )
+      }
+
+      const qty = parseInt(quantity)
+      if (!qty || qty < 1) {
+        return NextResponse.json({ error: 'Quantity must be at least 1' }, { status: 400 })
+      }
+
+      // Find max existing numeric suffix for this prefix
+      const allExisting = await prisma.serialNumberStock.findMany({
+        where: { itemId: id },
+        select: { serialNumber: true },
+      })
+
+      const prefix = snExamplePrefix + '-'
+      const maxSuffix = allExisting.reduce((max, sn) => {
+        if (sn.serialNumber.startsWith(prefix)) {
+          const num = parseInt(sn.serialNumber.slice(prefix.length))
+          if (!isNaN(num) && num > max) return num
+        }
+        return max
+      }, 0)
+
+      const generatedSNs = Array.from({ length: qty }, (_, i) => `${snExamplePrefix}-${maxSuffix + i + 1}`)
+
+      await prisma.serialNumberStock.createMany({
+        data: generatedSNs.map((sn) => ({
+          itemId: id,
+          serialNumber: sn,
+          location: location || 'MAIN_WAREHOUSE',
+          status: 'AVAILABLE',
+        })),
+      })
+
+      return NextResponse.json(
+        { created: qty, message: `${qty} serial numbers auto-generated`, serialNumbers: generatedSNs },
+        { status: 201 }
+      )
+    }
+
+    // Manual serial numbers
+    if (!serialNumbers || !Array.isArray(serialNumbers) || serialNumbers.length === 0) {
+      return NextResponse.json(
+        { error: 'Serial numbers array is required' },
         { status: 400 }
       )
     }
@@ -132,7 +184,7 @@ export async function POST(
     })
 
     return NextResponse.json(
-      { created: created.count, message: `${created.count} serial numbers added` },
+      { created: created.count, message: `${created.count} serial numbers added`, serialNumbers: [] },
       { status: 201 }
     )
   } catch (error) {

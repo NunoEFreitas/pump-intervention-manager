@@ -60,7 +60,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
     if (!selectedItem) return
 
     if (selectedItem.tracksSerialNumbers && selectedSerialNumbers.length !== quantity) {
-      alert('Please select the correct number of serial numbers')
+      alert(t('selectCorrectSnCount'))
       return
     }
 
@@ -83,13 +83,13 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
 
       if (!response.ok) {
         const data = await response.json()
-        throw new Error(data.error || 'Failed to add part')
+        throw new Error(data.error || t('failedToAddPart'))
       }
 
       onPartAdded()
       onClose()
     } catch (error: any) {
-      alert(error.message || 'Failed to add part')
+      alert(error.message || t('failedToAddPart'))
     } finally {
       setSubmitting(false)
     }
@@ -143,7 +143,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                           <h4 className="font-semibold text-gray-900">{item.itemName}</h4>
                           <p className="text-sm text-gray-600">{tWarehouse('partNumber')}: {item.partNumber}</p>
                           <p className="text-sm text-gray-600">
-                            {tWarehouse('available')}: {item.tracksSerialNumbers ? `${item.serialNumbers?.length || 0} units` : `${item.quantity} units`}
+                            {tWarehouse('available')}: {item.tracksSerialNumbers ? `${item.serialNumbers?.length || 0} ${tWarehouse('units')}` : `${item.quantity} ${tWarehouse('units')}`}
                           </p>
                         </div>
                         <span className="text-base sm:text-lg font-bold text-blue-600 shrink-0">€{item.value.toFixed(2)}</span>
@@ -184,7 +184,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                         required
                       />
                       <p className="text-xs text-gray-500 mt-1">
-                        {tWarehouse('available')}: {selectedItem.quantity} units
+                        {tWarehouse('available')}: {selectedItem.quantity} {tWarehouse('units')}
                       </p>
                     </div>
                   ) : (

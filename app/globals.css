@@ -26,6 +26,28 @@ body {
     rgb(var(--background-start-rgb));
 }
 
+/* ── Thermal label printing ─────────────────────────────────────────────── */
+@media print {
+  /* Hide everything by default */
+  body > * { display: none !important; }
+
+  /* Show only the label print area */
+  #label-print-root { display: block !important; }
+
+  @page {
+    size: 62mm 29mm;
+    margin: 0;
+  }
+
+  .label-page {
+    width: 62mm;
+    height: 29mm;
+    page-break-after: always;
+    page-break-inside: avoid;
+    overflow: hidden;
+  }
+}
+
 @layer components {
   .btn {
     @apply px-4 py-2 rounded-lg font-medium transition-colors;

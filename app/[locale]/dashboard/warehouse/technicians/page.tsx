@@ -82,18 +82,18 @@ export default function TechniciansPage() {
 
               <div className="flex gap-4 mb-4">
                 <div className="flex-1 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-blue-600 font-medium mb-1">Total Items</p>
+                  <p className="text-xs text-blue-600 font-medium mb-1">{t('totalItems')}</p>
                   <p className="text-2xl font-bold text-blue-900">{tech.totalItems}</p>
                 </div>
                 <div className="flex-1 p-3 bg-green-50 rounded-lg">
-                  <p className="text-xs text-green-600 font-medium mb-1">Total Value</p>
+                  <p className="text-xs text-green-600 font-medium mb-1">{t('totalValue')}</p>
                   <p className="text-xl font-bold text-green-900">€{tech.totalValue.toFixed(2)}</p>
                 </div>
               </div>
 
               {tech.stockItems.length > 0 && (
                 <div className="pt-3 border-t">
-                  <p className="text-xs text-gray-500 mb-2">Stock Items:</p>
+                  <p className="text-xs text-gray-500 mb-2">{t('stockItemsLabel')}</p>
                   <div className="space-y-1">
                     {tech.stockItems.slice(0, 3).map((item, idx) => (
                       <p key={idx} className="text-sm text-gray-700">
@@ -101,7 +101,7 @@ export default function TechniciansPage() {
                       </p>
                     ))}
                     {tech.stockItems.length > 3 && (
-                      <p className="text-xs text-gray-500">+{tech.stockItems.length - 3} more...</p>
+                      <p className="text-xs text-gray-500">{t('moreItems', { count: tech.stockItems.length - 3 })}</p>
                     )}
                   </div>
                 </div>

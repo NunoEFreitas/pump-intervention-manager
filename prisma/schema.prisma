@@ -148,10 +148,11 @@ model WarehouseItem {
   id                  String              @id @default(uuid())
   itemName            String
   partNumber          String
-  serialNumber        String?             // Template/example for serialized items
   value               Float
   mainWarehouse       Int                 @default(0)  // Count for non-serialized items
   tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
+  autoSn              Boolean             @default(false) // Auto-generate serial numbers on add stock
+  snExample           String?             // Prefix for auto-generated SNs (e.g. "PTT" → "PTT-1", "PTT-2")
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
   movements           ItemMovement[]

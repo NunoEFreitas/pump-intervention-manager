@@ -104,7 +104,10 @@
     "equipmentBrand": "Marca",
     "equipmentModel": "Modelo",
     "noEquipment": "Nenhum equipamento registado.",
-    "saveEquipment": "Guardar Equipamento"
+    "saveEquipment": "Guardar Equipamento",
+    "selectClient": "Selecionar um cliente...",
+    "searchClients": "Pesquisar clientes...",
+    "noClientsInDropdown": "Nenhum cliente encontrado"
   },
   "interventions": {
     "title": "Intervenções",
@@ -179,7 +182,9 @@
     "changePart": "Alterar",
     "howManyUnits": "Quantas unidades utilizar?",
     "addPart": "Adicionar Peça",
-    "selected": "Selecionado"
+    "selected": "Selecionado",
+    "selectCorrectSnCount": "Por favor selecione o número correto de números de série",
+    "failedToAddPart": "Falha ao adicionar peça"
   },
   "admin": {
     "title": "Painel de Administração",
@@ -290,6 +295,42 @@
     "noSerialNumbersAvailable": "Nenhum número de série disponível",
     "serialNumbersToMove": "Números de Série a Mover",
     "bulkItem": "Item a Granel (Sem Números de Série)",
-    "available": "Disponível"
+    "available": "Disponível",
+    "printLabels": "Imprimir Etiquetas",
+    "label": "etiqueta",
+    "labels": "etiquetas",
+    "autoSnGeneration": "Geração Automática de NS",
+    "autoSnGenerationHelp": "Os números de série serão gerados automaticamente usando um prefixo ao adicionar stock.",
+    "snExample": "Prefixo de NS",
+    "snExampleHelp": "Os números de série serão gerados como {example}-1, {example}-2, etc.",
+    "manualSnNote": "Terá de inserir os números de série individualmente ao adicionar stock. Cada unidade será rastreada separadamente.",
+    "snTracked": "NS Rastreado",
+    "noSnInMainWarehouse": "Sem números de série no armazém principal",
+    "technicianColon": "Técnico: {name}",
+    "used": "Usado",
+    "noMovements": "Sem movimentos ainda",
+    "units": "unidades",
+    "movementFrom": "De: {name}",
+    "movementTo": "Para: {name}",
+    "movementBy": "Por: {name}",
+    "movementSerialNumbers": "Números de Série:",
+    "deleteItemConfirm": "Tem a certeza que deseja eliminar este item?",
+    "itemNotFound": "Item não encontrado",
+    "serialNumberTrackingEnabled": "Rastreamento de Número de Série ativo",
+    "selectTechnician": "Selecionar técnico",
+    "nSelected": "{count} selecionado(s)",
+    "operationFailed": "Operação falhou",
+    "enterValidQuantity": "Por favor insira uma quantidade válida",
+    "enterAtLeastOneSn": "Por favor insira pelo menos um número de série",
+    "selectAtLeastOneSn": "Por favor selecione pelo menos um número de série",
+    "maxAvailable": "Máximo disponível: {max}",
+    "totalItems": "Total de Itens",
+    "totalValue": "Valor Total",
+    "stockItemsLabel": "Itens em stock:",
+    "moreItems": "+{count} mais...",
+    "newItemSubtitle": "Adicionar um novo item ao inventário do armazém",
+    "tracksSnHelp": "Ative se cada unidade tem um número de série único (ex., bombas, motores). Deixe desmarcado para itens a granel (ex., parafusos, anilhas).",
+    "initialStockHelp": "Pode adicionar mais stock posteriormente usando operações de stock",
+    "snInitialStockNote": "O stock inicial deve ser 0 para itens com rastreamento de número de série. Adicione stock com números de série usando a operação Adicionar Stock após criar o item."
   }
 }

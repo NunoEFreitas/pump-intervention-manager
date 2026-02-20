@@ -35,10 +35,11 @@ interface Item {
   id: string
   itemName: string
   partNumber: string
-  serialNumber: string | null
   value: number
   mainWarehouse: number
   tracksSerialNumbers: boolean
+  autoSn: boolean
+  snExample: string | null
   technicianStocks: Array<{
     technician: { id: string; name: string }
     quantity: number
@@ -62,8 +63,9 @@ export default function WarehouseItemDetailPage() {
   const [editData, setEditData] = useState({
     itemName: '',
     partNumber: '',
-    serialNumber: '',
     value: '',
+    autoSn: false,
+    snExample: '',
   })
 
   useEffect(() => {
@@ -83,8 +85,9 @@ export default function WarehouseItemDetailPage() {
       setEditData({
         itemName: data.itemName,
         partNumber: data.partNumber,
-        serialNumber: data.serialNumber || '',
         value: data.value.toString(),
+        autoSn: data.autoSn ?? false,
+        snExample: data.snExample || '',
       })
 
       // Fetch serial numbers if item tracks them
@@ -134,7 +137,7 @@ export default function WarehouseItemDetailPage() {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this item?')) return
+    if (!confirm(t('deleteItemConfirm'))) return
 
     try {
       const token = localStorage.getItem('token')
@@ -192,7 +195,7 @@ export default function WarehouseItemDetailPage() {
   }
 
   if (!item) {
-    return <div className="card">Item not found</div>
+    return <div className="card">{t('itemNotFound')}</div>
   }
 
   return (
@@ -217,7 +220,7 @@ export default function WarehouseItemDetailPage() {
                   </h1>
                   {item.tracksSerialNumbers && (
                     <span className="px-3 py-1 text-sm font-medium bg-purple-100 text-purple-800 rounded">
-                      SN Tracked
+                      {t('snTracked')}
                     </span>
                   )}
                 </div>
@@ -244,12 +247,7 @@ export default function WarehouseItemDetailPage() {
                 <p className="text-sm text-gray-600">{t('partNumber')}</p>
                 <p className="text-lg font-semibold text-gray-900">{item.partNumber}</p>
               </div>
-              {item.serialNumber && (
-                <div>
-                  <p className="text-sm text-gray-600">{t('serialNumber')}</p>
-                  <p className="text-lg font-semibold text-gray-900">{item.serialNumber}</p>
-                </div>
-              )}
+
               <div>
                 <p className="text-sm text-gray-600">{t('value')}</p>
                 <p className="text-lg font-semibold text-gray-900">€{item.value.toFixed(2)}</p>
@@ -278,11 +276,11 @@ export default function WarehouseItemDetailPage() {
                       {item.technicianStocks.map((ts, idx) => (
                         <div key={idx} className="flex justify-between items-center p-4 bg-green-50 rounded-lg border border-green-200">
                           <div>
-                            <p className="text-sm text-green-600 font-medium">Technician</p>
+                            <p className="text-sm text-green-600 font-medium">{t('technician')}</p>
                             <p className="text-gray-900 font-semibold">{ts.technician.name}</p>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm text-green-600 font-medium">Quantity</p>
+                            <p className="text-sm text-green-600 font-medium">{t('quantity')}</p>
                             <p className="text-2xl font-bold text-green-900">{ts.quantity}</p>
                           </div>
                         </div>
@@ -310,7 +308,7 @@ export default function WarehouseItemDetailPage() {
                           ))}
                       </div>
                     ) : (
-                      <p className="text-sm text-blue-600">No serial numbers in main warehouse</p>
+                      <p className="text-sm text-blue-600">{t('noSnInMainWarehouse')}</p>
                     )}
                   </div>
                 </div>
@@ -323,7 +321,7 @@ export default function WarehouseItemDetailPage() {
 
                   return (
                     <div key={techId} className="mb-4">
-                      <h4 className="text-sm font-medium text-green-600 mb-2">Technician: {techName}</h4>
+                      <h4 className="text-sm font-medium text-green-600 mb-2">{t('technicianColon', { name: techName })}</h4>
                       <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                         <div className="flex flex-wrap gap-2">
                           {techSerials.map(sn => (
@@ -340,7 +338,7 @@ export default function WarehouseItemDetailPage() {
                 {/* Used Serial Numbers */}
                 {serialNumbers.filter(sn => sn.location === 'USED').length > 0 && (
                   <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-600 mb-2">Used</h4>
+                    <h4 className="text-sm font-medium text-gray-600 mb-2">{t('used')}</h4>
                     <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <div className="flex flex-wrap gap-2">
                         {serialNumbers
@@ -369,25 +367,45 @@ export default function WarehouseItemDetailPage() {
               </button>
               <button
                 onClick={() => openStockOperation('REMOVE_STOCK')}
-                className="btn btn-secondary"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
+                    : item.mainWarehouse === 0
+                }
               >
                 {t('removeStock')}
               </button>
               <button
                 onClick={() => openStockOperation('TRANSFER_TO_TECH')}
-                className="btn btn-primary"
+                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
+                    : item.mainWarehouse === 0
+                }
               >
                 {t('transferToTech')}
               </button>
               <button
                 onClick={() => openStockOperation('TRANSFER_FROM_TECH')}
-                className="btn btn-secondary"
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length === 0
+                    : item.technicianStocks.length === 0
+                }
               >
                 {t('transferFromTech')}
               </button>
               <button
                 onClick={() => openStockOperation('USE')}
-                className="btn btn-danger"
+                className="btn btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
+                    : item.mainWarehouse === 0
+                }
               >
                 {t('useStock')}
               </button>
@@ -397,7 +415,7 @@ export default function WarehouseItemDetailPage() {
           <div className="card">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{t('movements')}</h2>
             {item.movements.length === 0 ? (
-              <p className="text-gray-600">No movements yet</p>
+              <p className="text-gray-600">{t('noMovements')}</p>
             ) : (
               <div className="space-y-3">
                 {item.movements.map((movement) => (
@@ -414,7 +432,7 @@ export default function WarehouseItemDetailPage() {
                             ? 'text-red-600'
                             : 'text-gray-600'
                         }`}>
-                          {getMovementSign(movement.movementType)}{movement.quantity} units
+                          {getMovementSign(movement.movementType)}{movement.quantity} {t('units')}
                         </span>
                       </div>
                       <span className="text-sm text-gray-500">
@@ -423,14 +441,14 @@ export default function WarehouseItemDetailPage() {
                     </div>
                     
                     <div className="text-sm text-gray-600">
-                      {movement.fromUser && <span>From: {movement.fromUser.name} </span>}
-                      {movement.toUser && <span>To: {movement.toUser.name} </span>}
-                      <span>By: {movement.createdBy.name}</span>
+                      {movement.fromUser && <span>{t('movementFrom', { name: movement.fromUser.name })} </span>}
+                      {movement.toUser && <span>{t('movementTo', { name: movement.toUser.name })} </span>}
+                      <span>{t('movementBy', { name: movement.createdBy.name })}</span>
                     </div>
 
                     {movement.serialNumbers && movement.serialNumbers.length > 0 && (
                       <div className="mt-2">
-                        <p className="text-xs text-gray-500 mb-1">Serial Numbers:</p>
+                        <p className="text-xs text-gray-500 mb-1">{t('movementSerialNumbers')}</p>
                         <div className="flex flex-wrap gap-1">
                           {movement.serialNumbers.map((msn) => (
                             <span
@@ -485,18 +503,6 @@ export default function WarehouseItemDetailPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('serialNumber')}
-            </label>
-            <input
-              type="text"
-              className="input text-gray-800"
-              value={editData.serialNumber}
-              onChange={(e) => setEditData({ ...editData, serialNumber: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
               {t('value')}
             </label>
             <input
@@ -510,13 +516,38 @@ export default function WarehouseItemDetailPage() {
           </div>
 
           {item.tracksSerialNumbers && (
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg">
-              <p className="text-sm font-medium text-purple-900 mb-1">
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-3">
+              <p className="text-sm font-medium text-purple-900">
                 {t('serialNumberTracking')}
               </p>
-              <p className="text-xs text-purple-700">
-                This item uses serial number tracking. Stock is managed through individual serial numbers.
-              </p>
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="editAutoSn"
+                  checked={editData.autoSn}
+                  onChange={(e) => setEditData({...editData, autoSn: e.target.checked, snExample: ''})}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <label htmlFor="editAutoSn" className="text-sm font-medium text-purple-900 cursor-pointer">
+                    {t('autoSnGeneration')}
+                  </label>
+                  {editData.autoSn && (
+                    <div className="mt-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('snExample')} *
+                      </label>
+                      <input
+                        type="text"
+                        className="input text-gray-800"
+                        value={editData.snExample}
+                        onChange={(e) => setEditData({...editData, snExample: e.target.value})}
+                        placeholder="e.g. PTT"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
@@ -539,8 +570,13 @@ export default function WarehouseItemDetailPage() {
         <StockOperationModal
           itemId={item.id}
           itemName={item.itemName}
+          partNumber={item.partNumber}
           tracksSerialNumbers={item.tracksSerialNumbers}
+          autoSn={item.autoSn}
+          snExample={item.snExample}
           operation={stockOperation}
+          mainWarehouse={item.mainWarehouse}
+          technicianStocks={item.technicianStocks}
           onClose={() => setShowStockModal(false)}
           onSuccess={() => {
             setShowStockModal(false)

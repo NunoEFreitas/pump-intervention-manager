@@ -70,7 +70,12 @@ export async function GET(
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
     }
 
-    return NextResponse.json(item)
+    // Fetch new fields not yet in Prisma client via raw SQL
+    const [extra] = await prisma.$queryRaw<Array<{ autoSn: boolean; snExample: string | null }>>`
+      SELECT "autoSn", "snExample" FROM "WarehouseItem" WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...item, ...(extra ?? {}) })
   } catch (error) {
     console.error('Error fetching warehouse item:', error)
     return NextResponse.json(
@@ -110,12 +115,18 @@ export async function PUT(
       data: {
         itemName: data.itemName,
         partNumber: data.partNumber,
-        serialNumber: data.serialNumber,
         value: parseFloat(data.value),
       },
     })
 
-    return NextResponse.json(item)
+    // Update new fields via raw SQL
+    const newAutoSn = data.autoSn === true || data.autoSn === 'true'
+    const newSnExample = data.snExample?.trim() || null
+    await prisma.$executeRaw`
+      UPDATE "WarehouseItem" SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample} WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...item, autoSn: newAutoSn, snExample: newSnExample })
   } catch (error) {
     console.error('Error updating warehouse item:', error)
     return NextResponse.json(

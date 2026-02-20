@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-    } else if (movementType === 'TRANSFER_FROM_TECH' || movementType === 'USE') {
+    } else if (movementType === 'TRANSFER_FROM_TECH') {
       // Must be with the specified technician
       const notWithTech = serialNumbers.filter(
         sn => sn.location !== 'TECHNICIAN' || sn.technicianId !== fromUserId
@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         )
       }
     }
+    // For USE: any available serial number can be consumed — no location restriction
 
     // Create the movement record
     const movement = await prisma.itemMovement.create({
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
         itemId,
         movementType,
         quantity: serialNumberIds.length,
-        fromUserId,
+        fromUserId: fromUserId || null,
         toUserId,
         notes,
         createdById: payload.userId,
@@ -90,8 +91,12 @@ export async function POST(request: NextRequest) {
           technicianId: toUserId,
         },
       })
-      // Update technician stock count
       await updateTechnicianStock(itemId, toUserId)
+      // Decrement main warehouse counter (all transferred items came from there)
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: { mainWarehouse: { decrement: serialNumberIds.length } },
+      })
     } else if (movementType === 'TRANSFER_FROM_TECH') {
       await prisma.serialNumberStock.updateMany({
         where: { id: { in: serialNumberIds } },
@@ -100,8 +105,12 @@ export async function POST(request: NextRequest) {
           technicianId: null,
         },
       })
-      // Update technician stock count
       await updateTechnicianStock(itemId, fromUserId)
+      // Increment main warehouse counter
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: { mainWarehouse: { increment: serialNumberIds.length } },
+      })
     } else if (movementType === 'REMOVE_STOCK') {
       await prisma.serialNumberStock.updateMany({
         where: { id: { in: serialNumberIds } },
@@ -110,7 +119,22 @@ export async function POST(request: NextRequest) {
           location: 'USED',
         },
       })
+      // Decrement main warehouse counter (all removed items came from there)
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: { mainWarehouse: { decrement: serialNumberIds.length } },
+      })
     } else if (movementType === 'USE') {
+      // Count items coming from each source before clearing locations
+      const fromMainWarehouse = serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length
+      const affectedTechIds = [
+        ...new Set(
+          serialNumbers
+            .filter(sn => sn.technicianId)
+            .map(sn => sn.technicianId as string)
+        ),
+      ]
+
       await prisma.serialNumberStock.updateMany({
         where: { id: { in: serialNumberIds } },
         data: {
@@ -119,8 +143,19 @@ export async function POST(request: NextRequest) {
           technicianId: null,
         },
       })
-      // Update technician stock count
-      await updateTechnicianStock(itemId, fromUserId)
+
+      // Update stock count for every technician who had items consumed
+      for (const techId of affectedTechIds) {
+        await updateTechnicianStock(itemId, techId)
+      }
+
+      // Decrement main warehouse counter for items that came from there
+      if (fromMainWarehouse > 0) {
+        await prisma.warehouseItem.update({
+          where: { id: itemId },
+          data: { mainWarehouse: { decrement: fromMainWarehouse } },
+        })
+      }
     }
 
     return NextResponse.json(movement, { status: 201 })
@@ -146,21 +181,27 @@ async function updateTechnicianStock(itemId: string, technicianId: string | unde
     },
   })
 
-  // Update or create technician stock record
-  await prisma.technicianStock.upsert({
-    where: {
-      itemId_technicianId: {
+  // Remove the record entirely if the technician has no more stock
+  if (count === 0) {
+    await prisma.technicianStock.deleteMany({
+      where: { itemId, technicianId },
+    })
+  } else {
+    await prisma.technicianStock.upsert({
+      where: {
+        itemId_technicianId: {
+          itemId,
+          technicianId,
+        },
+      },
+      create: {
         itemId,
         technicianId,
+        quantity: count,
       },
-    },
-    create: {
-      itemId,
-      technicianId,
-      quantity: count,
-    },
-    update: {
-      quantity: count,
-    },
-  })
+      update: {
+        quantity: count,
+      },
+    })
+  }
 }

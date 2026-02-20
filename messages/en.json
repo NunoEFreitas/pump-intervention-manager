@@ -104,7 +104,10 @@
     "equipmentBrand": "Brand",
     "equipmentModel": "Model",
     "noEquipment": "No equipment registered.",
-    "saveEquipment": "Save Equipment"
+    "saveEquipment": "Save Equipment",
+    "selectClient": "Select a client...",
+    "searchClients": "Search clients...",
+    "noClientsInDropdown": "No clients found"
   },
   "interventions": {
     "title": "Interventions",
@@ -179,7 +182,9 @@
     "changePart": "Change",
     "howManyUnits": "How many units to use?",
     "addPart": "Add Part",
-    "selected": "Selected"
+    "selected": "Selected",
+    "selectCorrectSnCount": "Please select the correct number of serial numbers",
+    "failedToAddPart": "Failed to add part"
   },
   "admin": {
     "title": "Admin Panel",
@@ -290,6 +295,42 @@
     "noSerialNumbersAvailable": "No serial numbers available",
     "serialNumbersToMove": "Serial Numbers to Move",
     "bulkItem": "Bulk Item (No Serial Numbers)",
-    "available": "Available"
+    "available": "Available",
+    "printLabels": "Print Labels",
+    "label": "label",
+    "labels": "labels",
+    "autoSnGeneration": "Automatic SN Generation",
+    "autoSnGenerationHelp": "Serial numbers will be auto-generated using a prefix when adding stock.",
+    "snExample": "SN Prefix",
+    "snExampleHelp": "Serial numbers will be generated as {example}-1, {example}-2, etc.",
+    "manualSnNote": "You'll need to enter individual serial numbers when adding stock. Each unit will be tracked separately.",
+    "snTracked": "SN Tracked",
+    "noSnInMainWarehouse": "No serial numbers in main warehouse",
+    "technicianColon": "Technician: {name}",
+    "used": "Used",
+    "noMovements": "No movements yet",
+    "units": "units",
+    "movementFrom": "From: {name}",
+    "movementTo": "To: {name}",
+    "movementBy": "By: {name}",
+    "movementSerialNumbers": "Serial Numbers:",
+    "deleteItemConfirm": "Are you sure you want to delete this item?",
+    "itemNotFound": "Item not found",
+    "serialNumberTrackingEnabled": "Serial Number Tracking enabled",
+    "selectTechnician": "Select technician",
+    "nSelected": "{count} selected",
+    "operationFailed": "Operation failed",
+    "enterValidQuantity": "Please enter a valid quantity",
+    "enterAtLeastOneSn": "Please enter at least one serial number",
+    "selectAtLeastOneSn": "Please select at least one serial number",
+    "maxAvailable": "Maximum available: {max}",
+    "totalItems": "Total Items",
+    "totalValue": "Total Value",
+    "stockItemsLabel": "Stock items:",
+    "moreItems": "+{count} more...",
+    "newItemSubtitle": "Add a new item to warehouse inventory",
+    "tracksSnHelp": "Enable if each unit has a unique serial number (e.g., pumps, motors). Leave unchecked for bulk items (e.g., bolts, washers).",
+    "initialStockHelp": "You can add more stock later using stock operations",
+    "snInitialStockNote": "Initial stock must be 0 for serial number tracked items. Add stock with serial numbers using Add Stock operation after creating the item."
   }
 }

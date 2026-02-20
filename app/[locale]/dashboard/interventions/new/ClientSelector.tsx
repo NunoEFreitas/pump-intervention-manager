@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { useTranslations } from 'next-intl'
 
 interface Client {
   id: string
@@ -17,6 +18,7 @@ interface ClientSelectorProps {
 }
 
 export default function ClientSelector({ clients, value, onChange, label, required = false }: ClientSelectorProps) {
+  const tClients = useTranslations('clients')
   const [isOpen, setIsOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -56,7 +58,7 @@ export default function ClientSelector({ clients, value, onChange, label, requir
         onClick={() => setIsOpen(!isOpen)}
       >
         <span className={selectedClient ? 'text-gray-900' : 'text-gray-500'}>
-          {selectedClient ? selectedClient.name : 'Select a client...'}
+          {selectedClient ? selectedClient.name : tClients('selectClient')}
         </span>
         <svg
           className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -74,7 +76,7 @@ export default function ClientSelector({ clients, value, onChange, label, requir
             <input
               type="text"
               className="w-full px-3 py-2 border border-gray-300 rounded text-gray-800"
-              placeholder="Search clients..."
+              placeholder={tClients('searchClients')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onClick={(e) => e.stopPropagation()}
@@ -84,7 +86,7 @@ export default function ClientSelector({ clients, value, onChange, label, requir
 
           <div className="overflow-y-auto max-h-52">
             {filteredClients.length === 0 ? (
-              <div className="px-4 py-3 text-gray-500 text-sm">No clients found</div>
+              <div className="px-4 py-3 text-gray-500 text-sm">{tClients('noClientsInDropdown')}</div>
             ) : (
               filteredClients.map((client) => (
                 <div
