@@ -18,6 +18,7 @@
     "updating": "Actualizando...",
     "deleting": "Eliminando...",
     "saving": "Guardando...",
+    "saved": "¡Guardado!",
     "adding": "Añadiendo...",
     "hours": "horas",
     "name": "Nombre"
@@ -105,6 +106,10 @@
     "equipmentModel": "Modelo",
     "noEquipment": "No hay equipos registrados.",
     "saveEquipment": "Guardar Equipo",
+    "equipmentSerialNumber": "Número de Serie",
+    "equipmentObservations": "Observaciones",
+    "moreEquipment": "equipos más",
+    "showLess": "Mostrar menos",
     "selectClient": "Seleccionar un cliente...",
     "searchClients": "Buscar clientes...",
     "noClientsInDropdown": "No se encontraron clientes"
@@ -120,6 +125,7 @@
     "noInterventions": "No se encontraron intervenciones.",
     "createFirst": "+ Crear Primera Intervención",
     "statusOpen": "Abierta",
+    "statusAssigned": "Asignada",
     "statusInProgress": "En Progreso",
     "statusQualityAssessment": "Evaluación de Calidad",
     "statusCompleted": "Completada",
@@ -142,6 +148,9 @@
     "placeholdersDescription": "Descripción detallada del trabajo a realizar...",
     "placeholdersPartsUsed": "Liste las piezas utilizadas (una por línea)\nej:\nSello de bomba - Modelo XYZ\nJunta tórica 50mm\nActuador de válvula",
     "requiredFields": "Campos obligatorios: Cliente, Técnico Asignado, Fecha y Hora",
+    "requiredFieldsNew": "Obligatorio: Cliente y Avería. Técnico, Fecha y Hora son opcionales — puede asignarlos más tarde.",
+    "unassigned": "Sin asignar",
+    "assignTechnician": "Asignar Técnico",
     "optionalDetails": "Detalles Opcionales",
     "partsUsedNote": "Ingrese una pieza por línea",
     "scheduled": "Programada",
@@ -184,7 +193,18 @@
     "addPart": "Añadir Pieza",
     "selected": "Seleccionado",
     "selectCorrectSnCount": "Por favor seleccione el número correcto de números de serie",
-    "failedToAddPart": "Error al añadir pieza"
+    "failedToAddPart": "Error al añadir pieza",
+    "workOrders": "Órdenes de Trabajo",
+    "addWorkOrder": "+ Añadir Orden de Trabajo",
+    "newWorkOrder": "Nueva Orden de Trabajo",
+    "noWorkOrders": "Sin órdenes de trabajo.",
+    "workOrderDescription": "Descripción del Trabajo *",
+    "workOrderDeleted": "Eliminar Orden de Trabajo",
+    "totalHours": "Total de Horas",
+    "grandTotal": "Total General",
+    "noPartsInWorkOrder": "Sin piezas utilizadas.",
+    "notScheduled": "Sin fecha",
+    "setDate": "Establecer Fecha/Hora"
   },
   "admin": {
     "title": "Panel de Administración",
@@ -231,7 +251,12 @@
     "editType": "Editar Tipo",
     "editBrand": "Editar Marca",
     "typeInUse": "No se puede eliminar: tipo en uso",
-    "brandInUse": "No se puede eliminar: marca en uso"
+    "brandInUse": "No se puede eliminar: marca en uso",
+    "settings": "Configuración",
+    "clientPrefix": "Prefijo de Cliente",
+    "clientPrefixHint": "Prefijo usado para referencias de clientes (ej: CLI → CLI-001)",
+    "projectPrefix": "Prefijo de Proyecto",
+    "projectPrefixHint": "Prefijo usado para números de intervención/proyecto (ej: INT → INT-001)"
   },
   "errors": {
     "unauthorized": "No autorizado",
@@ -273,6 +298,12 @@
     "transferToTech": "Transferir a Técnico",
     "transferFromTech": "Devolver de Técnico",
     "useStock": "Usar Stock",
+    "repairIn": "Enviar a Reparación",
+    "repairOut": "Devolver de Reparación",
+    "inRepair": "En Reparación",
+    "repairBreakdownDesc": "Descripción de la Avería *",
+    "repairFixDesc": "Descripción de la Reparación / Trabajo Realizado *",
+    "noSnInRepair": "No hay números de serie en reparación",
     "quantity": "Cantidad",
     "technician": "Técnico",
     "notes": "Notas",
@@ -331,6 +362,12 @@
     "newItemSubtitle": "Añadir un nuevo artículo al inventario del almacén",
     "tracksSnHelp": "Habilite si cada unidad tiene un número de serie único (p.ej., bombas, motores). Deje sin marcar para artículos a granel (p.ej., tornillos, arandelas).",
     "initialStockHelp": "Puede añadir más stock posteriormente usando operaciones de stock",
-    "snInitialStockNote": "El stock inicial debe ser 0 para artículos con seguimiento de número de serie. Añada stock con números de serie usando la operación Añadir Stock después de crear el artículo."
+    "snInitialStockNote": "El stock inicial debe ser 0 para artículos con seguimiento de número de serie. Añada stock con números de serie usando la operación Añadir Stock después de crear el artículo.",
+    "equipmentType": "Tipo de Equipo",
+    "equipmentBrand": "Marca",
+    "selectType": "Seleccionar tipo...",
+    "selectBrand": "Seleccionar marca...",
+    "itemNamePreview": "Nombre del artículo (generado automáticamente)",
+    "snFormatPreview": "Formato de NS"
   }
 }

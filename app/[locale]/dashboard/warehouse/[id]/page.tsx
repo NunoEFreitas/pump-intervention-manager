@@ -31,12 +31,20 @@ interface SerialNumber {
   technician?: { id: string; name: string } | null
 }
 
+interface EquipmentType { id: string; name: string }
+interface EquipmentBrand { id: string; name: string }
+
 interface Item {
   id: string
   itemName: string
   partNumber: string
+  equipmentTypeId: string | null
+  brandId: string | null
+  typeName: string | null
+  brandName: string | null
   value: number
   mainWarehouse: number
+  repairStock: number
   tracksSerialNumbers: boolean
   autoSn: boolean
   snExample: string | null
@@ -60,8 +68,11 @@ export default function WarehouseItemDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
   const [stockOperation, setStockOperation] = useState<string>('')
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
+  const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [editData, setEditData] = useState({
-    itemName: '',
+    equipmentTypeId: '',
+    brandId: '',
     partNumber: '',
     value: '',
     autoSn: false,
@@ -72,6 +83,15 @@ export default function WarehouseItemDetailPage() {
     if (params.id) {
       fetchItem()
     }
+    const token = localStorage.getItem('token')
+    const headers = { Authorization: `Bearer ${token}` }
+    Promise.all([
+      fetch('/api/admin/equipment-types', { headers }).then(r => r.json()),
+      fetch('/api/admin/equipment-brands', { headers }).then(r => r.json()),
+    ]).then(([types, brands]) => {
+      setEquipmentTypes(types)
+      setEquipmentBrands(brands)
+    })
   }, [params.id])
 
   const fetchItem = async () => {
@@ -83,7 +103,8 @@ export default function WarehouseItemDetailPage() {
       const data = await response.json()
       setItem(data)
       setEditData({
-        itemName: data.itemName,
+        equipmentTypeId: data.equipmentTypeId || '',
+        brandId: data.brandId || '',
         partNumber: data.partNumber,
         value: data.value.toString(),
         autoSn: data.autoSn ?? false,
@@ -166,18 +187,20 @@ export default function WarehouseItemDetailPage() {
       TRANSFER_TO_TECH: t('transferToTech'),
       TRANSFER_FROM_TECH: t('transferFromTech'),
       USE: t('useStock'),
+      REPAIR_IN: t('repairIn'),
+      REPAIR_OUT: t('repairOut'),
     }
     return labels[type] || type
   }
 
   const getMovementSign = (type: string) => {
-    // + for items entering stock, - for items leaving stock
-    // Transfers between warehouse/technician don't show signs (just location changes)
     switch (type) {
       case 'ADD_STOCK':
+      case 'REPAIR_OUT':
         return '+'
       case 'REMOVE_STOCK':
       case 'USE':
+      case 'REPAIR_IN':
         return '-'
       case 'TRANSFER_TO_TECH':
       case 'TRANSFER_FROM_TECH':
@@ -197,6 +220,10 @@ export default function WarehouseItemDetailPage() {
   if (!item) {
     return <div className="card">{t('itemNotFound')}</div>
   }
+
+  const editTypeName = equipmentTypes.find(x => x.id === editData.equipmentTypeId)?.name || ''
+  const editBrandName = equipmentBrands.find(x => x.id === editData.brandId)?.name || ''
+  const editComputedName = [editTypeName, editBrandName, editData.partNumber].filter(Boolean).join(' ')
 
   return (
     <div>
@@ -243,11 +270,22 @@ export default function WarehouseItemDetailPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+              {item.typeName && (
+                <div>
+                  <p className="text-sm text-gray-600">{t('equipmentType')}</p>
+                  <p className="text-lg font-semibold text-gray-900">{item.typeName}</p>
+                </div>
+              )}
+              {item.brandName && (
+                <div>
+                  <p className="text-sm text-gray-600">{t('equipmentBrand')}</p>
+                  <p className="text-lg font-semibold text-gray-900">{item.brandName}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-gray-600">{t('partNumber')}</p>
                 <p className="text-lg font-semibold text-gray-900">{item.partNumber}</p>
               </div>
-
               <div>
                 <p className="text-sm text-gray-600">{t('value')}</p>
                 <p className="text-lg font-semibold text-gray-900">€{item.value.toFixed(2)}</p>
@@ -256,11 +294,17 @@ export default function WarehouseItemDetailPage() {
 
             {!item.tracksSerialNumbers ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <p className="text-sm text-blue-600 font-medium mb-1">{t('mainWarehouse')}</p>
                     <p className="text-3xl font-bold text-blue-900">{item.mainWarehouse}</p>
                   </div>
+                  {item.repairStock > 0 && (
+                    <div className="p-4 bg-orange-50 rounded-lg">
+                      <p className="text-sm text-orange-600 font-medium mb-1">{t('inRepair')}</p>
+                      <p className="text-3xl font-bold text-orange-900">{item.repairStock}</p>
+                    </div>
+                  )}
                   <div className="p-4 bg-purple-50 rounded-lg">
                     <p className="text-sm text-purple-600 font-medium mb-1">{t('totalStock')}</p>
                     <p className="text-3xl font-bold text-purple-900">
@@ -335,6 +379,24 @@ export default function WarehouseItemDetailPage() {
                   )
                 })}
 
+                {/* In Repair Serial Numbers */}
+                {serialNumbers.filter(sn => sn.location === 'REPAIR').length > 0 && (
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-orange-600 mb-2">{t('inRepair')}</h4>
+                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                      <div className="flex flex-wrap gap-2">
+                        {serialNumbers
+                          .filter(sn => sn.location === 'REPAIR')
+                          .map(sn => (
+                            <span key={sn.id} className="px-3 py-1 bg-orange-100 text-orange-900 rounded text-sm font-mono">
+                              {sn.serialNumber}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Used Serial Numbers */}
                 {serialNumbers.filter(sn => sn.location === 'USED').length > 0 && (
                   <div className="mb-4">
@@ -358,7 +420,7 @@ export default function WarehouseItemDetailPage() {
 
           <div className="card mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{t('stockOperations')}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
               <button
                 onClick={() => openStockOperation('ADD_STOCK')}
                 className="btn btn-primary"
@@ -408,6 +470,28 @@ export default function WarehouseItemDetailPage() {
                 }
               >
                 {t('useStock')}
+              </button>
+              <button
+                onClick={() => openStockOperation('REPAIR_IN')}
+                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
+                    : item.mainWarehouse === 0
+                }
+              >
+                {t('repairIn')}
+              </button>
+              <button
+                onClick={() => openStockOperation('REPAIR_OUT')}
+                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={
+                  item.tracksSerialNumbers
+                    ? serialNumbers.filter(sn => sn.location === 'REPAIR').length === 0
+                    : item.repairStock === 0
+                }
+              >
+                {t('repairOut')}
               </button>
             </div>
           </div>
@@ -477,15 +561,34 @@ export default function WarehouseItemDetailPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('itemName')}
+              {t('equipmentType')}
             </label>
-            <input
-              type="text"
+            <select
               className="input text-gray-800"
-              value={editData.itemName}
-              onChange={(e) => setEditData({ ...editData, itemName: e.target.value })}
-              required
-            />
+              value={editData.equipmentTypeId}
+              onChange={(e) => setEditData({ ...editData, equipmentTypeId: e.target.value })}
+            >
+              <option value="">{t('selectType')}</option>
+              {equipmentTypes.map(type => (
+                <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('equipmentBrand')}
+            </label>
+            <select
+              className="input text-gray-800"
+              value={editData.brandId}
+              onChange={(e) => setEditData({ ...editData, brandId: e.target.value })}
+            >
+              <option value="">{t('selectBrand')}</option>
+              {equipmentBrands.map(brand => (
+                <option key={brand.id} value={brand.id}>{brand.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -500,6 +603,13 @@ export default function WarehouseItemDetailPage() {
               required
             />
           </div>
+
+          {editComputedName && (
+            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+              <p className="text-xs text-gray-500 mb-1">{t('itemNamePreview')}</p>
+              <p className="font-semibold text-gray-900">{editComputedName}</p>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -517,15 +627,13 @@ export default function WarehouseItemDetailPage() {
 
           {item.tracksSerialNumbers && (
             <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-3">
-              <p className="text-sm font-medium text-purple-900">
-                {t('serialNumberTracking')}
-              </p>
+              <p className="text-sm font-medium text-purple-900">{t('serialNumberTracking')}</p>
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="editAutoSn"
                   checked={editData.autoSn}
-                  onChange={(e) => setEditData({...editData, autoSn: e.target.checked, snExample: ''})}
+                  onChange={(e) => setEditData({ ...editData, autoSn: e.target.checked })}
                   className="mt-1"
                 />
                 <div className="flex-1">
@@ -533,17 +641,21 @@ export default function WarehouseItemDetailPage() {
                     {t('autoSnGeneration')}
                   </label>
                   {editData.autoSn && (
-                    <div className="mt-2">
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        {t('snExample')} *
-                      </label>
+                    <div className="mt-2 space-y-2">
                       <input
                         type="text"
                         className="input text-gray-800"
                         value={editData.snExample}
-                        onChange={(e) => setEditData({...editData, snExample: e.target.value})}
-                        placeholder="e.g. PTT"
+                        onChange={(e) => setEditData({ ...editData, snExample: e.target.value })}
+                        placeholder="e.g., PUMP-GF-PS001"
                       />
+                      {editData.snExample && (
+                        <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-800">
+                            {t('snFormatPreview')}: <span className="font-mono font-semibold">{editData.snExample}-1</span>, <span className="font-mono font-semibold">{editData.snExample}-2</span>…
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -576,6 +688,7 @@ export default function WarehouseItemDetailPage() {
           snExample={item.snExample}
           operation={stockOperation}
           mainWarehouse={item.mainWarehouse}
+          repairStock={item.repairStock}
           technicianStocks={item.technicianStocks}
           onClose={() => setShowStockModal(false)}
           onSuccess={() => {

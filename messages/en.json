@@ -18,6 +18,7 @@
     "updating": "Updating...",
     "deleting": "Deleting...",
     "saving": "Saving...",
+    "saved": "Saved!",
     "adding": "Adding...",
     "hours": "hours",
     "name": "Name"
@@ -105,6 +106,10 @@
     "equipmentModel": "Model",
     "noEquipment": "No equipment registered.",
     "saveEquipment": "Save Equipment",
+    "equipmentSerialNumber": "Serial Number",
+    "equipmentObservations": "Observations",
+    "moreEquipment": "more equipment",
+    "showLess": "Show less",
     "selectClient": "Select a client...",
     "searchClients": "Search clients...",
     "noClientsInDropdown": "No clients found"
@@ -120,6 +125,7 @@
     "noInterventions": "No interventions found.",
     "createFirst": "+ Create First Intervention",
     "statusOpen": "Open",
+    "statusAssigned": "Assigned",
     "statusInProgress": "In Progress",
     "statusQualityAssessment": "Quality Assessment",
     "statusCompleted": "Completed",
@@ -142,6 +148,9 @@
     "placeholdersDescription": "Detailed description of the work to be performed...",
     "placeholdersPartsUsed": "List parts used (one per line)\ne.g.,\nPump seal - Model XYZ\nO-ring 50mm\nValve actuator",
     "requiredFields": "Required fields: Client, Assigned Technician, Date, and Time",
+    "requiredFieldsNew": "Required: Client and Breakdown. Technician, Date and Time are optional — you can assign them later.",
+    "unassigned": "Not assigned",
+    "assignTechnician": "Assign Technician",
     "optionalDetails": "Optional Details",
     "partsUsedNote": "Enter one part per line",
     "scheduled": "Scheduled",
@@ -184,7 +193,18 @@
     "addPart": "Add Part",
     "selected": "Selected",
     "selectCorrectSnCount": "Please select the correct number of serial numbers",
-    "failedToAddPart": "Failed to add part"
+    "failedToAddPart": "Failed to add part",
+    "workOrders": "Work Orders",
+    "addWorkOrder": "+ Add Work Order",
+    "newWorkOrder": "New Work Order",
+    "noWorkOrders": "No work orders yet.",
+    "workOrderDescription": "Work Description *",
+    "workOrderDeleted": "Delete Work Order",
+    "totalHours": "Total Hours",
+    "grandTotal": "Grand Total",
+    "noPartsInWorkOrder": "No parts used.",
+    "notScheduled": "Not scheduled",
+    "setDate": "Set Date/Time"
   },
   "admin": {
     "title": "Admin Panel",
@@ -231,7 +251,12 @@
     "editType": "Edit Type",
     "editBrand": "Edit Brand",
     "typeInUse": "Cannot delete: type is in use",
-    "brandInUse": "Cannot delete: brand is in use"
+    "brandInUse": "Cannot delete: brand is in use",
+    "settings": "Settings",
+    "clientPrefix": "Client Prefix",
+    "clientPrefixHint": "Prefix used for client reference numbers (e.g. CLI → CLI-001)",
+    "projectPrefix": "Project Prefix",
+    "projectPrefixHint": "Prefix used for intervention/project numbers (e.g. INT → INT-001)"
   },
   "errors": {
     "unauthorized": "Unauthorized",
@@ -273,6 +298,12 @@
     "transferToTech": "Transfer to Technician",
     "transferFromTech": "Return from Technician",
     "useStock": "Use Stock",
+    "repairIn": "Send to Repair",
+    "repairOut": "Return from Repair",
+    "inRepair": "In Repair",
+    "repairBreakdownDesc": "Breakdown Description *",
+    "repairFixDesc": "Fix Description / Work Done *",
+    "noSnInRepair": "No serial numbers currently in repair",
     "quantity": "Quantity",
     "technician": "Technician",
     "notes": "Notes",
@@ -331,6 +362,12 @@
     "newItemSubtitle": "Add a new item to warehouse inventory",
     "tracksSnHelp": "Enable if each unit has a unique serial number (e.g., pumps, motors). Leave unchecked for bulk items (e.g., bolts, washers).",
     "initialStockHelp": "You can add more stock later using stock operations",
-    "snInitialStockNote": "Initial stock must be 0 for serial number tracked items. Add stock with serial numbers using Add Stock operation after creating the item."
+    "snInitialStockNote": "Initial stock must be 0 for serial number tracked items. Add stock with serial numbers using Add Stock operation after creating the item.",
+    "equipmentType": "Equipment Type",
+    "equipmentBrand": "Brand",
+    "selectType": "Select type...",
+    "selectBrand": "Select brand...",
+    "itemNamePreview": "Item name (auto-generated)",
+    "snFormatPreview": "SN format"
   }
 }

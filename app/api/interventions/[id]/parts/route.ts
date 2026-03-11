@@ -99,6 +99,10 @@ export async function POST(
       return NextResponse.json({ error: 'Intervention not found' }, { status: 404 })
     }
 
+    if (!intervention.assignedToId) {
+      return NextResponse.json({ error: 'Intervention has no assigned technician' }, { status: 400 })
+    }
+
     // Get item to check if it tracks serial numbers
     const item = await prisma.warehouseItem.findUnique({
       where: { id: itemId },

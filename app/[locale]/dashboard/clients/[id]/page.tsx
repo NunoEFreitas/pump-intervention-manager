@@ -9,6 +9,8 @@ interface LocationEquipment {
   equipmentTypeId: string
   brandId: string
   model: string
+  serialNumber: string | null
+  observations: string | null
   equipmentType: { name: string }
   brand: { name: string }
 }
@@ -27,8 +29,8 @@ interface CompanyLocation {
 
 interface Client {
   id: string
+  reference: string | null
   name: string
-  clientType: 'PRIVATE' | 'COMPANY'
   address: string
   city: string
   postalCode: string
@@ -43,9 +45,6 @@ interface Client {
 interface Intervention {
   id: string
   status: string
-  workDone: string | null
-  timeSpent: number | null
-  description: string | null
   scheduledDate: string
   scheduledTime: string
   createdAt: string
@@ -61,7 +60,7 @@ const emptyLocationForm = {
 }
 
 const emptyEquipmentForm = {
-  equipmentTypeId: '', brandId: '', model: '',
+  equipmentTypeId: '', brandId: '', model: '', serialNumber: '', observations: '',
 }
 
 export default function ClientDetailPage() {
@@ -82,6 +81,7 @@ export default function ClientDetailPage() {
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [addEquipmentLocationId, setAddEquipmentLocationId] = useState<string | null>(null)
   const [editingEquipment, setEditingEquipment] = useState<LocationEquipment | null>(null)
+  const [expandedEquipmentLocations, setExpandedEquipmentLocations] = useState<Set<string>>(new Set())
   const [equipmentForm, setEquipmentForm] = useState(emptyEquipmentForm)
   const [equipmentLoading, setEquipmentLoading] = useState(false)
 
@@ -221,7 +221,7 @@ export default function ClientDetailPage() {
   const openEditEquipment = (eq: LocationEquipment, locationId: string) => {
     setAddEquipmentLocationId(locationId)
     setEditingEquipment(eq)
-    setEquipmentForm({ equipmentTypeId: eq.equipmentTypeId, brandId: eq.brandId, model: eq.model })
+    setEquipmentForm({ equipmentTypeId: eq.equipmentTypeId, brandId: eq.brandId, model: eq.model, serialNumber: eq.serialNumber || '', observations: eq.observations || '' })
   }
 
   const closeEquipmentForm = () => {
@@ -300,11 +300,11 @@ export default function ClientDetailPage() {
       <div className="card mb-6">
         <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4">
           <div>
+            {client.reference && (
+              <p className="text-sm font-mono text-gray-500 mb-0.5">{client.reference}</p>
+            )}
             <div className="flex flex-wrap items-center gap-3 mb-1">
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{client.name}</h1>
-              <span className={`text-xs px-2 py-1 rounded-full font-medium ${client.clientType === 'COMPANY' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'}`}>
-                {client.clientType === 'COMPANY' ? tClients('company') : tClients('private')}
-              </span>
             </div>
           </div>
           <button
@@ -362,9 +362,8 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {/* Locations section (company only) */}
-      {client.clientType === 'COMPANY' && (
-        <div className="card mb-6">
+      {/* Locations section */}
+      <div className="card mb-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold text-gray-900">
               {tClients('locations')} ({client.locations.length})
@@ -518,6 +517,24 @@ export default function ClientDetailPage() {
                               onChange={(e) => setEquipmentForm({ ...equipmentForm, model: e.target.value })}
                             />
                           </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">{tClients('equipmentSerialNumber')}</label>
+                            <input
+                              type="text"
+                              className="input text-gray-800 text-sm"
+                              value={equipmentForm.serialNumber}
+                              onChange={(e) => setEquipmentForm({ ...equipmentForm, serialNumber: e.target.value })}
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs text-gray-600 mb-1">{tClients('equipmentObservations')}</label>
+                            <textarea
+                              rows={3}
+                              className="input text-gray-800 text-sm"
+                              value={equipmentForm.observations}
+                              onChange={(e) => setEquipmentForm({ ...equipmentForm, observations: e.target.value })}
+                            />
+                          </div>
                         </div>
                         <div className="flex gap-2">
                           <button
@@ -540,40 +557,68 @@ export default function ClientDetailPage() {
                     {/* Equipment list */}
                     {loc.equipment.length === 0 && addEquipmentLocationId !== loc.id ? (
                       <p className="text-xs text-gray-400 py-1">{tClients('noEquipment')}</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {loc.equipment.map((eq) => (
-                          <div key={eq.id} className="flex items-center justify-between bg-gray-50 rounded px-3 py-2 text-sm">
-                            <span className="text-gray-800">
-                              <span className="font-medium">{eq.equipmentType.name}</span>
-                              <span className="text-gray-500"> — {eq.brand.name} </span>
-                              <span className="text-gray-700">{eq.model}</span>
-                            </span>
-                            <div className="flex gap-2 ml-2 shrink-0">
-                              <button
-                                onClick={() => openEditEquipment(eq, loc.id)}
-                                className="text-blue-600 hover:text-blue-800 text-xs"
-                              >
-                                {tCommon('edit')}
-                              </button>
-                              <button
-                                onClick={() => deleteEquipment(loc.id, eq.id)}
-                                className="text-red-600 hover:text-red-800 text-xs"
-                              >
-                                {tCommon('delete')}
-                              </button>
+                    ) : (() => {
+                      const isExpanded = expandedEquipmentLocations.has(loc.id)
+                      const visible = isExpanded ? loc.equipment : loc.equipment.slice(0, 3)
+                      const hidden = loc.equipment.length - 3
+                      return (
+                        <div className="space-y-2">
+                          {visible.map((eq) => (
+                            <div key={eq.id} className="bg-gray-50 rounded px-3 py-2 text-sm">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <span className="font-medium text-gray-800">{eq.equipmentType.name}</span>
+                                  <span className="text-gray-500"> — {eq.brand.name} </span>
+                                  <span className="text-gray-700">{eq.model}</span>
+                                  {eq.serialNumber && (
+                                    <span className="text-gray-500 ml-2">· SN: {eq.serialNumber}</span>
+                                  )}
+                                  {eq.observations && (
+                                    <p className="text-gray-500 mt-1 text-xs whitespace-pre-wrap">{eq.observations}</p>
+                                  )}
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  <button
+                                    onClick={() => openEditEquipment(eq, loc.id)}
+                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                  >
+                                    {tCommon('edit')}
+                                  </button>
+                                  <button
+                                    onClick={() => deleteEquipment(loc.id, eq.id)}
+                                    className="text-red-600 hover:text-red-800 text-xs"
+                                  >
+                                    {tCommon('delete')}
+                                  </button>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                          {loc.equipment.length > 3 && (
+                            <button
+                              onClick={() => setExpandedEquipmentLocations(prev => {
+                                const next = new Set(prev)
+                                isExpanded ? next.delete(loc.id) : next.add(loc.id)
+                                return next
+                              })}
+                              className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 pt-1"
+                            >
+                              {isExpanded ? (
+                                <>{tClients('showLess')} ▲</>
+                              ) : (
+                                <>+{hidden} {tClients('moreEquipment')} ▼</>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       {/* Interventions */}
       <div className="card">
@@ -609,19 +654,15 @@ export default function ClientDetailPage() {
                     </span>
                   </div>
                   <h3 className="font-semibold text-gray-900 mb-1">
-                    {intervention.workDone || tInterventions('scheduledIntervention')}
+                    {tInterventions('scheduledIntervention')}
                   </h3>
                   {intervention.location && (
                     <p className="text-sm text-purple-700 mb-1">
                       {intervention.location.name}{intervention.location.city ? ` — ${intervention.location.city}` : ''}
                     </p>
                   )}
-                  {intervention.description && (
-                    <p className="text-sm text-gray-600 mb-2">{intervention.description}</p>
-                  )}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-600">
                     <span>{tInterventions('fieldsAssignedTo')}: {intervention.assignedTo.name}</span>
-                    {intervention.timeSpent && <span>{tInterventions('fieldsTimeSpent')}: {intervention.timeSpent}h</span>}
                   </div>
                 </div>
               </div>

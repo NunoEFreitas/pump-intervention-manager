@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { generateProjectReference } from '@/lib/reference'
 
 // GET all interventions (filtered by role)
 export async function GET(request: NextRequest) {
@@ -86,35 +87,26 @@ export async function POST(request: NextRequest) {
     const data = await request.json()
 
     // Validate required fields
-    if (!data.clientId || !data.assignedToId || !data.scheduledDate || !data.scheduledTime || !data.breakdown) {
+    if (!data.clientId || !data.breakdown) {
       return NextResponse.json(
-        { error: 'Client, assigned technician, date, time and breakdown description are required' },
+        { error: 'Client and breakdown description are required' },
         { status: 400 }
       )
     }
 
-    // If client is COMPANY, locationId is required
-    const client = await prisma.client.findUnique({ where: { id: data.clientId }, select: { clientType: true } })
-    if (client?.clientType === 'COMPANY' && !data.locationId) {
-      return NextResponse.json(
-        { error: 'Location is required for company clients' },
-        { status: 400 }
-      )
-    }
+    const reference = await generateProjectReference()
 
     const intervention = await prisma.intervention.create({
       data: {
+        reference,
         clientId: data.clientId,
         locationId: data.locationId || null,
-        assignedToId: data.assignedToId,
+        assignedToId: data.assignedToId || null,
         createdById: payload.userId,
-        status: 'OPEN',
-        scheduledDate: new Date(data.scheduledDate),
-        scheduledTime: data.scheduledTime,
+        status: data.assignedToId ? 'ASSIGNED' : 'OPEN',
+        scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : null,
+        scheduledTime: data.scheduledTime || null,
         breakdown: data.breakdown,
-        workDone: data.workDone || null,
-        timeSpent: data.timeSpent || null,
-        description: data.description || null,
       },
       include: {
         client: {

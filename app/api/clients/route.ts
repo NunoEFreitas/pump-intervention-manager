@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { generateClientReference } from '@/lib/reference'
 
 // GET all clients
 export async function GET(request: NextRequest) {
@@ -41,9 +42,11 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json()
 
+    const reference = await generateClientReference()
+
     const client = await prisma.client.create({
       data: {
-        clientType: data.clientType || 'PRIVATE',
+        reference,
         name: data.name,
         address: data.address,
         city: data.city,

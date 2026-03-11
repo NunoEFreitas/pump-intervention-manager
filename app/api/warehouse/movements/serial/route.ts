@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check availability based on operation type
-    if (movementType === 'TRANSFER_TO_TECH' || movementType === 'REMOVE_STOCK') {
+    if (movementType === 'TRANSFER_TO_TECH' || movementType === 'REMOVE_STOCK' || movementType === 'REPAIR_IN') {
       // Must be in main warehouse
       const notInWarehouse = serialNumbers.filter(sn => sn.location !== 'MAIN_WAREHOUSE')
       if (notInWarehouse.length > 0) {
@@ -55,6 +55,15 @@ export async function POST(request: NextRequest) {
       if (notWithTech.length > 0) {
         return NextResponse.json(
           { error: 'Some serial numbers are not assigned to this technician' },
+          { status: 400 }
+        )
+      }
+    } else if (movementType === 'REPAIR_OUT') {
+      // Must be in repair
+      const notInRepair = serialNumbers.filter(sn => (sn.location as string) !== 'REPAIR')
+      if (notInRepair.length > 0) {
+        return NextResponse.json(
+          { error: 'Some serial numbers are not in repair' },
           { status: 400 }
         )
       }
@@ -156,6 +165,30 @@ export async function POST(request: NextRequest) {
           data: { mainWarehouse: { decrement: fromMainWarehouse } },
         })
       }
+    } else if (movementType === 'REPAIR_IN') {
+      await prisma.serialNumberStock.updateMany({
+        where: { id: { in: serialNumberIds } },
+        data: { location: 'REPAIR' as any },
+      })
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: {
+          mainWarehouse: { decrement: serialNumberIds.length },
+          repairStock: { increment: serialNumberIds.length },
+        } as any,
+      })
+    } else if (movementType === 'REPAIR_OUT') {
+      await prisma.serialNumberStock.updateMany({
+        where: { id: { in: serialNumberIds } },
+        data: { location: 'MAIN_WAREHOUSE' },
+      })
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: {
+          repairStock: { decrement: serialNumberIds.length },
+          mainWarehouse: { increment: serialNumberIds.length },
+        } as any,
+      })
     }
 
     return NextResponse.json(movement, { status: 201 })

@@ -18,12 +18,13 @@ interface StockItem {
 
 interface PartsSelectorProps {
   technicianId: string
+  interventionId: string
+  workOrderId: string
   onClose: () => void
   onPartAdded: () => void
-  interventionId: string
 }
 
-export default function PartsSelector({ technicianId, onClose, onPartAdded, interventionId }: PartsSelectorProps) {
+export default function PartsSelector({ technicianId, onClose, onPartAdded, interventionId, workOrderId }: PartsSelectorProps) {
   const t = useTranslations('interventions')
   const tCommon = useTranslations('common')
   const tWarehouse = useTranslations('warehouse')
@@ -68,7 +69,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
 
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/interventions/${interventionId}/parts`, {
+      const response = await fetch(`/api/interventions/${interventionId}/work-orders/${workOrderId}/parts`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

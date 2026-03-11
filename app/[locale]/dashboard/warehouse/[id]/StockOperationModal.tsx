@@ -25,6 +25,7 @@ interface StockOperationModalProps {
   snExample: string | null
   operation: string
   mainWarehouse: number
+  repairStock: number
   technicianStocks: Array<{ technician: { id: string; name: string }; quantity: number }>
   onClose: () => void
   onSuccess: () => void
@@ -39,6 +40,7 @@ export default function StockOperationModal({
   snExample,
   operation,
   mainWarehouse,
+  repairStock,
   technicianStocks,
   onClose,
   onSuccess,
@@ -80,10 +82,12 @@ export default function StockOperationModal({
     try {
       const token = localStorage.getItem('token')
       let url = `/api/warehouse/items/${itemId}/serial-numbers?status=AVAILABLE`
-      if (operation === 'TRANSFER_TO_TECH' || operation === 'REMOVE_STOCK') {
+      if (operation === 'TRANSFER_TO_TECH' || operation === 'REMOVE_STOCK' || operation === 'REPAIR_IN') {
         url += '&location=MAIN_WAREHOUSE'
       } else if (operation === 'TRANSFER_FROM_TECH' && formData.technicianId) {
         url += `&location=TECHNICIAN&technicianId=${formData.technicianId}`
+      } else if (operation === 'REPAIR_OUT') {
+        url = `/api/warehouse/items/${itemId}/serial-numbers?location=REPAIR`
       }
       // For USE: no location filter — any available serial number can be consumed
       const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -211,7 +215,7 @@ export default function StockOperationModal({
           }
           if (operation === 'TRANSFER_TO_TECH') payload.toUserId = formData.technicianId
           if (operation === 'TRANSFER_FROM_TECH') payload.fromUserId = formData.technicianId
-          // For USE: server records createdById from JWT — no fromUserId needed
+          // For USE / REPAIR_IN / REPAIR_OUT: no fromUserId/toUserId needed
 
           const response = await fetch('/api/warehouse/movements/serial', {
             method: 'POST',
@@ -232,7 +236,7 @@ export default function StockOperationModal({
         const qty = parseInt(formData.quantity)
 
         // Enforce max quantity client-side
-        if (operation === 'TRANSFER_TO_TECH' && qty > mainWarehouse) {
+        if ((operation === 'TRANSFER_TO_TECH' || operation === 'REPAIR_IN') && qty > mainWarehouse) {
           alert(t('maxAvailable', { max: mainWarehouse }))
           setLoading(false)
           return
@@ -244,6 +248,11 @@ export default function StockOperationModal({
             setLoading(false)
             return
           }
+        }
+        if (operation === 'REPAIR_OUT' && qty > repairStock) {
+          alert(t('maxAvailable', { max: repairStock }))
+          setLoading(false)
+          return
         }
 
         const payload: any = {
@@ -289,10 +298,10 @@ export default function StockOperationModal({
     )
   }
 
-  // For USE: show the serial picker immediately (all available SNs fetched on mount)
-  // For other ops: wait until a technician is selected
+  // For USE / REPAIR_IN / REPAIR_OUT: show the serial picker immediately
+  // For TRANSFER ops: wait until a technician is selected
   const showSerialPicker = tracksSerialNumbers && operation !== 'ADD_STOCK' && (
-    operation === 'USE' || !!formData.technicianId
+    operation === 'USE' || operation === 'REPAIR_IN' || operation === 'REPAIR_OUT' || !!formData.technicianId
   )
 
   return (
@@ -304,6 +313,8 @@ export default function StockOperationModal({
           {operation === 'TRANSFER_TO_TECH' && t('transferToTech')}
           {operation === 'TRANSFER_FROM_TECH' && t('transferFromTech')}
           {operation === 'USE' && t('useStock')}
+          {operation === 'REPAIR_IN' && t('repairIn')}
+          {operation === 'REPAIR_OUT' && t('repairOut')}
         </h3>
         <p className="text-sm text-gray-600 mb-4">{itemName}</p>
 
@@ -366,6 +377,8 @@ export default function StockOperationModal({
               : undefined
             const quantityMax = operation === 'TRANSFER_TO_TECH' ? mainWarehouse
               : operation === 'TRANSFER_FROM_TECH' ? selectedTechStock
+              : operation === 'REPAIR_IN' ? mainWarehouse
+              : operation === 'REPAIR_OUT' ? repairStock
               : undefined
             return (
               <div>
@@ -438,7 +451,7 @@ export default function StockOperationModal({
               </label>
               {availableSerialNumbers.length === 0 ? (
                 <p className="text-sm text-gray-600 py-4 text-center bg-gray-50 rounded">
-                  {t('noSerialNumbersAvailable')}
+                  {operation === 'REPAIR_OUT' ? t('noSnInRepair') : t('noSerialNumbersAvailable')}
                 </p>
               ) : (
                 <div className="border rounded max-h-60 overflow-y-auto p-3 space-y-2">
@@ -466,13 +479,16 @@ export default function StockOperationModal({
           {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('notes')}
+              {operation === 'REPAIR_IN' ? t('repairBreakdownDesc')
+                : operation === 'REPAIR_OUT' ? t('repairFixDesc')
+                : t('notes')}
             </label>
             <textarea
               className="input text-gray-800"
               rows={3}
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              required={operation === 'REPAIR_IN' || operation === 'REPAIR_OUT'}
             />
           </div>
 

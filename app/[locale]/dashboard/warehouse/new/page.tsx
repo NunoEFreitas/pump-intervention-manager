@@ -1,9 +1,12 @@
 // FILE: app/[locale]/dashboard/warehouse/new/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
+
+interface EquipmentType { id: string; name: string }
+interface EquipmentBrand { id: string; name: string }
 
 export default function NewWarehouseItemPage() {
   const router = useRouter()
@@ -11,11 +14,14 @@ export default function NewWarehouseItemPage() {
   const t = useTranslations('warehouse')
   const tCommon = useTranslations('common')
   const tErrors = useTranslations('errors')
-  
+
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
+  const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [formData, setFormData] = useState({
-    itemName: '',
+    equipmentTypeId: '',
+    brandId: '',
     partNumber: '',
     value: '',
     mainWarehouse: '0',
@@ -23,6 +29,22 @@ export default function NewWarehouseItemPage() {
     autoSn: false,
     snExample: '',
   })
+
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    const headers = { Authorization: `Bearer ${token}` }
+    Promise.all([
+      fetch('/api/admin/equipment-types', { headers }).then(r => r.json()),
+      fetch('/api/admin/equipment-brands', { headers }).then(r => r.json()),
+    ]).then(([types, brands]) => {
+      setEquipmentTypes(types)
+      setEquipmentBrands(brands)
+    })
+  }, [])
+
+  const typeName = equipmentTypes.find(t => t.id === formData.equipmentTypeId)?.name || ''
+  const brandName = equipmentBrands.find(b => b.id === formData.brandId)?.name || ''
+  const computedItemName = [typeName, brandName, formData.partNumber].filter(Boolean).join(' ')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,20 +75,10 @@ export default function NewWarehouseItemPage() {
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    })
-  }
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="text-blue-600 hover:text-blue-800 mb-4"
-        >
+        <button onClick={() => router.back()} className="text-blue-600 hover:text-blue-800 mb-4">
           ← {tCommon('back')}
         </button>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('newItem')}</h1>
@@ -74,19 +86,39 @@ export default function NewWarehouseItemPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('itemName')} *
+            {t('equipmentType')} *
           </label>
-          <input
-            type="text"
-            name="itemName"
+          <select
             className="input text-gray-800"
-            value={formData.itemName}
-            onChange={handleChange}
-            placeholder="e.g., Pump Seal"
+            value={formData.equipmentTypeId}
+            onChange={(e) => setFormData({ ...formData, equipmentTypeId: e.target.value })}
             required
-          />
+          >
+            <option value="">{t('selectType')}</option>
+            {equipmentTypes.map(type => (
+              <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t('equipmentBrand')} *
+          </label>
+          <select
+            className="input text-gray-800"
+            value={formData.brandId}
+            onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
+            required
+          >
+            <option value="">{t('selectBrand')}</option>
+            {equipmentBrands.map(brand => (
+              <option key={brand.id} value={brand.id}>{brand.name}</option>
+            ))}
+          </select>
         </div>
 
         <div>
@@ -95,14 +127,20 @@ export default function NewWarehouseItemPage() {
           </label>
           <input
             type="text"
-            name="partNumber"
             className="input text-gray-800"
             value={formData.partNumber}
-            onChange={handleChange}
+            onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
             placeholder="e.g., PS-2024-001"
             required
           />
         </div>
+
+        {computedItemName && (
+          <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+            <p className="text-xs text-gray-500 mb-1">{t('itemNamePreview')}</p>
+            <p className="font-semibold text-gray-900">{computedItemName}</p>
+          </div>
+        )}
 
         <div className="border-t pt-4 space-y-3">
           <div className="flex items-start gap-3">
@@ -110,16 +148,14 @@ export default function NewWarehouseItemPage() {
               type="checkbox"
               id="tracksSerialNumbers"
               checked={formData.tracksSerialNumbers}
-              onChange={(e) => setFormData({...formData, tracksSerialNumbers: e.target.checked, autoSn: false, snExample: ''})}
+              onChange={(e) => setFormData({ ...formData, tracksSerialNumbers: e.target.checked, autoSn: false })}
               className="mt-1"
             />
             <div className="flex-1">
               <label htmlFor="tracksSerialNumbers" className="text-sm font-medium text-gray-700 cursor-pointer">
                 {t('tracksSerialNumbers')}
               </label>
-              <p className="text-xs text-gray-500 mt-1">
-                {t('tracksSnHelp')}
-              </p>
+              <p className="text-xs text-gray-500 mt-1">{t('tracksSnHelp')}</p>
             </div>
           </div>
 
@@ -129,39 +165,35 @@ export default function NewWarehouseItemPage() {
                 type="checkbox"
                 id="autoSn"
                 checked={formData.autoSn}
-                onChange={(e) => setFormData({...formData, autoSn: e.target.checked, snExample: ''})}
+                onChange={(e) => setFormData({ ...formData, autoSn: e.target.checked })}
                 className="mt-1"
               />
               <div className="flex-1">
                 <label htmlFor="autoSn" className="text-sm font-medium text-gray-700 cursor-pointer">
                   {t('autoSnGeneration')}
                 </label>
-                <p className="text-xs text-gray-500 mt-1">
-                  {t('autoSnGenerationHelp')}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{t('autoSnGenerationHelp')}</p>
                 {formData.autoSn && (
-                  <div className="mt-2">
-                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                      {t('snExample')} *
-                    </label>
+                  <div className="mt-2 space-y-2">
                     <input
                       type="text"
                       className="input text-gray-800"
                       value={formData.snExample}
-                      onChange={(e) => setFormData({...formData, snExample: e.target.value})}
-                      placeholder="e.g. PTT"
-                      required={formData.autoSn}
+                      onChange={(e) => setFormData({ ...formData, snExample: e.target.value })}
+                      placeholder="e.g., PUMP-GF-PS001"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      {t('snExampleHelp', { example: formData.snExample || 'PTT' })}
-                    </p>
+                    {formData.snExample && (
+                      <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                        <p className="text-xs text-blue-800">
+                          {t('snFormatPreview')}: <span className="font-mono font-semibold">{formData.snExample}-1</span>, <span className="font-mono font-semibold">{formData.snExample}-2</span>…
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {!formData.autoSn && (
                   <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-xs text-blue-800">
-                      {t('manualSnNote')}
-                    </p>
+                    <p className="text-xs text-blue-800">{t('manualSnNote')}</p>
                   </div>
                 )}
               </div>
@@ -176,10 +208,9 @@ export default function NewWarehouseItemPage() {
           <input
             type="number"
             step="0.01"
-            name="value"
             className="input text-gray-800"
             value={formData.value}
-            onChange={handleChange}
+            onChange={(e) => setFormData({ ...formData, value: e.target.value })}
             placeholder="0.00"
             required
           />
@@ -192,47 +223,31 @@ export default function NewWarehouseItemPage() {
             </label>
             <input
               type="number"
-              name="mainWarehouse"
               className="input text-gray-800"
               value={formData.mainWarehouse}
-              onChange={handleChange}
+              onChange={(e) => setFormData({ ...formData, mainWarehouse: e.target.value })}
               placeholder="0"
               min="0"
             />
-            <p className="text-xs text-gray-500 mt-1">
-              {t('initialStockHelp')}
-            </p>
+            <p className="text-xs text-gray-500 mt-1">{t('initialStockHelp')}</p>
           </div>
         )}
 
         {formData.tracksSerialNumbers && (
           <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-sm text-yellow-800">
-              {t('snInitialStockNote')}
-            </p>
+            <p className="text-sm text-yellow-800">{t('snInitialStockNote')}</p>
           </div>
         )}
 
         {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">
-            {error}
-          </div>
+          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>
         )}
 
         <div className="flex gap-3">
-          <button
-            type="submit"
-            className="btn btn-primary flex-1"
-            disabled={loading}
-          >
+          <button type="submit" className="btn btn-primary flex-1" disabled={loading}>
             {loading ? tCommon('loading') : t('createButton')}
           </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn btn-secondary"
-            disabled={loading}
-          >
+          <button type="button" onClick={() => router.back()} className="btn btn-secondary" disabled={loading}>
             {tCommon('cancel')}
           </button>
         </div>

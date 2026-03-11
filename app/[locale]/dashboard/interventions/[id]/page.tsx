@@ -6,9 +6,10 @@ import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
 import PartsSelector from './PartsSelector'
 
-interface InterventionPart {
+interface WorkOrderPart {
   id: string
   quantity: number
+  serialNumberIds: string[]
   item: {
     id: string
     itemName: string
@@ -22,15 +23,31 @@ interface InterventionPart {
   }>
 }
 
+interface WorkOrder {
+  id: string
+  description: string
+  timeSpent: number | null
+  createdAt: string
+  createdBy: {
+    id: string
+    name: string
+  }
+  parts: WorkOrderPart[]
+}
+
+interface Technician {
+  id: string
+  name: string
+  email: string
+}
+
 interface Intervention {
   id: string
+  reference: string | null
   status: string
-  workDone: string | null
-  timeSpent: number | null
-  description: string | null
   breakdown: string
-  scheduledDate: string
-  scheduledTime: string
+  scheduledDate: string | null
+  scheduledTime: string | null
   createdAt: string
   updatedAt: string
   client: {
@@ -58,7 +75,7 @@ interface Intervention {
     id: string
     name: string
     email: string
-  }
+  } | null
   createdBy: {
     id: string
     name: string
@@ -74,19 +91,23 @@ export default function InterventionDetailPage() {
   const tCommon = useTranslations('common')
   const tNav = useTranslations('nav')
   const tClients = useTranslations('clients')
-  const tWarehouse = useTranslations('warehouse')
 
   const [intervention, setIntervention] = useState<Intervention | null>(null)
-  const [parts, setParts] = useState<InterventionPart[]>([])
+  const [workOrders, setWorkOrders] = useState<WorkOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
-  const [showPartsSelector, setShowPartsSelector] = useState(false)
+  const [showWorkOrderForm, setShowWorkOrderForm] = useState(false)
+  const [workOrderForm, setWorkOrderForm] = useState({ description: '', timeSpent: '' })
+  const [workOrderLoading, setWorkOrderLoading] = useState(false)
+  const [showPartsForWorkOrderId, setShowPartsForWorkOrderId] = useState<string | null>(null)
   const [userRole, setUserRole] = useState<string>('')
+  const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [showAssignForm, setShowAssignForm] = useState(false)
+  const [assignTechId, setAssignTechId] = useState('')
+  const [showDateForm, setShowDateForm] = useState(false)
+  const [dateFormData, setDateFormData] = useState({ scheduledDate: '', scheduledTime: '' })
   const [editData, setEditData] = useState({
     status: '',
-    workDone: '',
-    timeSpent: '',
-    description: '',
     breakdown: '',
     scheduledDate: '',
     scheduledTime: '',
@@ -101,7 +122,8 @@ export default function InterventionDetailPage() {
 
     if (params.id) {
       fetchIntervention()
-      fetchParts()
+      fetchWorkOrders()
+      fetchTechnicians()
     }
   }, [params.id])
 
@@ -120,15 +142,12 @@ export default function InterventionDetailPage() {
 
       setIntervention(data)
 
-      const schedDate = new Date(data.scheduledDate).toISOString().split('T')[0]
+      const schedDate = data.scheduledDate ? new Date(data.scheduledDate).toISOString().split('T')[0] : ''
       setEditData({
         status: data.status,
-        workDone: data.workDone || '',
-        timeSpent: data.timeSpent?.toString() || '',
-        description: data.description || '',
         breakdown: data.breakdown || '',
         scheduledDate: schedDate,
-        scheduledTime: data.scheduledTime,
+        scheduledTime: data.scheduledTime || '',
       })
     } catch (error) {
       console.error('Error fetching intervention:', error)
@@ -137,16 +156,71 @@ export default function InterventionDetailPage() {
     }
   }
 
-  const fetchParts = async () => {
+  const fetchWorkOrders = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/interventions/${params.id}/parts`, {
+      const response = await fetch(`/api/interventions/${params.id}/work-orders`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
-      setParts(data)
+      setWorkOrders(Array.isArray(data) ? data : [])
     } catch (error) {
-      console.error('Error fetching parts:', error)
+      console.error('Error fetching work orders:', error)
+    }
+  }
+
+  const fetchTechnicians = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch('/api/technicians', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await response.json()
+      setTechnicians(data)
+    } catch (error) {
+      console.error('Error fetching technicians:', error)
+    }
+  }
+
+  const createWorkOrder = async () => {
+    if (!workOrderForm.description.trim()) return
+    setWorkOrderLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/interventions/${params.id}/work-orders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          description: workOrderForm.description,
+          timeSpent: workOrderForm.timeSpent ? parseFloat(workOrderForm.timeSpent) : null,
+        }),
+      })
+      if (response.ok) {
+        setShowWorkOrderForm(false)
+        setWorkOrderForm({ description: '', timeSpent: '' })
+        fetchWorkOrders()
+      }
+    } catch (error) {
+      console.error('Error creating work order:', error)
+    } finally {
+      setWorkOrderLoading(false)
+    }
+  }
+
+  const deleteWorkOrder = async (workOrderId: string) => {
+    if (!confirm(t('workOrderDeleted') + '?')) return
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/interventions/${params.id}/work-orders/${workOrderId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      fetchWorkOrders()
+    } catch (error) {
+      console.error('Error deleting work order:', error)
     }
   }
 
@@ -163,9 +237,8 @@ export default function InterventionDetailPage() {
         },
         body: JSON.stringify({
           ...editData,
-          timeSpent: editData.timeSpent ? parseFloat(editData.timeSpent) : null,
           clientId: intervention?.client.id,
-          assignedToId: intervention?.assignedTo.id,
+          assignedToId: intervention?.assignedTo?.id,
         }),
       })
 
@@ -183,13 +256,62 @@ export default function InterventionDetailPage() {
     }
   }
 
-  // Build a Google Maps navigation URL from location or client address
+  const handleAssignTechnician = async () => {
+    if (!assignTechId) return
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/interventions/${params.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          assignedToId: assignTechId,
+          clientId: intervention?.client.id,
+        }),
+      })
+      if (response.ok) {
+        setShowAssignForm(false)
+        setAssignTechId('')
+        fetchIntervention()
+      }
+    } catch (error) {
+      console.error('Error assigning technician:', error)
+    }
+  }
+
+  const handleSetDate = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/interventions/${params.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          scheduledDate: dateFormData.scheduledDate || null,
+          scheduledTime: dateFormData.scheduledTime || null,
+          clientId: intervention?.client.id,
+          assignedToId: intervention?.assignedTo?.id,
+        }),
+      })
+      if (response.ok) {
+        setShowDateForm(false)
+        fetchIntervention()
+      }
+    } catch (error) {
+      console.error('Error setting date:', error)
+    }
+  }
+
   const getMapsUrl = () => {
     const loc = intervention?.location
-    const parts = loc
+    const addressParts = loc
       ? [loc.name, loc.address, loc.city, loc.postalCode].filter(Boolean)
       : [intervention?.client.address, intervention?.client.city, intervention?.client.postalCode].filter(Boolean)
-    const query = parts.join(', ')
+    const query = addressParts.join(', ')
     if (!query) return null
     return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(query)}`
   }
@@ -212,8 +334,9 @@ export default function InterventionDetailPage() {
 
   const canEdit = canEditIntervention(userRole as any, intervention.status as any)
   const availableStatuses = getAvailableStatuses(userRole as any, intervention.status as any)
-  const totalPartsValue = parts.reduce((sum, part) => sum + (part.quantity * part.item.value), 0)
   const mapsUrl = getMapsUrl()
+  const totalHours = workOrders.reduce((s, wo) => s + (wo.timeSpent || 0), 0)
+  const grandTotal = workOrders.flatMap(wo => wo.parts).reduce((s, p) => s + p.quantity * p.item.value, 0)
 
   return (
     <div>
@@ -236,13 +359,20 @@ export default function InterventionDetailPage() {
                   <span className={`text-sm px-3 py-1 rounded-full whitespace-nowrap ${getStatusColor(intervention.status as any)}`}>
                     {getStatusLabel(intervention.status as any)}
                   </span>
-                  <span className="text-sm text-gray-600 whitespace-nowrap">
-                    {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
-                  </span>
+                  {intervention.scheduledDate && (
+                    <span className="text-sm text-gray-600 whitespace-nowrap">
+                      {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
+                    </span>
+                  )}
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">
-                  {intervention.workDone || t('details')}
-                </h1>
+                <div className="flex items-baseline gap-3">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">
+                    {t('details')}
+                  </h1>
+                  {intervention.reference && (
+                    <span className="text-base font-mono text-gray-500">{intervention.reference}</span>
+                  )}
+                </div>
               </div>
               {canEdit && (
                 <button
@@ -340,18 +470,116 @@ export default function InterventionDetailPage() {
                 <div className="space-y-2 text-sm">
                   <div>
                     <span className="font-medium text-gray-600">{t('assignedTechnician')}:</span>
-                    <p className="text-gray-900">{intervention.assignedTo.name}</p>
+                    {(() => {
+                      const canChangeTech = canEdit && (intervention.status === 'OPEN' || intervention.status === 'ASSIGNED')
+                      return !showAssignForm ? (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {intervention.assignedTo ? (
+                            <span className="text-gray-900">{intervention.assignedTo.name}</span>
+                          ) : (
+                            <span className="text-gray-400 italic">{t('unassigned')}</span>
+                          )}
+                          {canChangeTech && (
+                            <button
+                              onClick={() => { setAssignTechId(intervention.assignedTo?.id || ''); setShowAssignForm(true) }}
+                              className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              {intervention.assignedTo ? tCommon('edit') : t('assignTechnician')}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mt-1">
+                          <select
+                            className="input text-gray-800 text-sm py-1"
+                            value={assignTechId}
+                            onChange={(e) => setAssignTechId(e.target.value)}
+                          >
+                            <option value="">{t('placeholdersSelectTechnician')}</option>
+                            {technicians.map((tech) => (
+                              <option key={tech.id} value={tech.id}>
+                                {tech.name}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={handleAssignTechnician}
+                            disabled={!assignTechId}
+                            className="btn btn-primary text-sm py-1 px-3"
+                          >
+                            {tCommon('save')}
+                          </button>
+                          <button
+                            onClick={() => { setShowAssignForm(false); setAssignTechId('') }}
+                            className="btn btn-secondary text-sm py-1 px-3"
+                          >
+                            {tCommon('cancel')}
+                          </button>
+                        </div>
+                      )
+                    })()}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">{t('fieldsScheduledDate')}:</span>
+                    {!showDateForm ? (
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {intervention.scheduledDate ? (
+                          <span className="text-gray-900">
+                            {new Date(intervention.scheduledDate).toLocaleDateString()}{intervention.scheduledTime ? ` ${intervention.scheduledTime}` : ''}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 italic">{t('notScheduled')}</span>
+                        )}
+                        {canEdit && (
+                          <button
+                            onClick={() => {
+                              const schedDate = intervention.scheduledDate ? new Date(intervention.scheduledDate).toISOString().split('T')[0] : ''
+                              setDateFormData({ scheduledDate: schedDate, scheduledTime: intervention.scheduledTime || '' })
+                              setShowDateForm(true)
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                          >
+                            {intervention.scheduledDate ? tCommon('edit') : t('setDate')}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-1 space-y-2">
+                        <div className="flex flex-wrap gap-2">
+                          <input
+                            type="date"
+                            className="input text-gray-800 text-sm py-1"
+                            value={dateFormData.scheduledDate}
+                            onChange={(e) => setDateFormData({ ...dateFormData, scheduledDate: e.target.value })}
+                          />
+                          <input
+                            type="time"
+                            className="input text-gray-800 text-sm py-1"
+                            value={dateFormData.scheduledTime}
+                            onChange={(e) => setDateFormData({ ...dateFormData, scheduledTime: e.target.value })}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleSetDate}
+                            className="btn btn-primary text-sm py-1 px-3"
+                          >
+                            {tCommon('save')}
+                          </button>
+                          <button
+                            onClick={() => setShowDateForm(false)}
+                            className="btn btn-secondary text-sm py-1 px-3"
+                          >
+                            {tCommon('cancel')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   {intervention.createdBy && (
                     <div>
                       <span className="font-medium text-gray-600">{t('createdBy')}:</span>
                       <p className="text-gray-900">{intervention.createdBy.name}</p>
-                    </div>
-                  )}
-                  {intervention.timeSpent && (
-                    <div>
-                      <span className="font-medium text-gray-600">{t('fieldsTimeSpent')}:</span>
-                      <p className="text-gray-900">{intervention.timeSpent} {tCommon('hours')}</p>
                     </div>
                   )}
                   <div>
@@ -367,79 +595,150 @@ export default function InterventionDetailPage() {
             </div>
 
             {/* Breakdown */}
-            <div className="border-t pt-4 mb-4">
+            <div className="border-t pt-4">
               <h3 className="font-semibold text-gray-700 mb-2">{t('breakdownDescription')}</h3>
               <p className="text-gray-900 whitespace-pre-wrap">{intervention.breakdown}</p>
             </div>
-
-            {/* Additional notes */}
-            {intervention.description && (
-              <div className="border-t pt-4">
-                <h3 className="font-semibold text-gray-700 mb-2">{t('additionalNotes')}</h3>
-                <p className="text-gray-900 whitespace-pre-wrap">{intervention.description}</p>
-              </div>
-            )}
           </div>
 
-          {/* Parts Used */}
+          {/* Work Orders */}
           <div className="card mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-gray-900">{t('fieldsPartsUsed')}</h2>
+              <h2 className="text-xl font-bold text-gray-900">{t('workOrders')}</h2>
               {canEdit && (
                 <button
-                  onClick={() => setShowPartsSelector(true)}
+                  onClick={() => setShowWorkOrderForm(true)}
                   className="btn btn-primary text-sm"
                 >
-                  {t('addParts')}
+                  {t('addWorkOrder')}
                 </button>
               )}
             </div>
 
-            {parts.length === 0 ? (
-              <p className="text-gray-600">{t('noPartsUsed')}</p>
+            {/* Inline create form */}
+            {showWorkOrderForm && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 space-y-3">
+                <h3 className="font-semibold text-gray-800">{t('newWorkOrder')}</h3>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('workOrderDescription')}
+                  </label>
+                  <textarea
+                    rows={4}
+                    className="input text-gray-800"
+                    value={workOrderForm.description}
+                    onChange={(e) => setWorkOrderForm({ ...workOrderForm, description: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('fieldsTimeSpent')}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    className="input text-gray-800"
+                    value={workOrderForm.timeSpent}
+                    onChange={(e) => setWorkOrderForm({ ...workOrderForm, timeSpent: e.target.value })}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={createWorkOrder}
+                    disabled={workOrderLoading || !workOrderForm.description.trim()}
+                    className="btn btn-primary text-sm"
+                  >
+                    {workOrderLoading ? tCommon('saving') : tCommon('save')}
+                  </button>
+                  <button
+                    onClick={() => { setShowWorkOrderForm(false); setWorkOrderForm({ description: '', timeSpent: '' }) }}
+                    className="btn btn-secondary text-sm"
+                  >
+                    {tCommon('cancel')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {workOrders.length === 0 && !showWorkOrderForm ? (
+              <p className="text-gray-600">{t('noWorkOrders')}</p>
             ) : (
-              <>
-                <div className="space-y-3 mb-4">
-                  {parts.map((part) => (
-                    <div key={part.id} className="p-4 bg-gray-50 rounded-lg border">
-                      <h4 className="font-semibold text-gray-900 mb-1">{part.item.itemName}</h4>
-                      <p className="text-sm text-gray-600 mb-2">{tWarehouse('partNumber')}: {part.item.partNumber}</p>
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600">
-                        <span>
-                          {tWarehouse('quantity')}: <span className="font-semibold text-gray-900">{part.quantity}</span>
-                        </span>
-                        <span>
-                          {t('unitValue')}: <span className="font-semibold text-gray-900">€{part.item.value.toFixed(2)}</span>
-                        </span>
-                        <span>
-                          {t('partTotal')}: <span className="font-semibold text-green-900">€{(part.quantity * part.item.value).toFixed(2)}</span>
-                        </span>
+              <div className="space-y-4">
+                {workOrders.map((wo) => (
+                  <div key={wo.id} className="border rounded-lg p-4">
+                    <div className="flex justify-between mb-2">
+                      <div className="text-xs text-gray-500">
+                        {new Date(wo.createdAt).toLocaleString()} — {wo.createdBy.name}
+                        {wo.timeSpent ? <span> · {wo.timeSpent}h</span> : null}
                       </div>
-                      {part.item.tracksSerialNumbers && part.serialNumbers && part.serialNumbers.length > 0 && (
-                        <div className="mt-3">
-                          <p className="text-xs text-gray-500 mb-1">{t('serialNumbers')}:</p>
-                          <div className="flex flex-wrap gap-1">
-                            {part.serialNumbers.map((sn) => (
-                              <span
-                                key={sn.id}
-                                className="px-2 py-1 bg-purple-100 text-purple-900 rounded text-xs font-mono"
-                              >
-                                {sn.serialNumber}
-                              </span>
-                            ))}
+                      {canEdit && (
+                        <button
+                          onClick={() => deleteWorkOrder(wo.id)}
+                          className="text-red-600 hover:text-red-800 text-xs"
+                        >
+                          {tCommon('delete')}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-gray-900 whitespace-pre-wrap mb-3">{wo.description}</p>
+
+                    {/* Parts for this work order */}
+                    <div className="border-t pt-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('fieldsPartsUsed')}</span>
+                        {canEdit && intervention.assignedTo && (
+                          <button
+                            onClick={() => setShowPartsForWorkOrderId(wo.id)}
+                            className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                          >
+                            {t('addParts')}
+                          </button>
+                        )}
+                      </div>
+                      {wo.parts.length === 0 ? (
+                        <p className="text-xs text-gray-400">{t('noPartsInWorkOrder')}</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {wo.parts.map((part) => (
+                            <div key={part.id} className="bg-gray-50 rounded px-3 py-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="font-medium text-gray-900">{part.item.itemName}</span>
+                                <span className="font-semibold text-green-900">€{(part.quantity * part.item.value).toFixed(2)}</span>
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {t('unitValue')}: {part.quantity} · €{part.item.value.toFixed(2)}/unit
+                              </div>
+                              {part.item.tracksSerialNumbers && part.serialNumbers && part.serialNumbers.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {part.serialNumbers.map((sn) => (
+                                    <span key={sn.id} className="px-2 py-0.5 bg-purple-100 text-purple-900 rounded text-xs font-mono">
+                                      {sn.serialNumber}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                          <div className="text-right text-sm font-semibold text-green-900">
+                            {t('partTotal')}: €{wo.parts.reduce((s, p) => s + p.quantity * p.item.value, 0).toFixed(2)}
                           </div>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-                <div className="border-t pt-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-semibold text-gray-700">{t('totalPartsValue')}:</span>
-                    <span className="text-xl font-bold text-green-900">€{totalPartsValue.toFixed(2)}</span>
                   </div>
-                </div>
-              </>
+                ))}
+
+                {/* Grand total */}
+                {workOrders.length > 0 && (
+                  <div className="border-t pt-3 flex justify-between items-center">
+                    <span className="font-semibold text-gray-700">{t('totalHours')}: {totalHours}</span>
+                    <span className="text-xl font-bold text-green-900">
+                      {t('grandTotal')}: €{grandTotal.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </>
@@ -477,7 +776,6 @@ export default function InterventionDetailPage() {
                 className="input text-gray-800"
                 value={editData.scheduledDate}
                 onChange={(e) => setEditData({ ...editData, scheduledDate: e.target.value })}
-                required
               />
             </div>
             <div>
@@ -489,7 +787,6 @@ export default function InterventionDetailPage() {
                 className="input text-gray-800"
                 value={editData.scheduledTime}
                 onChange={(e) => setEditData({ ...editData, scheduledTime: e.target.value })}
-                required
               />
             </div>
           </div>
@@ -504,43 +801,6 @@ export default function InterventionDetailPage() {
               value={editData.breakdown}
               onChange={(e) => setEditData({ ...editData, breakdown: e.target.value })}
               required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fieldsWorkDone')}
-            </label>
-            <input
-              type="text"
-              className="input text-gray-800"
-              value={editData.workDone}
-              onChange={(e) => setEditData({ ...editData, workDone: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fieldsTimeSpent')}
-            </label>
-            <input
-              type="number"
-              step="0.5"
-              className="input text-gray-800"
-              value={editData.timeSpent}
-              onChange={(e) => setEditData({ ...editData, timeSpent: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('additionalNotes')}
-            </label>
-            <textarea
-              rows={4}
-              className="input text-gray-800"
-              value={editData.description}
-              onChange={(e) => setEditData({ ...editData, description: e.target.value })}
             />
           </div>
 
@@ -559,14 +819,15 @@ export default function InterventionDetailPage() {
         </form>
       )}
 
-      {showPartsSelector && intervention && (
+      {showPartsForWorkOrderId && intervention?.assignedTo && (
         <PartsSelector
           technicianId={intervention.assignedTo.id}
           interventionId={intervention.id}
-          onClose={() => setShowPartsSelector(false)}
+          workOrderId={showPartsForWorkOrderId}
+          onClose={() => setShowPartsForWorkOrderId(null)}
           onPartAdded={() => {
-            fetchParts()
-            setShowPartsSelector(false)
+            fetchWorkOrders()
+            setShowPartsForWorkOrderId(null)
           }}
         />
       )}

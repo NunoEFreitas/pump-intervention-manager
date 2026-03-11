@@ -25,6 +25,7 @@ model User {
   itemMovementsFrom       ItemMovement[] @relation("MovementFrom")
   itemMovementsTo         ItemMovement[] @relation("MovementTo")
   itemMovementsCreated    ItemMovement[] @relation("MovementCreatedBy")
+  workOrdersCreated       WorkOrder[] @relation("WorkOrderCreatedBy")
 }
 
 enum UserRole {
@@ -33,14 +34,9 @@ enum UserRole {
   TECHNICIAN
 }
 
-enum ClientType {
-  PRIVATE
-  COMPANY
-}
-
 model Client {
   id            String            @id @default(uuid())
-  clientType    ClientType        @default(PRIVATE)
+  reference     String?           @unique
   name          String
   address       String?
   city          String?
@@ -73,17 +69,19 @@ model CompanyLocation {
 }
 
 model EquipmentType {
-  id        String              @id @default(uuid())
-  name      String              @unique
-  createdAt DateTime            @default(now())
-  equipment LocationEquipment[]
+  id             String              @id @default(uuid())
+  name           String              @unique
+  createdAt      DateTime            @default(now())
+  equipment      LocationEquipment[]
+  warehouseItems WarehouseItem[]
 }
 
 model EquipmentBrand {
-  id        String              @id @default(uuid())
-  name      String              @unique
-  createdAt DateTime            @default(now())
-  equipment LocationEquipment[]
+  id             String              @id @default(uuid())
+  name           String              @unique
+  createdAt      DateTime            @default(now())
+  equipment      LocationEquipment[]
+  warehouseItems WarehouseItem[]
 }
 
 model LocationEquipment {
@@ -95,28 +93,29 @@ model LocationEquipment {
   brandId         String
   brand           EquipmentBrand  @relation(fields: [brandId], references: [id])
   model           String
+  serialNumber    String?
+  observations    String?         @db.Text
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 }
 
 model Intervention {
   id               String              @id @default(uuid())
+  reference        String?             @unique
   clientId         String
   client           Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   locationId       String?
   location         CompanyLocation?    @relation(fields: [locationId], references: [id])
-  assignedToId     String
-  assignedTo       User                @relation("AssignedInterventions", fields: [assignedToId], references: [id])
+  assignedToId     String?
+  assignedTo       User?               @relation("AssignedInterventions", fields: [assignedToId], references: [id])
   createdById      String?
   createdBy        User?               @relation("CreatedInterventions", fields: [createdById], references: [id])
   status           InterventionStatus  @default(OPEN)
-  scheduledDate    DateTime
-  scheduledTime    String
+  scheduledDate    DateTime?
+  scheduledTime    String?
   breakdown        String              @default("") @db.Text // Description of the breakdown/issue
-  workDone         String?             @db.Text
-  timeSpent        Float?              // in hours
-  description      String?             @db.Text
   partsUsed        InterventionPart[]  // Parts used in this intervention
+  workOrders       WorkOrder[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
@@ -138,6 +137,7 @@ model InterventionPart {
 
 enum InterventionStatus {
   OPEN
+  ASSIGNED
   IN_PROGRESS
   QUALITY_ASSESSMENT
   COMPLETED
@@ -148,8 +148,13 @@ model WarehouseItem {
   id                  String              @id @default(uuid())
   itemName            String
   partNumber          String
+  equipmentTypeId     String?
+  equipmentType       EquipmentType?      @relation(fields: [equipmentTypeId], references: [id])
+  brandId             String?
+  brand               EquipmentBrand?     @relation(fields: [brandId], references: [id])
   value               Float
   mainWarehouse       Int                 @default(0)  // Count for non-serialized items
+  repairStock         Int                 @default(0)  // Count of items currently in repair
   tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
   autoSn              Boolean             @default(false) // Auto-generate serial numbers on add stock
   snExample           String?             // Prefix for auto-generated SNs (e.g. "PTT" → "PTT-1", "PTT-2")
@@ -159,6 +164,7 @@ model WarehouseItem {
   technicianStocks    TechnicianStock[]
   serialNumbers       SerialNumberStock[]
   interventionParts   InterventionPart[]
+  workOrderParts      WorkOrderPart[]
 }
 
 model TechnicianStock {
@@ -197,6 +203,8 @@ enum MovementType {
   TRANSFER_TO_TECH    // Transfer from main to technician
   TRANSFER_FROM_TECH  // Return from technician to main
   USE                 // Used in intervention
+  REPAIR_IN           // Sent to repair (removed from active stock)
+  REPAIR_OUT          // Returned from repair (back to main warehouse)
 }
 
 // Track individual serial numbers for items
@@ -220,6 +228,7 @@ enum StockLocation {
   MAIN_WAREHOUSE
   TECHNICIAN
   USED
+  REPAIR
 }
 
 enum SerialStatus {
@@ -238,4 +247,39 @@ model MovementSerialNumber {
   serialNumber    SerialNumberStock @relation(fields: [serialNumberId], references: [id], onDelete: Cascade)
 
   @@unique([movementId, serialNumberId])
+}
+
+model WorkOrder {
+  id             String          @id @default(uuid())
+  interventionId String
+  intervention   Intervention    @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  description    String          @db.Text
+  timeSpent      Float?
+  createdById    String
+  createdBy      User            @relation("WorkOrderCreatedBy", fields: [createdById], references: [id])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  parts          WorkOrderPart[]
+
+  @@index([interventionId])
+}
+
+model WorkOrderPart {
+  id              String        @id @default(uuid())
+  workOrderId     String
+  workOrder       WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  itemId          String
+  item            WarehouseItem @relation(fields: [itemId], references: [id])
+  quantity        Int
+  serialNumberIds String[]
+  createdAt       DateTime      @default(now())
+
+  @@index([workOrderId])
+  @@index([itemId])
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

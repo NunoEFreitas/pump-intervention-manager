@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
-type Tab = 'users' | 'types' | 'brands'
+type Tab = 'users' | 'types' | 'brands' | 'settings'
 
 interface User {
   id: string
@@ -42,6 +42,11 @@ export default function AdminPage() {
   const [editingBrand, setEditingBrand] = useState<EquipmentBrand | null>(null)
   const [brandLoading, setBrandLoading] = useState(false)
 
+  // Settings state
+  const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '' })
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaved, setSettingsSaved] = useState(false)
+
   const tAdmin = useTranslations('admin')
   const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
@@ -60,6 +65,7 @@ export default function AdminPage() {
     fetchUsers()
     fetchEquipmentTypes()
     fetchEquipmentBrands()
+    fetchSettings()
   }, [router])
 
   // Fetch lazy: only reload when switching to that tab if not yet loaded
@@ -85,6 +91,38 @@ export default function AdminPage() {
       setEquipmentTypes(await res.json())
     } catch (error) {
       console.error('Error fetching equipment types:', error)
+    }
+  }
+
+  const fetchSettings = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '' })
+    } catch (error) {
+      console.error('Error fetching settings:', error)
+    }
+  }
+
+  const saveSettings = async () => {
+    setSettingsLoading(true)
+    setSettingsSaved(false)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(settings),
+      })
+      const data = await res.json()
+      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '' })
+      setSettingsSaved(true)
+      setTimeout(() => setSettingsSaved(false), 2000)
+    } catch (error) {
+      console.error('Error saving settings:', error)
+    } finally {
+      setSettingsLoading(false)
     }
   }
 
@@ -250,6 +288,9 @@ export default function AdminPage() {
             <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
               {equipmentBrands.length}
             </span>
+          </button>
+          <button className={tabClass('settings')} onClick={() => setActiveTab('settings')}>
+            {tAdmin('settings')}
           </button>
         </nav>
       </div>
@@ -475,6 +516,53 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Settings tab ─────────────────────────────────────────────────── */}
+      {activeTab === 'settings' && (
+        <div className="card max-w-lg">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">{tAdmin('settings')}</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {tAdmin('clientPrefix')}
+              </label>
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder="e.g. CLI"
+                value={settings.clientPrefix}
+                onChange={(e) => setSettings({ ...settings, clientPrefix: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">{tAdmin('clientPrefixHint')}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {tAdmin('projectPrefix')}
+              </label>
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder="e.g. INT"
+                value={settings.projectPrefix}
+                onChange={(e) => setSettings({ ...settings, projectPrefix: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">{tAdmin('projectPrefixHint')}</p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={saveSettings}
+                disabled={settingsLoading}
+                className="btn btn-primary"
+              >
+                {settingsLoading ? tCommon('saving') : tCommon('save')}
+              </button>
+              {settingsSaved && (
+                <span className="text-sm text-green-600 font-medium">{tCommon('saved')}</span>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

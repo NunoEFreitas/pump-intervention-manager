@@ -128,9 +128,15 @@ export async function PUT(
       )
     }
 
+    // Auto-transition to ASSIGNED when technician is assigned to an OPEN intervention
+    let newStatus = data.status
+    if (data.assignedToId && !intervention.assignedToId && intervention.status === 'OPEN') {
+      newStatus = 'ASSIGNED'
+    }
+
     // Check if user can change status
-    if (data.status && data.status !== intervention.status) {
-      if (!canChangeStatus(currentUser.role as any, intervention.status as any, data.status)) {
+    if (newStatus && newStatus !== intervention.status) {
+      if (!canChangeStatus(currentUser.role as any, intervention.status as any, newStatus)) {
         return NextResponse.json(
           { error: 'You do not have permission to change to this status' },
           { status: 403 }
@@ -143,14 +149,11 @@ export async function PUT(
       data: {
         clientId: data.clientId,
         locationId: data.locationId !== undefined ? (data.locationId || null) : undefined,
-        assignedToId: data.assignedToId,
-        status: data.status,
-        scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : undefined,
-        scheduledTime: data.scheduledTime,
+        assignedToId: data.assignedToId !== undefined ? (data.assignedToId || null) : undefined,
+        status: newStatus,
+        scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : data.scheduledDate === null ? null : undefined,
+        scheduledTime: data.scheduledTime !== undefined ? (data.scheduledTime || null) : undefined,
         breakdown: data.breakdown,
-        workDone: data.workDone,
-        timeSpent: data.timeSpent,
-        description: data.description,
       },
       include: {
         client: {

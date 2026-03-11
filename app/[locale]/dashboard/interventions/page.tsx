@@ -4,16 +4,13 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getStatusColor } from '@/lib/permissions'
-import type { InterventionStatus } from '@/lib/permissions'
 
 interface Intervention {
   id: string
+  reference: string | null
   status: string
-  workDone: string | null
-  timeSpent: number | null
-  description: string | null
-  scheduledDate: string
-  scheduledTime: string
+  scheduledDate: string | null
+  scheduledTime: string | null
   createdAt: string
   client: {
     id: string
@@ -22,7 +19,7 @@ interface Intervention {
   }
   assignedTo: {
     name: string
-  }
+  } | null
 }
 
 function InterventionsContent() {
@@ -46,6 +43,8 @@ function InterventionsContent() {
         return tCommon('all')
       case 'OPEN':
         return t('statusOpen')
+      case 'ASSIGNED':
+        return t('statusAssigned')
       case 'IN_PROGRESS':
         return t('statusInProgress')
       case 'QUALITY_ASSESSMENT':
@@ -90,7 +89,7 @@ function InterventionsContent() {
 
   const filteredInterventions = interventions
     .filter(i => statusFilter === 'ALL' || i.status === statusFilter)
-    .filter(i => clientSearch === '' || i.client.name.toLowerCase().includes(clientSearch.toLowerCase()))
+    .filter(i => clientSearch === '' || i.client.name.toLowerCase().includes(clientSearch.toLowerCase()) || i.reference?.toLowerCase().includes(clientSearch.toLowerCase()))
 
   if (loading) return <div className="text-center py-12 text-gray-600">{tCommon('loading')}</div>
 
@@ -124,7 +123,7 @@ function InterventionsContent() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {['ALL', 'OPEN', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED'].map((status) => (
+          {['ALL', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}
@@ -159,16 +158,21 @@ function InterventionsContent() {
                     <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(intervention.status as any)}`}>
                       {getTranslatedStatusLabel(intervention.status)}
                     </span>
-                    <span className="text-sm text-gray-600">
-                      {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
-                    </span>
+                    {intervention.scheduledDate && (
+                      <span className="text-sm text-gray-600">
+                        {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
+                      </span>
+                    )}
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">{intervention.workDone || t('scheduledIntervention')}</h3>
-                  {intervention.description && <p className="text-gray-600 mb-3">{intervention.description}</p>}
+                  <div className="flex items-baseline gap-2 mb-2">
+                    <h3 className="text-xl font-semibold text-gray-900">{t('scheduledIntervention')}</h3>
+                    {intervention.reference && (
+                      <span className="text-sm font-mono text-gray-500">{intervention.reference}</span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                     <span className="flex items-center">{t('fieldsClient')}: {intervention.client.name}</span>
-                    <span className="flex items-center">{t('technician')}: {intervention.assignedTo.name}</span>
-                    {intervention.timeSpent && <span>{t('time')}: {intervention.timeSpent}h</span>}
+                    {intervention.assignedTo && <span className="flex items-center">{t('technician')}: {intervention.assignedTo.name}</span>}
                     {intervention.client.city && <span>{intervention.client.city}</span>}
                   </div>
                 </div>

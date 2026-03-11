@@ -70,12 +70,27 @@ export async function GET(
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
     }
 
-    // Fetch new fields not yet in Prisma client via raw SQL
-    const [extra] = await prisma.$queryRaw<Array<{ autoSn: boolean; snExample: string | null }>>`
-      SELECT "autoSn", "snExample" FROM "WarehouseItem" WHERE id = ${id}
+    const [extra] = await prisma.$queryRaw<Array<{
+      autoSn: boolean
+      snExample: string | null
+      equipmentTypeId: string | null
+      brandId: string | null
+    }>>`
+      SELECT "autoSn", "snExample", "equipmentTypeId", "brandId" FROM "WarehouseItem" WHERE id = ${id}
     `
 
-    return NextResponse.json({ ...item, ...(extra ?? {}) })
+    let typeName: string | null = null
+    let brandName: string | null = null
+    if (extra?.equipmentTypeId) {
+      const t = await prisma.equipmentType.findUnique({ where: { id: extra.equipmentTypeId }, select: { name: true } })
+      typeName = t?.name ?? null
+    }
+    if (extra?.brandId) {
+      const b = await prisma.equipmentBrand.findUnique({ where: { id: extra.brandId }, select: { name: true } })
+      brandName = b?.name ?? null
+    }
+
+    return NextResponse.json({ ...item, ...(extra ?? {}), typeName, brandName })
   } catch (error) {
     console.error('Error fetching warehouse item:', error)
     return NextResponse.json(
@@ -110,23 +125,41 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
 
+    const equipmentTypeId: string | null = data.equipmentTypeId || null
+    const brandId: string | null = data.brandId || null
+
+    let typeName = ''
+    let brandName = ''
+    if (equipmentTypeId) {
+      const t = await prisma.equipmentType.findUnique({ where: { id: equipmentTypeId }, select: { name: true } })
+      typeName = t?.name || ''
+    }
+    if (brandId) {
+      const b = await prisma.equipmentBrand.findUnique({ where: { id: brandId }, select: { name: true } })
+      brandName = b?.name || ''
+    }
+
+    const itemName = [typeName, brandName, data.partNumber].filter(Boolean).join(' ') || data.itemName
+    const newAutoSn = data.autoSn === true || data.autoSn === 'true'
+    const newSnExample = newAutoSn ? (data.snExample || null) : null
+
     const item = await prisma.warehouseItem.update({
       where: { id },
       data: {
-        itemName: data.itemName,
+        itemName,
         partNumber: data.partNumber,
         value: parseFloat(data.value),
       },
     })
 
-    // Update new fields via raw SQL
-    const newAutoSn = data.autoSn === true || data.autoSn === 'true'
-    const newSnExample = data.snExample?.trim() || null
     await prisma.$executeRaw`
-      UPDATE "WarehouseItem" SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample} WHERE id = ${id}
+      UPDATE "WarehouseItem"
+      SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample},
+          "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId}
+      WHERE id = ${id}
     `
 
-    return NextResponse.json({ ...item, autoSn: newAutoSn, snExample: newSnExample })
+    return NextResponse.json({ ...item, autoSn: newAutoSn, snExample: newSnExample, equipmentTypeId, brandId, typeName, brandName })
   } catch (error) {
     console.error('Error updating warehouse item:', error)
     return NextResponse.json(

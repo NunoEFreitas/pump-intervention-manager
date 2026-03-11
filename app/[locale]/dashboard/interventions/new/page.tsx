@@ -9,7 +9,6 @@ interface Client {
   id: string
   name: string
   city?: string | null
-  clientType: 'PRIVATE' | 'COMPANY'
 }
 
 interface CompanyLocation {
@@ -49,9 +48,6 @@ function NewInterventionContent() {
     scheduledDate: '',
     scheduledTime: '',
     breakdown: '',
-    workDone: '',
-    timeSpent: '',
-    description: '',
   })
 
   useEffect(() => {
@@ -65,9 +61,7 @@ function NewInterventionContent() {
       const client = clients.find((c) => c.id === preSelectedClientId)
       if (client) {
         setSelectedClient(client)
-        if (client.clientType === 'COMPANY') {
-          fetchLocations(client.id)
-        }
+        fetchLocations(client.id)
       }
     }
   }, [clients, preSelectedClientId])
@@ -116,9 +110,7 @@ function NewInterventionContent() {
     setSelectedClient(client)
     setFormData({ ...formData, clientId, locationId: '' })
     setLocations([])
-    if (client?.clientType === 'COMPANY') {
-      fetchLocations(clientId)
-    }
+    fetchLocations(clientId)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,10 +126,7 @@ function NewInterventionContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...formData,
-          timeSpent: formData.timeSpent ? parseFloat(formData.timeSpent) : null,
-        }),
+        body: JSON.stringify(formData),
       })
 
       const data = await response.json()
@@ -160,8 +149,6 @@ function NewInterventionContent() {
     })
   }
 
-  const isCompany = selectedClient?.clientType === 'COMPANY'
-
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
@@ -178,7 +165,7 @@ function NewInterventionContent() {
       <form onSubmit={handleSubmit} className="card space-y-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
           <p className="text-sm text-blue-800">
-            {t('requiredFields')}
+            {t('requiredFieldsNew')}
           </p>
         </div>
 
@@ -190,8 +177,8 @@ function NewInterventionContent() {
           required
         />
 
-        {/* Location dropdown — only for company clients */}
-        {isCompany && (
+        {/* Location dropdown */}
+        {selectedClient && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t('fieldsLocation')} *
@@ -220,55 +207,6 @@ function NewInterventionContent() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('fieldsAssignedTo')} *
-          </label>
-          <select
-            name="assignedToId"
-            className="input text-gray-800"
-            value={formData.assignedToId}
-            onChange={handleChange}
-            required
-          >
-            <option value="">{t('placeholdersSelectTechnician')}</option>
-            {technicians.map((tech) => (
-              <option key={tech.id} value={tech.id}>
-                {tech.name} ({tech.email})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fieldsScheduledDate')} *
-            </label>
-            <input
-              type="date"
-              name="scheduledDate"
-              className="input text-gray-800"
-              value={formData.scheduledDate}
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fieldsScheduledTime')} *
-            </label>
-            <input
-              type="time"
-              name="scheduledTime"
-              className="input text-gray-800"
-              value={formData.scheduledTime}
-              onChange={handleChange}
-              required
-            />
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
             {t('fieldsBreakdown')} *
           </label>
           <textarea
@@ -283,56 +221,50 @@ function NewInterventionContent() {
           <p className="text-xs text-gray-500 mt-1">{t('breakdownHint')}</p>
         </div>
 
-        <div className="border-t pt-4">
-          <h3 className="text-sm font-medium text-gray-700 mb-3">{t('optionalDetails')}</h3>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t('fieldsAssignedTo')}
+          </label>
+          <select
+            name="assignedToId"
+            className="input text-gray-800"
+            value={formData.assignedToId}
+            onChange={handleChange}
+          >
+            <option value="">{t('placeholdersSelectTechnician')}</option>
+            {technicians.map((tech) => (
+              <option key={tech.id} value={tech.id}>
+                {tech.name} ({tech.email})
+              </option>
+            ))}
+          </select>
+        </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('fieldsWorkDone')}
-              </label>
-              <input
-                type="text"
-                name="workDone"
-                className="input text-gray-800"
-                placeholder={t('placeholdersWorkDone')}
-                value={formData.workDone}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('fieldsTimeSpent')}
-              </label>
-              <input
-                type="number"
-                step="0.5"
-                name="timeSpent"
-                className="input text-gray-800"
-                placeholder={t('placeholdersTimeSpent')}
-                value={formData.timeSpent}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('fieldsDescription')}
-              </label>
-              <textarea
-                name="description"
-                rows={4}
-                className="input text-gray-800"
-                placeholder={t('placeholdersDescription')}
-                value={formData.description}
-                onChange={handleChange}
-              />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('fieldsScheduledDate')}
+            </label>
+            <input
+              type="date"
+              name="scheduledDate"
+              className="input text-gray-800"
+              value={formData.scheduledDate}
+              onChange={handleChange}
+            />
           </div>
-          <p className="text-xs text-gray-500 mt-2">
-            {t('partsTrackingNote')}
-          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('fieldsScheduledTime')}
+            </label>
+            <input
+              type="time"
+              name="scheduledTime"
+              className="input text-gray-800"
+              value={formData.scheduledTime}
+              onChange={handleChange}
+            />
+          </div>
         </div>
 
         {error && (

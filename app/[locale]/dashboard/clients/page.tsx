@@ -6,11 +6,11 @@ import { useTranslations } from 'next-intl'
 
 interface Client {
   id: string
+  reference: string | null
   name: string
   city: string
   phone: string
   email: string
-  clientType: 'PRIVATE' | 'COMPANY'
   _count?: {
     interventions: number
   }
@@ -47,7 +47,8 @@ export default function ClientsPage() {
 
   const filteredClients = clients.filter((client) =>
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.city?.toLowerCase().includes(searchTerm.toLowerCase())
+    client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    client.reference?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -107,12 +108,12 @@ export default function ClientsPage() {
             >
               <div className="flex justify-between items-start mb-3">
                 <div>
+                  {client.reference && (
+                    <p className="text-xs font-mono text-gray-500 mb-0.5">{client.reference}</p>
+                  )}
                   <h3 className="text-lg font-semibold text-gray-900">
                     {client.name}
                   </h3>
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${client.clientType === 'COMPANY' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'}`}>
-                    {client.clientType === 'COMPANY' ? tClients('company') : tClients('private')}
-                  </span>
                 </div>
                 <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                   {client._count?.interventions || 0} {tClients('interventions')}

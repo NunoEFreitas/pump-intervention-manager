@@ -157,7 +157,33 @@ export async function POST(request: NextRequest) {
           mainWarehouse: item.mainWarehouse - quantity,
         }
         break
-        
+
+      case 'REPAIR_IN':
+        if (item.mainWarehouse < quantity) {
+          return NextResponse.json(
+            { error: 'Insufficient stock in main warehouse' },
+            { status: 400 }
+          )
+        }
+        updateData = {
+          mainWarehouse: item.mainWarehouse - quantity,
+          repairStock: (item as any).repairStock + quantity,
+        }
+        break
+
+      case 'REPAIR_OUT':
+        if ((item as any).repairStock < quantity) {
+          return NextResponse.json(
+            { error: 'Insufficient items in repair' },
+            { status: 400 }
+          )
+        }
+        updateData = {
+          repairStock: (item as any).repairStock - quantity,
+          mainWarehouse: item.mainWarehouse + quantity,
+        }
+        break
+
       default:
         return NextResponse.json(
           { error: 'Invalid movement type' },

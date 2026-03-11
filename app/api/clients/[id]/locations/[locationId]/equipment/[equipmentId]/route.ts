@@ -14,7 +14,7 @@ export async function PUT(
 
   try {
     const { equipmentId } = await params
-    const { equipmentTypeId, brandId, model } = await request.json()
+    const { equipmentTypeId, brandId, model, serialNumber, observations } = await request.json()
 
     if (!equipmentTypeId || !brandId || !model?.trim()) {
       return NextResponse.json({ error: 'equipmentTypeId, brandId, and model are required' }, { status: 400 })
@@ -22,7 +22,13 @@ export async function PUT(
 
     const equipment = await prisma.locationEquipment.update({
       where: { id: equipmentId },
-      data: { equipmentTypeId, brandId, model: model.trim() },
+      data: {
+        equipmentTypeId,
+        brandId,
+        model: model.trim(),
+        serialNumber: serialNumber?.trim() || null,
+        observations: observations?.trim() || null,
+      },
       include: {
         equipmentType: { select: { name: true } },
         brand: { select: { name: true } },
