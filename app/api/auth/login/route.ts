@@ -33,6 +33,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const blockedRow = await prisma.$queryRaw<[{ blocked: boolean }]>`
+      SELECT blocked FROM "User" WHERE id = ${user.id}
+    `
+    if (blockedRow[0]?.blocked) {
+      return NextResponse.json(
+        { error: 'Account is blocked. Contact your administrator.' },
+        { status: 403 }
+      )
+    }
+
     const token = generateToken(user.id, user.email)
 
     return NextResponse.json({

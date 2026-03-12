@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import LocationSelector from '@/components/LocationSelector'
 
 interface LocationEquipment {
   id: string
@@ -18,6 +19,8 @@ interface LocationEquipment {
 interface CompanyLocation {
   id: string
   name: string
+  country: string | null
+  district: string | null
   address: string | null
   city: string | null
   postalCode: string | null
@@ -31,6 +34,9 @@ interface Client {
   id: string
   reference: string | null
   name: string
+  vatNumber: string | null
+  country: string | null
+  district: string | null
   address: string
   city: string
   postalCode: string
@@ -56,7 +62,7 @@ interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
 
 const emptyLocationForm = {
-  name: '', address: '', city: '', postalCode: '', phone: '', contactPerson: '', notes: '',
+  name: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', contactPerson: '', notes: '',
 }
 
 const emptyEquipmentForm = {
@@ -69,6 +75,11 @@ export default function ClientDetailPage() {
   const locale = params.locale as string
   const [client, setClient] = useState<Client | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isEditingClient, setIsEditingClient] = useState(false)
+  const [clientEditData, setClientEditData] = useState({
+    name: '', vatNumber: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', email: '', contactPerson: '', notes: '',
+  })
+  const [clientEditLoading, setClientEditLoading] = useState(false)
 
   // Location form state
   const [showLocationForm, setShowLocationForm] = useState(false)
@@ -110,6 +121,44 @@ export default function ClientDetailPage() {
       console.error('Error fetching client:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const openEditClient = () => {
+    if (!client) return
+    setClientEditData({
+      name: client.name,
+      vatNumber: client.vatNumber || '',
+      country: client.country || '',
+      district: client.district || '',
+      address: client.address || '',
+      city: client.city || '',
+      postalCode: client.postalCode || '',
+      phone: client.phone || '',
+      email: client.email || '',
+      contactPerson: client.contactPerson || '',
+      notes: client.notes || '',
+    })
+    setIsEditingClient(true)
+  }
+
+  const saveClient = async () => {
+    setClientEditLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/clients/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(clientEditData),
+      })
+      if (response.ok) {
+        setIsEditingClient(false)
+        fetchClient()
+      }
+    } catch (error) {
+      console.error('Error updating client:', error)
+    } finally {
+      setClientEditLoading(false)
     }
   }
 
@@ -158,6 +207,8 @@ export default function ClientDetailPage() {
     setEditingLocation(loc)
     setLocationForm({
       name: loc.name,
+      country: loc.country || '',
+      district: loc.district || '',
       address: loc.address || '',
       city: loc.city || '',
       postalCode: loc.postalCode || '',
@@ -303,61 +354,130 @@ export default function ClientDetailPage() {
             {client.reference && (
               <p className="text-sm font-mono text-gray-500 mb-0.5">{client.reference}</p>
             )}
-            <div className="flex flex-wrap items-center gap-3 mb-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{client.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{client.name}</h1>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <button
+              onClick={openEditClient}
+              className="btn btn-secondary"
+            >
+              {tCommon('edit')}
+            </button>
+            <button
+              onClick={() => router.push(`/${locale}/dashboard/interventions/new?clientId=${client.id}`)}
+              className="btn btn-primary flex-1 sm:flex-none"
+            >
+              {tInterventions('newIntervention')}
+            </button>
+          </div>
+        </div>
+
+        {isEditingClient ? (
+          <div className="space-y-4 border-t pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('clientName')} *</label>
+                <input type="text" className="input text-gray-800" value={clientEditData.name} onChange={(e) => setClientEditData({ ...clientEditData, name: e.target.value })} required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('vatNumber')}</label>
+                <input type="text" className="input text-gray-800" value={clientEditData.vatNumber} onChange={(e) => setClientEditData({ ...clientEditData, vatNumber: e.target.value })} />
+              </div>
+            </div>
+            <LocationSelector
+              country={clientEditData.country}
+              district={clientEditData.district}
+              city={clientEditData.city}
+              labelSize="xs"
+              onCountryChange={(v) => setClientEditData({ ...clientEditData, country: v, district: '', city: '' })}
+              onDistrictChange={(v) => setClientEditData({ ...clientEditData, district: v, city: '' })}
+              onCityChange={(v) => setClientEditData({ ...clientEditData, city: v })}
+            />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('address')}</label>
+                <input type="text" className="input text-gray-800" value={clientEditData.address} onChange={(e) => setClientEditData({ ...clientEditData, address: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('postalCode')}</label>
+                <input type="text" className="input text-gray-800" value={clientEditData.postalCode} onChange={(e) => setClientEditData({ ...clientEditData, postalCode: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('phone')}</label>
+                <input type="tel" className="input text-gray-800" value={clientEditData.phone} onChange={(e) => setClientEditData({ ...clientEditData, phone: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tAuth('email')}</label>
+                <input type="email" className="input text-gray-800" value={clientEditData.email} onChange={(e) => setClientEditData({ ...clientEditData, email: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('contactPerson')}</label>
+                <input type="text" className="input text-gray-800" value={clientEditData.contactPerson} onChange={(e) => setClientEditData({ ...clientEditData, contactPerson: e.target.value })} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('notes')}</label>
+              <textarea rows={3} className="input text-gray-800" value={clientEditData.notes} onChange={(e) => setClientEditData({ ...clientEditData, notes: e.target.value })} />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveClient} disabled={clientEditLoading || !clientEditData.name.trim()} className="btn btn-primary text-sm">
+                {clientEditLoading ? tCommon('saving') : tCommon('save')}
+              </button>
+              <button onClick={() => setIsEditingClient(false)} className="btn btn-secondary text-sm">
+                {tCommon('cancel')}
+              </button>
             </div>
           </div>
-          <button
-            onClick={() => router.push(`/${locale}/dashboard/interventions/new?clientId=${client.id}`)}
-            className="btn btn-primary w-full sm:w-auto"
-          >
-            {tInterventions('newIntervention')}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          {client.address && (
-            <div>
-              <span className="font-medium text-gray-700">{tClients('address')}:</span>
-              <p className="text-gray-600">{client.address}</p>
-            </div>
-          )}
-          {client.city && (
-            <div>
-              <span className="font-medium text-gray-700">{tClients('city')}:</span>
-              <p className="text-gray-600">{client.city}</p>
-            </div>
-          )}
-          {client.postalCode && (
-            <div>
-              <span className="font-medium text-gray-700">{tClients('postalCode')}:</span>
-              <p className="text-gray-600">{client.postalCode}</p>
-            </div>
-          )}
-          {client.phone && (
-            <div>
-              <span className="font-medium text-gray-700">{tClients('phone')}:</span>
-              <p className="text-gray-600">{client.phone}</p>
-            </div>
-          )}
-          {client.email && (
-            <div>
-              <span className="font-medium text-gray-700">{tAuth('email')}:</span>
-              <p className="text-gray-600">{client.email}</p>
-            </div>
-          )}
-          {client.contactPerson && (
-            <div>
-              <span className="font-medium text-gray-700">{tClients('contactPerson')}:</span>
-              <p className="text-gray-600">{client.contactPerson}</p>
-            </div>
-          )}
-        </div>
-
-        {client.notes && (
-          <div className="mt-4 pt-4 border-t">
-            <span className="font-medium text-gray-700">{tClients('notes')}:</span>
-            <p className="text-gray-600 mt-1">{client.notes}</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            {client.vatNumber && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('vatNumber')}:</span>
+                <p className="text-gray-600">{client.vatNumber}</p>
+              </div>
+            )}
+            {client.country && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('country')}:</span>
+                <p className="text-gray-600">{[client.country, client.district, client.city].filter(Boolean).join(' › ')}</p>
+              </div>
+            )}
+            {client.address && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('address')}:</span>
+                <p className="text-gray-600">{client.address}</p>
+              </div>
+            )}
+            {client.postalCode && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('postalCode')}:</span>
+                <p className="text-gray-600">{client.postalCode}</p>
+              </div>
+            )}
+            {client.phone && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('phone')}:</span>
+                <p className="text-gray-600">{client.phone}</p>
+              </div>
+            )}
+            {client.email && (
+              <div>
+                <span className="font-medium text-gray-700">{tAuth('email')}:</span>
+                <p className="text-gray-600">{client.email}</p>
+              </div>
+            )}
+            {client.contactPerson && (
+              <div>
+                <span className="font-medium text-gray-700">{tClients('contactPerson')}:</span>
+                <p className="text-gray-600">{client.contactPerson}</p>
+              </div>
+            )}
+            {client.notes && (
+              <div className="md:col-span-2 pt-2 border-t">
+                <span className="font-medium text-gray-700">{tClients('notes')}:</span>
+                <p className="text-gray-600 mt-1">{client.notes}</p>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -389,14 +509,19 @@ export default function ClientDetailPage() {
                   onChange={handleLocationFormChange}
                 />
               </div>
+              <LocationSelector
+                country={locationForm.country}
+                district={locationForm.district}
+                city={locationForm.city}
+                labelSize="xs"
+                onCountryChange={(v) => setLocationForm({ ...locationForm, country: v, district: '', city: '' })}
+                onDistrictChange={(v) => setLocationForm({ ...locationForm, district: v, city: '' })}
+                onCityChange={(v) => setLocationForm({ ...locationForm, city: v })}
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('address')}</label>
                   <input type="text" name="address" className="input text-gray-800" value={locationForm.address} onChange={handleLocationFormChange} />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('city')}</label>
-                  <input type="text" name="city" className="input text-gray-800" value={locationForm.city} onChange={handleLocationFormChange} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('postalCode')}</label>

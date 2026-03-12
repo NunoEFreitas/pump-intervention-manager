@@ -34,7 +34,14 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(location)
+    await prisma.$executeRaw`
+      UPDATE "CompanyLocation"
+      SET "country"  = ${data.country ?? null},
+          "district" = ${data.district ?? null}
+      WHERE id = ${locationId}
+    `
+
+    return NextResponse.json({ ...location, country: data.country ?? null, district: data.district ?? null })
   } catch (error) {
     console.error('Error updating location:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

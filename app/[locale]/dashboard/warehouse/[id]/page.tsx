@@ -68,6 +68,7 @@ export default function WarehouseItemDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
   const [stockOperation, setStockOperation] = useState<string>('')
+  const [snExpanded, setSnExpanded] = useState<Record<string, boolean>>({})
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [editData, setEditData] = useState({
@@ -338,82 +339,135 @@ export default function WarehouseItemDetailPage() {
                 <h3 className="font-semibold text-gray-700 mb-3">{t('serialNumberTracking')}</h3>
 
                 {/* Main Warehouse Serial Numbers */}
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-blue-600 mb-2">{t('mainWarehouse')}</h4>
-                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                    {serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length > 0 ? (
-                      <div className="flex flex-wrap gap-2">
-                        {serialNumbers
-                          .filter(sn => sn.location === 'MAIN_WAREHOUSE')
-                          .map(sn => (
-                            <span key={sn.id} className="px-3 py-1 bg-blue-100 text-blue-900 rounded text-sm font-mono">
-                              {sn.serialNumber}
-                            </span>
-                          ))}
+                {(() => {
+                  const sns = serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE')
+                  const key = 'main'
+                  const expanded = snExpanded[key]
+                  const visible = expanded ? sns : sns.slice(0, 8)
+                  return (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-blue-600 mb-2">{t('mainWarehouse')}</h4>
+                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                        {sns.length > 0 ? (
+                          <>
+                            <div className="flex flex-wrap gap-2">
+                              {visible.map(sn => (
+                                <span key={sn.id} className="px-3 py-1 bg-blue-100 text-blue-900 rounded text-sm font-mono">
+                                  {sn.serialNumber}
+                                </span>
+                              ))}
+                            </div>
+                            {sns.length > 8 && (
+                              <button
+                                onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
+                                className="mt-2 text-xs text-blue-600 hover:underline"
+                              >
+                                {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm text-blue-600">{t('noSnInMainWarehouse')}</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-sm text-blue-600">{t('noSnInMainWarehouse')}</p>
-                    )}
-                  </div>
-                </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Technician Serial Numbers */}
                 {Array.from(new Set(serialNumbers.filter(sn => sn.location === 'TECHNICIAN').map(sn => sn.technician?.id))).map(techId => {
                   const techSerials = serialNumbers.filter(sn => sn.location === 'TECHNICIAN' && sn.technician?.id === techId)
                   if (techSerials.length === 0) return null
                   const techName = techSerials[0].technician?.name || 'Unknown'
+                  const key = `tech-${techId}`
+                  const expanded = snExpanded[key]
+                  const visible = expanded ? techSerials : techSerials.slice(0, 8)
 
                   return (
                     <div key={techId} className="mb-4">
                       <h4 className="text-sm font-medium text-green-600 mb-2">{t('technicianColon', { name: techName })}</h4>
                       <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                         <div className="flex flex-wrap gap-2">
-                          {techSerials.map(sn => (
+                          {visible.map(sn => (
                             <span key={sn.id} className="px-3 py-1 bg-green-100 text-green-900 rounded text-sm font-mono">
                               {sn.serialNumber}
                             </span>
                           ))}
                         </div>
+                        {techSerials.length > 8 && (
+                          <button
+                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
+                            className="mt-2 text-xs text-green-600 hover:underline"
+                          >
+                            {expanded ? '▲ Show less' : `▼ Show ${techSerials.length - 8} more`}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )
                 })}
 
                 {/* In Repair Serial Numbers */}
-                {serialNumbers.filter(sn => sn.location === 'REPAIR').length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-orange-600 mb-2">{t('inRepair')}</h4>
-                    <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                      <div className="flex flex-wrap gap-2">
-                        {serialNumbers
-                          .filter(sn => sn.location === 'REPAIR')
-                          .map(sn => (
+                {(() => {
+                  const sns = serialNumbers.filter(sn => sn.location === 'REPAIR')
+                  if (sns.length === 0) return null
+                  const key = 'repair'
+                  const expanded = snExpanded[key]
+                  const visible = expanded ? sns : sns.slice(0, 8)
+                  return (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-orange-600 mb-2">{t('inRepair')}</h4>
+                      <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                        <div className="flex flex-wrap gap-2">
+                          {visible.map(sn => (
                             <span key={sn.id} className="px-3 py-1 bg-orange-100 text-orange-900 rounded text-sm font-mono">
                               {sn.serialNumber}
                             </span>
                           ))}
+                        </div>
+                        {sns.length > 8 && (
+                          <button
+                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
+                            className="mt-2 text-xs text-orange-600 hover:underline"
+                          >
+                            {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
 
                 {/* Used Serial Numbers */}
-                {serialNumbers.filter(sn => sn.location === 'USED').length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-600 mb-2">{t('used')}</h4>
-                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <div className="flex flex-wrap gap-2">
-                        {serialNumbers
-                          .filter(sn => sn.location === 'USED')
-                          .map(sn => (
+                {(() => {
+                  const sns = serialNumbers.filter(sn => sn.location === 'USED')
+                  if (sns.length === 0) return null
+                  const key = 'used'
+                  const expanded = snExpanded[key]
+                  const visible = expanded ? sns : sns.slice(0, 8)
+                  return (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-600 mb-2">{t('used')}</h4>
+                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <div className="flex flex-wrap gap-2">
+                          {visible.map(sn => (
                             <span key={sn.id} className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm font-mono">
                               {sn.serialNumber}
                             </span>
                           ))}
+                        </div>
+                        {sns.length > 8 && (
+                          <button
+                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
+                            className="mt-2 text-xs text-gray-500 hover:underline"
+                          >
+                            {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
+                          </button>
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
+                  )
+                })()}
               </div>
             )}
           </div>

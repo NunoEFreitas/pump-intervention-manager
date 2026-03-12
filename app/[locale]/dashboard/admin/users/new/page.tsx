@@ -15,6 +15,7 @@ export default function NewUserPage() {
     email: '',
     password: '',
     role: 'TECHNICIAN',
+    plateNumber: '',
   })
 
   const tNav = useTranslations('nav')
@@ -129,7 +130,21 @@ export default function NewUserPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAdmin('role')} *
+            {tAdmin('plateNumber')}
+          </label>
+          <input
+            type="text"
+            name="plateNumber"
+            className="input text-gray-800"
+            value={formData.plateNumber}
+            onChange={handleChange}
+            placeholder={tAdmin('plateNumberPlaceholder')}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+          {tAdmin('role')} *
           </label>
           <select
             name="role"
@@ -161,7 +176,7 @@ export default function NewUserPage() {
             className="btn btn-primary flex-1"
             disabled={loading}
           >
-            {loading ? tAdmin('saving') : tAdmin('createButton')}
+            {loading ? tCommon('saving') : tAdmin('createButton')}
           </button>
           <button
             type="button"

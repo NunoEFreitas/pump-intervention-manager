@@ -60,7 +60,14 @@ export async function POST(
       },
     })
 
-    return NextResponse.json(location, { status: 201 })
+    await prisma.$executeRaw`
+      UPDATE "CompanyLocation"
+      SET "country"  = ${data.country || null},
+          "district" = ${data.district || null}
+      WHERE id = ${location.id}
+    `
+
+    return NextResponse.json({ ...location, country: data.country || null, district: data.district || null }, { status: 201 })
   } catch (error) {
     console.error('Error creating location:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

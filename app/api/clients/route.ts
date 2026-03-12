@@ -58,7 +58,16 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(client, { status: 201 })
+    // Set new fields via raw SQL (Prisma client may be stale)
+    await prisma.$executeRaw`
+      UPDATE "Client"
+      SET "vatNumber" = ${data.vatNumber || null},
+          "country"   = ${data.country || null},
+          "district"  = ${data.district || null}
+      WHERE id = ${client.id}
+    `
+
+    return NextResponse.json({ ...client, vatNumber: data.vatNumber || null, country: data.country || null, district: data.district || null }, { status: 201 })
   } catch (error) {
     console.error('Error creating client:', error)
     return NextResponse.json(

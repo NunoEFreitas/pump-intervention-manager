@@ -11,6 +11,7 @@ interface User {
   name: string
   email: string
   role: string
+  blocked: boolean
   createdAt: string
   _count?: { assignedInterventions: number }
 }
@@ -43,7 +44,7 @@ export default function AdminPage() {
   const [brandLoading, setBrandLoading] = useState(false)
 
   // Settings state
-  const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '' })
+  const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '', workOrderPrefix: '' })
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
 
@@ -99,7 +100,7 @@ export default function AdminPage() {
       const token = localStorage.getItem('token')
       const res = await fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
       const data = await res.json()
-      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '' })
+      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '' })
     } catch (error) {
       console.error('Error fetching settings:', error)
     }
@@ -116,7 +117,7 @@ export default function AdminPage() {
         body: JSON.stringify(settings),
       })
       const data = await res.json()
-      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '' })
+      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '' })
       setSettingsSaved(true)
       setTimeout(() => setSettingsSaved(false), 2000)
     } catch (error) {
@@ -150,6 +151,20 @@ export default function AdminPage() {
       fetchUsers()
     } catch (error) {
       console.error('Error deleting user:', error)
+    }
+  }
+
+  const handleToggleBlock = async (userId: string, blocked: boolean) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ blocked }),
+      })
+      fetchUsers()
+    } catch (error) {
+      console.error('Error toggling block:', error)
     }
   }
 
@@ -343,9 +358,14 @@ export default function AdminPage() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {users.map((user) => (
-                    <tr key={user.id} className="hover:bg-gray-50">
+                    <tr key={user.id} className={`hover:bg-gray-50 ${user.blocked ? 'opacity-60' : ''}`}>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-medium text-gray-900">{user.name}</div>
+                          {user.blocked && (
+                            <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium">{tAdmin('blocked')}</span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-500 sm:hidden">{user.email}</div>
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
@@ -368,6 +388,12 @@ export default function AdminPage() {
                           className="text-blue-600 hover:text-blue-900 mr-3"
                         >
                           {tCommon('edit')}
+                        </button>
+                        <button
+                          onClick={() => handleToggleBlock(user.id, !user.blocked)}
+                          className={`mr-3 ${user.blocked ? 'text-green-600 hover:text-green-900' : 'text-orange-600 hover:text-orange-900'}`}
+                        >
+                          {user.blocked ? tAdmin('unblock') : tAdmin('block')}
                         </button>
                         <button
                           onClick={() => handleDeleteUser(user.id)}
@@ -549,6 +575,19 @@ export default function AdminPage() {
                 onChange={(e) => setSettings({ ...settings, projectPrefix: e.target.value })}
               />
               <p className="text-xs text-gray-500 mt-1">{tAdmin('projectPrefixHint')}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {tAdmin('workOrderPrefix')}
+              </label>
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder="e.g. WO"
+                value={settings.workOrderPrefix}
+                onChange={(e) => setSettings({ ...settings, workOrderPrefix: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">{tAdmin('workOrderPrefixHint')}</p>
             </div>
             <div className="flex items-center gap-3 pt-2">
               <button

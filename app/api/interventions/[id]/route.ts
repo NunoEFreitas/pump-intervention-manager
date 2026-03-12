@@ -68,7 +68,44 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    return NextResponse.json(intervention)
+    // Fetch bill/contract/warranty via raw SQL
+    const flagRows = await prisma.$queryRaw<[{ bill: boolean; contract: boolean; warranty: boolean; internal: boolean }]>`
+      SELECT "bill", "contract", "warranty", "internal" FROM "Intervention" WHERE id = ${id}
+    `
+
+    // Fetch new Client fields via raw SQL (Prisma client may be stale)
+    const clientExtras = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null }]>`
+      SELECT "vatNumber", "country", "district" FROM "Client" WHERE id = ${intervention.clientId}
+    `
+
+    // Fetch new CompanyLocation fields via raw SQL if there's a location
+    let locationExtras: { country: string | null; district: string | null } | null = null
+    if (intervention.locationId) {
+      const locRows = await prisma.$queryRaw<[{ country: string | null; district: string | null }]>`
+        SELECT "country", "district" FROM "CompanyLocation" WHERE id = ${intervention.locationId}
+      `
+      locationExtras = locRows[0] ?? null
+    }
+
+    // Fetch plate number for assigned technician
+    let techPlate: string | null = null
+    if (intervention.assignedToId) {
+      const techRows = await prisma.$queryRaw<[{ plateNumber: string | null }]>`
+        SELECT "plateNumber" FROM "User" WHERE id = ${intervention.assignedToId}
+      `
+      techPlate = techRows[0]?.plateNumber ?? null
+    }
+
+    return NextResponse.json({
+      ...intervention,
+      bill: flagRows[0]?.bill ?? false,
+      contract: flagRows[0]?.contract ?? false,
+      warranty: flagRows[0]?.warranty ?? false,
+      internal: flagRows[0]?.internal ?? false,
+      client: { ...intervention.client, ...(clientExtras[0] ?? {}) },
+      location: intervention.location ? { ...intervention.location, ...(locationExtras ?? {}) } : null,
+      assignedTo: intervention.assignedTo ? { ...intervention.assignedTo, plateNumber: techPlate } : null,
+    })
   } catch (error) {
     console.error('Error fetching intervention:', error)
     return NextResponse.json(
@@ -180,7 +217,24 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(updatedIntervention)
+    if (data.bill !== undefined || data.contract !== undefined || data.warranty !== undefined || data.internal !== undefined) {
+      await prisma.$executeRaw`
+        UPDATE "Intervention"
+        SET "bill"      = ${data.bill      ? true : false},
+            "contract"  = ${data.contract  ? true : false},
+            "warranty"  = ${data.warranty  ? true : false},
+            "internal"  = ${data.internal  ? true : false}
+        WHERE id = ${id}
+      `
+    }
+
+    return NextResponse.json({
+      ...updatedIntervention,
+      bill: data.bill ?? false,
+      contract: data.contract ?? false,
+      warranty: data.warranty ?? false,
+      internal: data.internal ?? false,
+    })
   } catch (error) {
     console.error('Error updating intervention:', error)
     return NextResponse.json(

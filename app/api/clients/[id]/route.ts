@@ -57,7 +57,23 @@ export async function GET(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 })
     }
 
-    return NextResponse.json(client)
+    // Fetch new Client fields via raw SQL (Prisma client may be stale)
+    const extra = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null }]>`
+      SELECT "vatNumber", "country", "district" FROM "Client" WHERE id = ${id}
+    `
+
+    // Fetch new CompanyLocation fields via raw SQL
+    const locExtras = await prisma.$queryRaw<Array<{ id: string; country: string | null; district: string | null }>>`
+      SELECT id, "country", "district" FROM "CompanyLocation" WHERE "clientId" = ${id}
+    `
+    const locExtrasMap = new Map(locExtras.map((l) => [l.id, l]))
+    const locationsWithExtras = client.locations.map((loc) => ({
+      ...loc,
+      country: locExtrasMap.get(loc.id)?.country ?? null,
+      district: locExtrasMap.get(loc.id)?.district ?? null,
+    }))
+
+    return NextResponse.json({ ...client, ...(extra[0] ?? {}), locations: locationsWithExtras })
   } catch (error) {
     console.error('Error fetching client:', error)
     return NextResponse.json(
@@ -96,7 +112,15 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(client)
+    await prisma.$executeRaw`
+      UPDATE "Client"
+      SET "vatNumber" = ${data.vatNumber ?? null},
+          "country"   = ${data.country ?? null},
+          "district"  = ${data.district ?? null}
+      WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...client, vatNumber: data.vatNumber ?? null, country: data.country ?? null, district: data.district ?? null })
   } catch (error) {
     console.error('Error updating client:', error)
     return NextResponse.json(

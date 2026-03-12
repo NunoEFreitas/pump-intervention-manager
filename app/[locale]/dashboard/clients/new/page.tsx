@@ -3,10 +3,13 @@
 import { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import LocationSelector from '@/components/LocationSelector'
 
 interface LocationDraft {
   id: string
   name: string
+  country: string
+  district: string
   address: string
   city: string
   postalCode: string
@@ -18,6 +21,8 @@ interface LocationDraft {
 const emptyLocation = (): LocationDraft => ({
   id: crypto.randomUUID(),
   name: '',
+  country: '',
+  district: '',
   address: '',
   city: '',
   postalCode: '',
@@ -34,6 +39,9 @@ export default function NewClientPage() {
   const [error, setError] = useState('')
   const [formData, setFormData] = useState({
     name: '',
+    vatNumber: '',
+    country: '',
+    district: '',
     address: '',
     city: '',
     postalCode: '',
@@ -160,6 +168,28 @@ export default function NewClientPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
+              {tClients('vatNumber')}
+            </label>
+            <input
+              type="text"
+              name="vatNumber"
+              className="input text-gray-800"
+              value={formData.vatNumber}
+              onChange={handleChange}
+            />
+          </div>
+
+          <LocationSelector
+            country={formData.country}
+            district={formData.district}
+            city={formData.city}
+            onCountryChange={(v) => setFormData({ ...formData, country: v, district: '', city: '' })}
+            onDistrictChange={(v) => setFormData({ ...formData, district: v, city: '' })}
+            onCityChange={(v) => setFormData({ ...formData, city: v })}
+          />
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               {tClients('address')}
             </label>
             <input
@@ -171,31 +201,17 @@ export default function NewClientPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {tClients('city')}
-              </label>
-              <input
-                type="text"
-                name="city"
-                className="input text-gray-800"
-                value={formData.city}
-                onChange={handleChange}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {tClients('postalCode')}
-              </label>
-              <input
-                type="text"
-                name="postalCode"
-                className="input text-gray-800"
-                value={formData.postalCode}
-                onChange={handleChange}
-              />
-            </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {tClients('postalCode')}
+            </label>
+            <input
+              type="text"
+              name="postalCode"
+              className="input text-gray-800"
+              value={formData.postalCode}
+              onChange={handleChange}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -308,6 +324,23 @@ export default function NewClientPage() {
                     />
                   </div>
 
+                  <LocationSelector
+                    country={loc.country}
+                    district={loc.district}
+                    city={loc.city}
+                    labelSize="xs"
+                    onCountryChange={(v) => {
+                      handleLocationChange(loc.id, 'country', v)
+                      handleLocationChange(loc.id, 'district', '')
+                      handleLocationChange(loc.id, 'city', '')
+                    }}
+                    onDistrictChange={(v) => {
+                      handleLocationChange(loc.id, 'district', v)
+                      handleLocationChange(loc.id, 'city', '')
+                    }}
+                    onCityChange={(v) => handleLocationChange(loc.id, 'city', v)}
+                  />
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {tClients('address')}
@@ -320,29 +353,16 @@ export default function NewClientPage() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {tClients('city')}
-                      </label>
-                      <input
-                        type="text"
-                        className="input text-gray-800"
-                        value={loc.city}
-                        onChange={e => handleLocationChange(loc.id, 'city', e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {tClients('postalCode')}
-                      </label>
-                      <input
-                        type="text"
-                        className="input text-gray-800"
-                        value={loc.postalCode}
-                        onChange={e => handleLocationChange(loc.id, 'postalCode', e.target.value)}
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {tClients('postalCode')}
+                    </label>
+                    <input
+                      type="text"
+                      className="input text-gray-800"
+                      value={loc.postalCode}
+                      onChange={e => handleLocationChange(loc.id, 'postalCode', e.target.value)}
+                    />
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

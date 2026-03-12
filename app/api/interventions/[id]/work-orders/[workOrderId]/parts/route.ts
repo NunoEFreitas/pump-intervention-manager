@@ -23,6 +23,11 @@ export async function POST(
   })
   if (!intervention) return NextResponse.json({ error: 'Intervention not found' }, { status: 404 })
 
+  const workOrderRef = await prisma.$queryRaw<{ reference: string | null }[]>`
+    SELECT reference FROM "WorkOrder" WHERE id::text = ${workOrderId}
+  `
+  const woLabel = workOrderRef[0]?.reference || workOrderId
+
   const item = await prisma.warehouseItem.findUnique({ where: { id: itemId } })
   if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
@@ -55,13 +60,15 @@ export async function POST(
     data: { workOrderId, itemId, quantity, serialNumberIds: serialNumberIds || [] },
   })
 
+  await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+
   await prisma.itemMovement.create({
     data: {
       itemId,
       movementType: 'USE',
       quantity,
       fromUserId: intervention.assignedToId,
-      notes: `Used in work order ${workOrderId}`,
+      notes: `Used in work order ${woLabel}`,
       createdById: payload.userId,
     },
   })

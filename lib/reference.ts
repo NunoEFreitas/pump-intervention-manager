@@ -29,3 +29,12 @@ export async function generateProjectReference(): Promise<string> {
     return `${prefix}-${String(counter).padStart(3, '0')}/${year}`
   })
 }
+
+export async function generateWorkOrderReference(): Promise<string> {
+  return prisma.$transaction(async (tx: any) => {
+    const prefixRow = await tx.systemSetting.findUnique({ where: { key: 'workOrderPrefix' } })
+    const prefix = prefixRow?.value?.trim() || 'WO'
+    const counter = await nextCounter(tx, 'workOrderCounter')
+    return `${prefix}-${String(counter).padStart(4, '0')}`
+  })
+}

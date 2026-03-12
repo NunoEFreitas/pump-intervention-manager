@@ -35,7 +35,11 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    return NextResponse.json(user)
+    const extras = await prisma.$queryRaw<[{ plateNumber: string | null }]>`
+      SELECT "plateNumber" FROM "User" WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...user, plateNumber: extras[0]?.plateNumber ?? null })
   } catch (error) {
     console.error('Error fetching user:', error)
     return NextResponse.json(
@@ -91,13 +95,38 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(user)
+    await prisma.$executeRaw`
+      UPDATE "User" SET "plateNumber" = ${data.plateNumber ?? null} WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...user, plateNumber: data.plateNumber ?? null })
   } catch (error) {
     console.error('Error updating user:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
+  }
+}
+
+// PATCH toggle blocked (admin only)
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const authCheck = await requireAdmin(request)
+  if (authCheck instanceof NextResponse) return authCheck
+
+  try {
+    const { id } = await params
+    const { blocked } = await request.json()
+
+    await prisma.$executeRaw`UPDATE "User" SET blocked = ${blocked} WHERE id = ${id}`
+
+    return NextResponse.json({ success: true, blocked })
+  } catch (error) {
+    console.error('Error toggling user block:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 

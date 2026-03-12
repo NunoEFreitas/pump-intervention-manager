@@ -16,6 +16,8 @@ model User {
   password                String
   name                    String
   role                    UserRole       @default(TECHNICIAN)
+  plateNumber             String?
+  blocked                 Boolean        @default(false)
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
   assignedInterventions   Intervention[] @relation("AssignedInterventions")
@@ -26,6 +28,8 @@ model User {
   itemMovementsTo         ItemMovement[] @relation("MovementTo")
   itemMovementsCreated    ItemMovement[] @relation("MovementCreatedBy")
   workOrdersCreated       WorkOrder[] @relation("WorkOrderCreatedBy")
+  clientPartsPickedUp     SerialNumberStock[] @relation("ClientPartPickedUpBy")
+  workOrderPartsUsed      WorkOrderPart[] @relation("WorkOrderPartUsedBy")
 }
 
 enum UserRole {
@@ -38,6 +42,9 @@ model Client {
   id            String            @id @default(uuid())
   reference     String?           @unique
   name          String
+  vatNumber     String?
+  country       String?
+  district      String?
   address       String?
   city          String?
   postalCode    String?
@@ -56,6 +63,8 @@ model CompanyLocation {
   clientId      String
   client        Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   name          String
+  country       String?
+  district      String?
   address       String?
   city          String?
   postalCode    String?
@@ -114,8 +123,13 @@ model Intervention {
   scheduledDate    DateTime?
   scheduledTime    String?
   breakdown        String              @default("") @db.Text // Description of the breakdown/issue
+  bill             Boolean             @default(false)
+  contract         Boolean             @default(false)
+  warranty         Boolean             @default(false)
+  internal         Boolean             @default(false)
   partsUsed        InterventionPart[]  // Parts used in this intervention
   workOrders       WorkOrder[]
+  clientParts      SerialNumberStock[] @relation("ClientPartSerialNumbers")
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
@@ -217,6 +231,11 @@ model SerialNumberStock {
   technicianId    String?
   technician      User?                   @relation("TechnicianSerialNumbers", fields: [technicianId], references: [id])
   status          SerialStatus            @default(AVAILABLE)
+  isClientPart    Boolean                 @default(false)  // Part taken from client site for repair
+  interventionId  String?
+  intervention    Intervention?           @relation("ClientPartSerialNumbers", fields: [interventionId], references: [id])
+  pickedUpById    String?
+  pickedUpBy      User?                   @relation("ClientPartPickedUpBy", fields: [pickedUpById], references: [id])
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
   movements       MovementSerialNumber[]
@@ -253,9 +272,19 @@ model WorkOrder {
   id             String          @id @default(uuid())
   interventionId String
   intervention   Intervention    @relation(fields: [interventionId], references: [id], onDelete: Cascade)
-  description    String          @db.Text
-  timeSpent      Float?
-  createdById    String
+  reference             String?         @unique
+  description           String          @db.Text
+  timeSpent             Float?
+  km                    Float?
+  locationEquipmentId   String?
+  interventionType      String?
+  transportGuide        String?
+  startDate             String?
+  startTime             String?
+  endDate               String?
+  endTime               String?
+  fromAddress           String?
+  createdById           String
   createdBy      User            @relation("WorkOrderCreatedBy", fields: [createdById], references: [id])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -272,6 +301,8 @@ model WorkOrderPart {
   item            WarehouseItem @relation(fields: [itemId], references: [id])
   quantity        Int
   serialNumberIds String[]
+  usedById        String?
+  usedBy          User?         @relation("WorkOrderPartUsedBy", fields: [usedById], references: [id])
   createdAt       DateTime      @default(now())
 
   @@index([workOrderId])

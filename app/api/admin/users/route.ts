@@ -25,7 +25,15 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(users)
+    const ids = users.map((u) => u.id)
+    const blockedRows = ids.length > 0
+      ? await prisma.$queryRaw<{ id: string; blocked: boolean }[]>`
+          SELECT id, blocked FROM "User" WHERE id::text = ANY(${ids}::text[])
+        `
+      : []
+    const blockedMap = Object.fromEntries(blockedRows.map((r) => [r.id, r.blocked]))
+
+    return NextResponse.json(users.map((u) => ({ ...u, blocked: blockedMap[u.id] ?? false })))
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(
@@ -84,7 +92,13 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(user, { status: 201 })
+    if (data.plateNumber) {
+      await prisma.$executeRaw`
+        UPDATE "User" SET "plateNumber" = ${data.plateNumber} WHERE id = ${user.id}
+      `
+    }
+
+    return NextResponse.json({ ...user, plateNumber: data.plateNumber || null }, { status: 201 })
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json(
