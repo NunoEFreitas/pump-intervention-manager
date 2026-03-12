@@ -33,18 +33,32 @@ export const canChangeStatus = (
   return false
 }
 
-export const getAvailableStatuses = (userRole: UserRole, currentStatus: InterventionStatus): InterventionStatus[] => {
+const REQUIRES_TECHNICIAN: InterventionStatus[] = ['IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED']
+
+export const getAvailableStatuses = (
+  userRole: UserRole,
+  currentStatus: InterventionStatus,
+  hasTechnician = true
+): InterventionStatus[] => {
   // Cannot change from completed or canceled (except admin)
   if ((currentStatus === 'COMPLETED' || currentStatus === 'CANCELED') && userRole !== 'ADMIN') {
     return [currentStatus]
   }
-  
+
+  let statuses: InterventionStatus[]
+
   if (userRole === 'ADMIN' || userRole === 'SUPERVISOR') {
-    return ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED']
+    statuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED']
+  } else {
+    // TECHNICIAN
+    statuses = ['ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT']
   }
 
-  // TECHNICIAN
-  return ['ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT']
+  if (!hasTechnician) {
+    statuses = statuses.filter(s => !REQUIRES_TECHNICIAN.includes(s))
+  }
+
+  return statuses
 }
 
 export const getStatusLabel = (status: InterventionStatus): string => {

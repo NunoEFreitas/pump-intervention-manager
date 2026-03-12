@@ -146,6 +146,7 @@ export default function InterventionDetailPage() {
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [assignTechId, setAssignTechId] = useState('')
+  const [statusChanging, setStatusChanging] = useState(false)
   const [showDateForm, setShowDateForm] = useState(false)
   const [dateFormData, setDateFormData] = useState({ scheduledDate: '', scheduledTime: '' })
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
@@ -475,6 +476,35 @@ export default function InterventionDetailPage() {
     }
   }
 
+  const handleQuickStatusChange = async (newStatus: string) => {
+    if (!intervention || newStatus === intervention.status) return
+    setStatusChanging(true)
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/interventions/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          status: newStatus,
+          clientId: intervention.client.id,
+          assignedToId: intervention.assignedTo?.id,
+          breakdown: intervention.breakdown,
+          scheduledDate: intervention.scheduledDate,
+          scheduledTime: intervention.scheduledTime,
+        }),
+      })
+      if (response.ok) fetchIntervention()
+      else {
+        const data = await response.json()
+        alert(data.error || 'Failed to update status')
+      }
+    } catch (error) {
+      console.error('Error updating status:', error)
+    } finally {
+      setStatusChanging(false)
+    }
+  }
+
   const handleAssignTechnician = async () => {
     if (!assignTechId) return
     try {
@@ -552,7 +582,7 @@ export default function InterventionDetailPage() {
   }
 
   const canEdit = canEditIntervention(userRole as any, intervention.status as any)
-  const availableStatuses = getAvailableStatuses(userRole as any, intervention.status as any)
+  const availableStatuses = getAvailableStatuses(userRole as any, intervention.status as any, !!intervention.assignedTo)
   const mapsUrl = getMapsUrl()
   const totalHours = workOrders.reduce((s, wo) => s + (wo.timeSpent || 0), 0)
   const grandTotal = workOrders.flatMap(wo => wo.parts).reduce((s, p) => s + p.quantity * p.item.value, 0)
@@ -575,9 +605,22 @@ export default function InterventionDetailPage() {
             <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <span className={`text-sm px-3 py-1 rounded-full whitespace-nowrap ${getStatusColor(intervention.status as any)}`}>
-                    {getStatusLabel(intervention.status as any)}
-                  </span>
+                  {canEdit && availableStatuses.length > 1 ? (
+                    <select
+                      className={`text-sm px-3 py-1 rounded-full border-0 font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400 disabled:opacity-60 ${getStatusColor(intervention.status as any)}`}
+                      value={intervention.status}
+                      disabled={statusChanging}
+                      onChange={(e) => handleQuickStatusChange(e.target.value)}
+                    >
+                      {availableStatuses.map(s => (
+                        <option key={s} value={s}>{getStatusLabel(s)}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={`text-sm px-3 py-1 rounded-full whitespace-nowrap ${getStatusColor(intervention.status as any)}`}>
+                      {getStatusLabel(intervention.status as any)}
+                    </span>
+                  )}
                   {intervention.scheduledDate && (
                     <span className="text-sm text-gray-600 whitespace-nowrap">
                       {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
