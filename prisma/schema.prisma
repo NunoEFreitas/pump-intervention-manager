@@ -16,7 +16,6 @@ model User {
   password                String
   name                    String
   role                    UserRole       @default(TECHNICIAN)
-  plateNumber             String?
   blocked                 Boolean        @default(false)
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
@@ -126,7 +125,6 @@ model Intervention {
   bill             Boolean             @default(false)
   contract         Boolean             @default(false)
   warranty         Boolean             @default(false)
-  internal         Boolean             @default(false)
   partsUsed        InterventionPart[]  // Parts used in this intervention
   workOrders       WorkOrder[]
   clientParts      SerialNumberStock[] @relation("ClientPartSerialNumbers")
@@ -284,6 +282,7 @@ model WorkOrder {
   endDate               String?
   endTime               String?
   fromAddress           String?
+  internal              Boolean         @default(false)
   createdById           String
   createdBy      User            @relation("WorkOrderCreatedBy", fields: [createdById], references: [id])
   createdAt      DateTime        @default(now())
@@ -291,6 +290,24 @@ model WorkOrder {
   parts          WorkOrderPart[]
 
   @@index([interventionId])
+}
+
+model WorkOrderVehicle {
+  id          String   @id @default(uuid())
+  workOrderId String
+  vehicleId   String
+  createdAt   DateTime @default(now())
+
+  @@unique([workOrderId, vehicleId])
+}
+
+model WorkOrderHelper {
+  id          String   @id @default(uuid())
+  workOrderId String
+  userId      String
+  createdAt   DateTime @default(now())
+
+  @@unique([workOrderId, userId])
 }
 
 model WorkOrderPart {
@@ -307,6 +324,15 @@ model WorkOrderPart {
 
   @@index([workOrderId])
   @@index([itemId])
+}
+
+model CompanyVehicle {
+  id          String   @id @default(uuid())
+  plateNumber String   @unique
+  brand       String?
+  model       String?
+  description String?
+  createdAt   DateTime @default(now())
 }
 
 model SystemSetting {

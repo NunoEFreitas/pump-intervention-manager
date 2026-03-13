@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
-type Tab = 'users' | 'types' | 'brands' | 'settings'
+type Tab = 'users' | 'types' | 'brands' | 'vehicles' | 'settings' | 'company'
+
+interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
 
 interface User {
   id: string
@@ -43,10 +45,24 @@ export default function AdminPage() {
   const [editingBrand, setEditingBrand] = useState<EquipmentBrand | null>(null)
   const [brandLoading, setBrandLoading] = useState(false)
 
+  // Vehicles state
+  const [vehicles, setVehicles] = useState<CompanyVehicle[]>([])
+  const [newVehiclePlate, setNewVehiclePlate] = useState('')
+  const [newVehicleBrand, setNewVehicleBrand] = useState('')
+  const [newVehicleModel, setNewVehicleModel] = useState('')
+  const [newVehicleDesc, setNewVehicleDesc] = useState('')
+  const [editingVehicle, setEditingVehicle] = useState<CompanyVehicle | null>(null)
+  const [vehicleLoading, setVehicleLoading] = useState(false)
+
   // Settings state
   const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '', workOrderPrefix: '' })
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
+
+  // Company state
+  const [company, setCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string }>({ name: '', email: '', address: '', phones: [], faxes: [], logo: '' })
+  const [companyLoading, setCompanyLoading] = useState(false)
+  const [companySaved, setCompanySaved] = useState(false)
 
   const tAdmin = useTranslations('admin')
   const tAuth = useTranslations('auth')
@@ -66,7 +82,9 @@ export default function AdminPage() {
     fetchUsers()
     fetchEquipmentTypes()
     fetchEquipmentBrands()
+    fetchVehicles()
     fetchSettings()
+    fetchCompany()
   }, [router])
 
   // Fetch lazy: only reload when switching to that tab if not yet loaded
@@ -92,6 +110,43 @@ export default function AdminPage() {
       setEquipmentTypes(await res.json())
     } catch (error) {
       console.error('Error fetching equipment types:', error)
+    }
+  }
+
+  const fetchCompany = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      setCompany({
+        name: data.name || '',
+        email: data.email || '',
+        address: data.address || '',
+        phones: Array.isArray(data.phones) ? data.phones : [],
+        faxes: Array.isArray(data.faxes) ? data.faxes : [],
+        logo: data.logo || '',
+      })
+    } catch (error) {
+      console.error('Error fetching company:', error)
+    }
+  }
+
+  const saveCompany = async () => {
+    setCompanyLoading(true)
+    setCompanySaved(false)
+    try {
+      const token = localStorage.getItem('token')
+      await fetch('/api/admin/company', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(company),
+      })
+      setCompanySaved(true)
+      setTimeout(() => setCompanySaved(false), 2000)
+    } catch (error) {
+      console.error('Error saving company:', error)
+    } finally {
+      setCompanyLoading(false)
     }
   }
 
@@ -165,6 +220,52 @@ export default function AdminPage() {
       fetchUsers()
     } catch (error) {
       console.error('Error toggling block:', error)
+    }
+  }
+
+  const fetchVehicles = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/vehicles', { headers: { Authorization: `Bearer ${token}` } })
+      setVehicles(await res.json())
+    } catch (error) {
+      console.error('Error fetching vehicles:', error)
+    }
+  }
+
+  const saveVehicle = async () => {
+    const plate = editingVehicle ? editingVehicle.plateNumber : newVehiclePlate
+    const brand = editingVehicle ? editingVehicle.brand : newVehicleBrand
+    const model = editingVehicle ? editingVehicle.model : newVehicleModel
+    const desc = editingVehicle ? editingVehicle.description : newVehicleDesc
+    if (!plate.trim()) return
+    setVehicleLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const url = editingVehicle ? `/api/admin/vehicles/${editingVehicle.id}` : '/api/admin/vehicles'
+      const response = await fetch(url, {
+        method: editingVehicle ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ plateNumber: plate, brand, model, description: desc }),
+      })
+      if (response.ok) { setNewVehiclePlate(''); setNewVehicleBrand(''); setNewVehicleModel(''); setNewVehicleDesc(''); setEditingVehicle(null); fetchVehicles() }
+      else { const d = await response.json(); alert(d.error || 'Failed to save') }
+    } catch (error) {
+      console.error('Error saving vehicle:', error)
+    } finally {
+      setVehicleLoading(false)
+    }
+  }
+
+  const deleteVehicle = async (id: string) => {
+    if (!confirm(tAdmin('deleteConfirm'))) return
+    try {
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/admin/vehicles/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+      if (response.ok) fetchVehicles()
+      else { const d = await response.json(); alert(d.error) }
+    } catch (error) {
+      console.error('Error deleting vehicle:', error)
     }
   }
 
@@ -304,8 +405,17 @@ export default function AdminPage() {
               {equipmentBrands.length}
             </span>
           </button>
+          <button className={tabClass('vehicles')} onClick={() => setActiveTab('vehicles')}>
+            {tAdmin('vehicles')}
+            <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
+              {vehicles.length}
+            </span>
+          </button>
           <button className={tabClass('settings')} onClick={() => setActiveTab('settings')}>
             {tAdmin('settings')}
+          </button>
+          <button className={tabClass('company')} onClick={() => setActiveTab('company')}>
+            {tAdmin('companySettings')}
           </button>
         </nav>
       </div>
@@ -542,6 +652,193 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Vehicles tab ─────────────────────────────────────────────────── */}
+      {activeTab === 'vehicles' && (
+        <div className="card">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-gray-900">{tAdmin('vehicles')}</h2>
+          </div>
+
+          {/* Add / Edit form */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6 space-y-3">
+            <h3 className="font-medium text-gray-700">{editingVehicle ? tCommon('edit') : tAdmin('addVehicle')}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                type="text"
+                className="input text-gray-800 font-mono uppercase"
+                placeholder={tAdmin('vehiclePlatePlaceholder')}
+                value={editingVehicle ? editingVehicle.plateNumber : newVehiclePlate}
+                onChange={(e) => editingVehicle
+                  ? setEditingVehicle({ ...editingVehicle, plateNumber: e.target.value.toUpperCase() })
+                  : setNewVehiclePlate(e.target.value.toUpperCase())}
+              />
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder={tAdmin('vehicleBrandPlaceholder')}
+                value={editingVehicle ? (editingVehicle.brand || '') : newVehicleBrand}
+                onChange={(e) => editingVehicle
+                  ? setEditingVehicle({ ...editingVehicle, brand: e.target.value })
+                  : setNewVehicleBrand(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder={tAdmin('vehicleModelPlaceholder')}
+                value={editingVehicle ? (editingVehicle.model || '') : newVehicleModel}
+                onChange={(e) => editingVehicle
+                  ? setEditingVehicle({ ...editingVehicle, model: e.target.value })
+                  : setNewVehicleModel(e.target.value)}
+              />
+              <input
+                type="text"
+                className="input text-gray-800"
+                placeholder={tAdmin('vehicleDescPlaceholder')}
+                value={editingVehicle ? (editingVehicle.description || '') : newVehicleDesc}
+                onChange={(e) => editingVehicle
+                  ? setEditingVehicle({ ...editingVehicle, description: e.target.value })
+                  : setNewVehicleDesc(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={saveVehicle} disabled={vehicleLoading} className="btn btn-primary text-sm">
+                {vehicleLoading ? tCommon('saving') : editingVehicle ? tCommon('save') : tAdmin('addVehicle')}
+              </button>
+              {editingVehicle && (
+                <button onClick={() => setEditingVehicle(null)} className="btn btn-secondary text-sm">{tCommon('cancel')}</button>
+              )}
+            </div>
+          </div>
+
+          {/* Vehicles list */}
+          {vehicles.length === 0 ? (
+            <p className="text-gray-500 text-sm">{tAdmin('noVehicles')}</p>
+          ) : (
+            <div className="space-y-2">
+              {vehicles.map((v) => (
+                <div key={v.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <span className="font-mono font-semibold text-gray-900">{v.plateNumber}</span>
+                    {(v.brand || v.model) && (
+                      <span className="ml-3 text-sm text-gray-700">{[v.brand, v.model].filter(Boolean).join(' ')}</span>
+                    )}
+                    {v.description && <span className="ml-3 text-sm text-gray-500">{v.description}</span>}
+                  </div>
+                  <div className="flex gap-3">
+                    <button onClick={() => setEditingVehicle(v)} className="text-blue-600 hover:text-blue-800 text-sm">{tCommon('edit')}</button>
+                    <button onClick={() => deleteVehicle(v.id)} className="text-red-600 hover:text-red-800 text-sm">{tCommon('delete')}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Company tab ──────────────────────────────────────────────────── */}
+      {activeTab === 'company' && (
+        <div className="card max-w-2xl">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">{tAdmin('companySettings')}</h2>
+          <div className="space-y-5">
+            {/* Logo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyLogo')}</label>
+              {company.logo && (
+                <div className="mb-2">
+                  <img src={company.logo} alt="Company logo" className="h-16 object-contain border rounded p-1" />
+                </div>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                className="text-sm text-gray-600"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  const reader = new FileReader()
+                  reader.onload = () => setCompany({ ...company, logo: reader.result as string })
+                  reader.readAsDataURL(file)
+                }}
+              />
+              {company.logo && (
+                <button onClick={() => setCompany({ ...company, logo: '' })} className="ml-3 text-xs text-red-600 hover:text-red-800">{tAdmin('removeLogo')}</button>
+              )}
+            </div>
+
+            {/* Name */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyName')}</label>
+              <input type="text" className="input text-gray-800" value={company.name} onChange={(e) => setCompany({ ...company, name: e.target.value })} />
+            </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyEmail')}</label>
+              <input type="email" className="input text-gray-800" value={company.email} onChange={(e) => setCompany({ ...company, email: e.target.value })} />
+            </div>
+
+            {/* Address */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyAddress')}</label>
+              <textarea className="input text-gray-800 resize-none" rows={2} value={company.address} onChange={(e) => setCompany({ ...company, address: e.target.value })} />
+            </div>
+
+            {/* Phones */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyPhones')}</label>
+              <div className="space-y-2">
+                {company.phones.map((phone, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      type="text"
+                      className="input text-gray-800 flex-1"
+                      value={phone}
+                      onChange={(e) => {
+                        const phones = [...company.phones]
+                        phones[i] = e.target.value
+                        setCompany({ ...company, phones })
+                      }}
+                    />
+                    <button onClick={() => setCompany({ ...company, phones: company.phones.filter((_, j) => j !== i) })} className="text-red-600 hover:text-red-800 text-sm px-2">&times;</button>
+                  </div>
+                ))}
+                <button onClick={() => setCompany({ ...company, phones: [...company.phones, ''] })} className="text-blue-600 hover:text-blue-800 text-sm">{tAdmin('addPhone')}</button>
+              </div>
+            </div>
+
+            {/* Faxes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('companyFaxes')}</label>
+              <div className="space-y-2">
+                {company.faxes.map((fax, i) => (
+                  <div key={i} className="flex gap-2">
+                    <input
+                      type="text"
+                      className="input text-gray-800 flex-1"
+                      value={fax}
+                      onChange={(e) => {
+                        const faxes = [...company.faxes]
+                        faxes[i] = e.target.value
+                        setCompany({ ...company, faxes })
+                      }}
+                    />
+                    <button onClick={() => setCompany({ ...company, faxes: company.faxes.filter((_, j) => j !== i) })} className="text-red-600 hover:text-red-800 text-sm px-2">&times;</button>
+                  </div>
+                ))}
+                <button onClick={() => setCompany({ ...company, faxes: [...company.faxes, ''] })} className="text-blue-600 hover:text-blue-800 text-sm">{tAdmin('addFax')}</button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button onClick={saveCompany} disabled={companyLoading} className="btn btn-primary">
+                {companyLoading ? tCommon('saving') : tCommon('save')}
+              </button>
+              {companySaved && <span className="text-sm text-green-600 font-medium">{tCommon('saved')}</span>}
+            </div>
+          </div>
         </div>
       )}
 

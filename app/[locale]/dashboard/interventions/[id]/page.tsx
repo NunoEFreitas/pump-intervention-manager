@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
 import PartsSelector from './PartsSelector'
+import { printWorkOrderPDF } from '@/lib/workOrderPrint'
 
 interface ClientPart {
   id: string
@@ -52,6 +53,9 @@ interface WorkOrder {
   endDate: string | null
   endTime: string | null
   fromAddress: string | null
+  internal: boolean
+  vehicles: { workOrderId: string; vehicleId: string; plateNumber: string; brand: string | null; model: string | null }[]
+  helpers: { workOrderId: string; userId: string; name: string }[]
   createdAt: string
   createdBy: {
     id: string
@@ -66,6 +70,14 @@ interface Technician {
   email: string
 }
 
+interface CompanyVehicle {
+  id: string
+  plateNumber: string
+  brand: string | null
+  model: string | null
+  description: string | null
+}
+
 interface Intervention {
   id: string
   reference: string | null
@@ -74,7 +86,6 @@ interface Intervention {
   bill: boolean
   contract: boolean
   warranty: boolean
-  internal: boolean
   scheduledDate: string | null
   scheduledTime: string | null
   createdAt: string
@@ -109,7 +120,6 @@ interface Intervention {
     id: string
     name: string
     email: string
-    plateNumber: string | null
   } | null
   createdBy: {
     id: string
@@ -132,18 +142,22 @@ export default function InterventionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [showWorkOrderForm, setShowWorkOrderForm] = useState(false)
-  const [workOrderForm, setWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '' })
+  const [workOrderForm, setWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
   const [workOrderLoading, setWorkOrderLoading] = useState(false)
   const [showPartsForWorkOrderId, setShowPartsForWorkOrderId] = useState<string | null>(null)
   const [showWarehousePartsForWOId, setShowWarehousePartsForWOId] = useState<string | null>(null)
-  const [warehousePartItemId, setWarehousePartItemId] = useState('')
-  const [warehousePartQty, setWarehousePartQty] = useState('1')
+  const [warehouseCart, setWarehouseCart] = useState<{ tempId: string; itemId: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; qty: number; serialNumberIds: string[] }[]>([])
+  const [warehousePickerItemId, setWarehousePickerItemId] = useState('')
+  const [warehousePickerQty, setWarehousePickerQty] = useState('1')
+  const [warehouseSnPicker, setWarehouseSnPicker] = useState<{ itemId: string; itemName: string; partNumber: string; sns: { id: string; serialNumber: string }[]; selected: string[]; qty: number } | null>(null)
+  const [warehouseSnLoading, setWarehouseSnLoading] = useState(false)
   const [warehousePartLoading, setWarehousePartLoading] = useState(false)
   const [editingWorkOrderId, setEditingWorkOrderId] = useState<string | null>(null)
-  const [editWorkOrderForm, setEditWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '' })
+  const [editWorkOrderForm, setEditWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
   const [editWorkOrderLoading, setEditWorkOrderLoading] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [vehicles, setVehicles] = useState<CompanyVehicle[]>([])
   const [showAssignForm, setShowAssignForm] = useState(false)
   const [assignTechId, setAssignTechId] = useState('')
   const [statusChanging, setStatusChanging] = useState(false)
@@ -153,13 +167,21 @@ export default function InterventionDetailPage() {
   const [showClientPartForm, setShowClientPartForm] = useState(false)
   const [clientPartItemId, setClientPartItemId] = useState('')
   const [clientPartLoading, setClientPartLoading] = useState(false)
-  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string }[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean }[]>([])
   const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const itemSelectorRef = useRef<HTMLDivElement>(null)
   const [whItemSelectorOpen, setWhItemSelectorOpen] = useState(false)
   const [whItemSearch, setWhItemSearch] = useState('')
   const whItemSelectorRef = useRef<HTMLDivElement>(null)
+  const [woVehicleOpen, setWoVehicleOpen] = useState(false)
+  const [woHelperOpen, setWoHelperOpen] = useState(false)
+  const [editWoVehicleOpen, setEditWoVehicleOpen] = useState(false)
+  const [editWoHelperOpen, setEditWoHelperOpen] = useState(false)
+  const woVehicleRef = useRef<HTMLDivElement>(null)
+  const woHelperRef = useRef<HTMLDivElement>(null)
+  const editWoVehicleRef = useRef<HTMLDivElement>(null)
+  const editWoHelperRef = useRef<HTMLDivElement>(null)
   const [editData, setEditData] = useState({
     status: '',
     breakdown: '',
@@ -168,8 +190,25 @@ export default function InterventionDetailPage() {
     bill: false,
     contract: false,
     warranty: false,
-    internal: false,
   })
+  const [printCompany, setPrintCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string } | null>(null)
+
+  const handlePrintWorkOrder = async (wo: WorkOrder) => {
+    if (!intervention) return
+    let company = printCompany
+    if (!company) {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        company = { name: data.name || '', email: data.email || '', address: data.address || '', phones: Array.isArray(data.phones) ? data.phones : [], faxes: Array.isArray(data.faxes) ? data.faxes : [], logo: data.logo || '' }
+        setPrintCompany(company)
+      } catch {
+        company = { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }
+      }
+    }
+    printWorkOrderPDF(wo, intervention, company)
+  }
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -179,6 +218,10 @@ export default function InterventionDetailPage() {
       if (whItemSelectorRef.current && !whItemSelectorRef.current.contains(e.target as Node)) {
         setWhItemSelectorOpen(false)
       }
+      if (woVehicleRef.current && !woVehicleRef.current.contains(e.target as Node)) setWoVehicleOpen(false)
+      if (woHelperRef.current && !woHelperRef.current.contains(e.target as Node)) setWoHelperOpen(false)
+      if (editWoVehicleRef.current && !editWoVehicleRef.current.contains(e.target as Node)) setEditWoVehicleOpen(false)
+      if (editWoHelperRef.current && !editWoHelperRef.current.contains(e.target as Node)) setEditWoHelperOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -195,6 +238,7 @@ export default function InterventionDetailPage() {
       fetchIntervention()
       fetchWorkOrders()
       fetchTechnicians()
+      fetchVehicles()
       fetchClientParts()
       fetchWarehouseItems()
     }
@@ -224,7 +268,6 @@ export default function InterventionDetailPage() {
         bill: data.bill ?? false,
         contract: data.contract ?? false,
         warranty: data.warranty ?? false,
-        internal: data.internal ?? false,
       })
     } catch (error) {
       console.error('Error fetching intervention:', error)
@@ -259,6 +302,16 @@ export default function InterventionDetailPage() {
     }
   }
 
+  const fetchVehicles = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/vehicles', { headers: { Authorization: `Bearer ${token}` } })
+      setVehicles(await res.json())
+    } catch (error) {
+      console.error('Error fetching vehicles:', error)
+    }
+  }
+
   const fetchClientParts = async () => {
     try {
       const token = localStorage.getItem('token')
@@ -281,7 +334,7 @@ export default function InterventionDetailPage() {
       const data = await response.json()
       setWarehouseItems(
         Array.isArray(data)
-          ? data.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber }))
+          ? data.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers }))
           : []
       )
     } catch (error) {
@@ -340,11 +393,14 @@ export default function InterventionDetailPage() {
           startTime: workOrderForm.startTime || null,
           endDate: workOrderForm.endDate || null,
           endTime: workOrderForm.endTime || null,
+          internal: workOrderForm.internal,
+          vehicleIds: workOrderForm.vehicleIds,
+          helperIds: workOrderForm.helperIds,
         }),
       })
       if (response.ok) {
         setShowWorkOrderForm(false)
-        setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '' })
+        setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [], helperIds: [] })
         fetchWorkOrders()
       }
     } catch (error) {
@@ -368,6 +424,9 @@ export default function InterventionDetailPage() {
       startTime: wo.startTime || '',
       endDate: wo.endDate || '',
       endTime: wo.endTime || '',
+      internal: wo.internal ?? false,
+      vehicleIds: wo.vehicles?.map(v => v.vehicleId) ?? [],
+      helperIds: wo.helpers?.map(h => h.userId) ?? [],
     })
   }
 
@@ -391,6 +450,9 @@ export default function InterventionDetailPage() {
           startTime: editWorkOrderForm.startTime || null,
           endDate: editWorkOrderForm.endDate || null,
           endTime: editWorkOrderForm.endTime || null,
+          internal: editWorkOrderForm.internal,
+          vehicleIds: editWorkOrderForm.vehicleIds,
+          helperIds: editWorkOrderForm.helperIds,
         }),
       })
       if (response.ok) {
@@ -404,29 +466,99 @@ export default function InterventionDetailPage() {
     }
   }
 
-  const addWarehousePart = async (workOrderId: string) => {
-    if (!warehousePartItemId || !warehousePartQty) return
-    setWarehousePartLoading(true)
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/interventions/${params.id}/work-orders/${workOrderId}/warehouse-parts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ itemId: warehousePartItemId, quantity: parseInt(warehousePartQty) }),
-      })
-      if (response.ok) {
-        setShowWarehousePartsForWOId(null)
-        setWarehousePartItemId('')
-        setWarehousePartQty('1')
-        fetchWorkOrders()
-      } else {
-        const data = await response.json()
-        alert(data.error || 'Failed to add part')
+  const addToWarehouseCart = async () => {
+    if (!warehousePickerItemId) return
+    const found = warehouseItems.find((i) => i.id === warehousePickerItemId)
+    if (!found) return
+    const qty = parseInt(warehousePickerQty) || 1
+    if (found.tracksSerialNumbers) {
+      // Load available SNs from warehouse and open SN picker
+      setWarehouseSnLoading(true)
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/warehouse/items/${found.id}/serial-numbers?location=MAIN_WAREHOUSE&status=AVAILABLE`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        setWarehouseSnPicker({
+          itemId: found.id,
+          itemName: found.itemName,
+          partNumber: found.partNumber,
+          sns: Array.isArray(data) ? data.map((s: any) => ({ id: s.id, serialNumber: s.serialNumber })) : [],
+          selected: [],
+          qty,
+        })
+      } catch {
+        alert('Failed to load serial numbers')
+      } finally {
+        setWarehouseSnLoading(false)
       }
-    } catch (error) {
-      console.error('Error adding warehouse part:', error)
-    } finally {
-      setWarehousePartLoading(false)
+    } else {
+      setWarehouseCart(prev => [...prev, {
+        tempId: crypto.randomUUID(),
+        itemId: found.id,
+        itemName: found.itemName,
+        partNumber: found.partNumber,
+        tracksSerialNumbers: false,
+        qty,
+        serialNumberIds: [],
+      }])
+      setWarehousePickerItemId('')
+      setWarehousePickerQty('1')
+      setWhItemSearch('')
+    }
+  }
+
+  const confirmWarehouseSnSelection = () => {
+    if (!warehouseSnPicker || warehouseSnPicker.selected.length !== warehouseSnPicker.qty) return
+    setWarehouseCart(prev => [...prev, {
+      tempId: crypto.randomUUID(),
+      itemId: warehouseSnPicker.itemId,
+      itemName: warehouseSnPicker.itemName,
+      partNumber: warehouseSnPicker.partNumber,
+      tracksSerialNumbers: true,
+      qty: warehouseSnPicker.qty,
+      serialNumberIds: warehouseSnPicker.selected,
+    }])
+    setWarehouseSnPicker(null)
+    setWarehousePickerItemId('')
+    setWarehousePickerQty('1')
+    setWhItemSearch('')
+  }
+
+  const submitWarehouseCart = async (workOrderId: string) => {
+    if (warehouseCart.length === 0) return
+    setWarehousePartLoading(true)
+    const token = localStorage.getItem('token')
+    const errors: string[] = []
+    for (const entry of warehouseCart) {
+      try {
+        const response = await fetch(`/api/interventions/${params.id}/work-orders/${workOrderId}/warehouse-parts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            itemId: entry.itemId,
+            quantity: entry.qty,
+            serialNumberIds: entry.tracksSerialNumbers ? entry.serialNumberIds : undefined,
+          }),
+        })
+        if (!response.ok) {
+          const data = await response.json()
+          errors.push(`${entry.itemName}: ${data.error || 'Failed'}`)
+        }
+      } catch {
+        errors.push(`${entry.itemName}: Network error`)
+      }
+    }
+    setWarehousePartLoading(false)
+    if (errors.length === 0) {
+      setShowWarehousePartsForWOId(null)
+      setWarehouseCart([])
+      setWarehousePickerItemId('')
+      setWarehousePickerQty('1')
+      fetchWorkOrders()
+    } else {
+      alert(errors.join('\n'))
     }
   }
 
@@ -752,11 +884,6 @@ export default function InterventionDetailPage() {
                           {intervention.assignedTo ? (
                             <span className="text-gray-900">
                               {intervention.assignedTo.name}
-                              {intervention.assignedTo.plateNumber && (
-                                <span className="ml-2 px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs font-mono">
-                                  {intervention.assignedTo.plateNumber}
-                                </span>
-                              )}
                             </span>
                           ) : (
                             <span className="text-gray-400 italic">{t('unassigned')}</span>
@@ -892,9 +1019,6 @@ export default function InterventionDetailPage() {
               </span>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${intervention.warranty ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-500'}`}>
                 {intervention.warranty ? '✓' : '✗'} {t('warranty')}
-              </span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${intervention.internal ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                {intervention.internal ? t('internal') : t('external')}
               </span>
             </div>
           </div>
@@ -1052,6 +1176,16 @@ export default function InterventionDetailPage() {
             {showWorkOrderForm && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 space-y-3">
                 <h3 className="font-semibold text-gray-800">{t('newWorkOrder')}</h3>
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setWorkOrderForm({ ...workOrderForm, internal: false })}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!workOrderForm.internal ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
+                    {t('external')}
+                  </button>
+                  <button type="button" onClick={() => setWorkOrderForm({ ...workOrderForm, internal: true })}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${workOrderForm.internal ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
+                    {t('internal')}
+                  </button>
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {t('workOrderDescription')}
@@ -1064,64 +1198,84 @@ export default function InterventionDetailPage() {
                     required
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
-                    <input type="date" className="input text-gray-800" value={workOrderForm.startDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startDate: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
-                    <input type="time" className="input text-gray-800" value={workOrderForm.startTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startTime: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
-                    <input type="date" className="input text-gray-800" value={workOrderForm.endDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endDate: e.target.value })} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
-                    <input type="time" className="input text-gray-800" value={workOrderForm.endTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endTime: e.target.value })} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('fieldsTimeSpent')}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.5"
-                      className="input text-gray-800"
-                      value={workOrderForm.timeSpent}
-                      onChange={(e) => setWorkOrderForm({ ...workOrderForm, timeSpent: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('fieldsKm')}
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      className="input text-gray-800"
-                      placeholder="0"
-                      value={workOrderForm.km}
-                      onChange={(e) => setWorkOrderForm({ ...workOrderForm, km: e.target.value })}
-                    />
-                  </div>
-                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('fieldsFromAddress')}
-                  </label>
-                  <input
-                    type="text"
-                    className="input text-gray-800"
-                    placeholder={t('fieldsFromAddressPlaceholder')}
-                    value={workOrderForm.fromAddress}
-                    onChange={(e) => setWorkOrderForm({ ...workOrderForm, fromAddress: e.target.value })}
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsTimeSpent')}</label>
+                  <input type="number" step="0.5" className="input text-gray-800" value={workOrderForm.timeSpent} onChange={(e) => setWorkOrderForm({ ...workOrderForm, timeSpent: e.target.value })} />
                 </div>
+                {!workOrderForm.internal && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
+                        <input type="date" className="input text-gray-800" value={workOrderForm.startDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startDate: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
+                        <input type="time" className="input text-gray-800" value={workOrderForm.startTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startTime: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
+                        <input type="date" className="input text-gray-800" value={workOrderForm.endDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endDate: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
+                        <input type="time" className="input text-gray-800" value={workOrderForm.endTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endTime: e.target.value })} />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsKm')}</label>
+                        <input type="number" step="0.1" min="0" className="input text-gray-800" placeholder="0" value={workOrderForm.km} onChange={(e) => setWorkOrderForm({ ...workOrderForm, km: e.target.value })} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsFromAddress')}</label>
+                      <input type="text" className="input text-gray-800" placeholder={t('fieldsFromAddressPlaceholder')} value={workOrderForm.fromAddress} onChange={(e) => setWorkOrderForm({ ...workOrderForm, fromAddress: e.target.value })} />
+                    </div>
+                    {vehicles.length > 0 && (
+                      <div ref={woVehicleRef} className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('vehicle')}</label>
+                        <button type="button" onClick={() => setWoVehicleOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
+                          <span className={workOrderForm.vehicleIds.length ? 'text-gray-800' : 'text-gray-400'}>
+                            {workOrderForm.vehicleIds.length ? vehicles.filter(v => workOrderForm.vehicleIds.includes(v.id)).map(v => v.plateNumber).join(', ') : t('vehiclePlaceholder')}
+                          </span>
+                          <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                        </button>
+                        {woVehicleOpen && (
+                          <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                            {vehicles.map((v) => (
+                              <div key={v.id} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setWorkOrderForm(f => ({ ...f, vehicleIds: f.vehicleIds.includes(v.id) ? f.vehicleIds.filter(id => id !== v.id) : [...f.vehicleIds, v.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${workOrderForm.vehicleIds.includes(v.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                                <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{workOrderForm.vehicleIds.includes(v.id) ? '✓' : ''}</span>
+                                <span className="text-sm">{v.plateNumber}{(v.brand || v.model) ? ` — ${[v.brand, v.model].filter(Boolean).join(' ')}` : ''}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                {technicians.filter(tech => tech.id !== intervention.assignedTo?.id).length > 0 && (
+                  <div ref={woHelperRef} className="relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('helpers')}</label>
+                    <button type="button" onClick={() => setWoHelperOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
+                      <span className={workOrderForm.helperIds.length ? 'text-gray-800' : 'text-gray-400'}>
+                        {workOrderForm.helperIds.length ? technicians.filter(tech => workOrderForm.helperIds.includes(tech.id)).map(tech => tech.name).join(', ') : '—'}
+                      </span>
+                      <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                    </button>
+                    {woHelperOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                        {technicians.filter(tech => tech.id !== intervention.assignedTo?.id).map((tech) => (
+                          <div key={tech.id} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setWorkOrderForm(f => ({ ...f, helperIds: f.helperIds.includes(tech.id) ? f.helperIds.filter(id => id !== tech.id) : [...f.helperIds, tech.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${workOrderForm.helperIds.includes(tech.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                            <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{workOrderForm.helperIds.includes(tech.id) ? '✓' : ''}</span>
+                            <span className="text-sm">{tech.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {intervention.location && intervention.location.equipment.length > 0 && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1186,7 +1340,7 @@ export default function InterventionDetailPage() {
                     {workOrderLoading ? tCommon('saving') : tCommon('save')}
                   </button>
                   <button
-                    onClick={() => { setShowWorkOrderForm(false); setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '' }) }}
+                    onClick={() => { setShowWorkOrderForm(false); setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [], helperIds: [] }) }}
                     className="btn btn-secondary text-sm"
                   >
                     {tCommon('cancel')}
@@ -1204,42 +1358,98 @@ export default function InterventionDetailPage() {
                     {editingWorkOrderId === wo.id ? (
                       /* ── Inline Edit Form ── */
                       <div className="space-y-3">
+                        <div className="flex gap-3">
+                          <button type="button" onClick={() => setEditWorkOrderForm({ ...editWorkOrderForm, internal: false })}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!editWorkOrderForm.internal ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
+                            {t('external')}
+                          </button>
+                          <button type="button" onClick={() => setEditWorkOrderForm({ ...editWorkOrderForm, internal: true })}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${editWorkOrderForm.internal ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
+                            {t('internal')}
+                          </button>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">{t('workOrderDescription')}</label>
                           <textarea rows={3} className="input text-gray-800" value={editWorkOrderForm.description} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, description: e.target.value })} required />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
-                            <input type="date" className="input text-gray-800" value={editWorkOrderForm.startDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startDate: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
-                            <input type="time" className="input text-gray-800" value={editWorkOrderForm.startTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startTime: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
-                            <input type="date" className="input text-gray-800" value={editWorkOrderForm.endDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endDate: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
-                            <input type="time" className="input text-gray-800" value={editWorkOrderForm.endTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endTime: e.target.value })} />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsTimeSpent')}</label>
-                            <input type="number" step="0.5" className="input text-gray-800" value={editWorkOrderForm.timeSpent} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, timeSpent: e.target.value })} />
-                          </div>
-                          <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsKm')}</label>
-                            <input type="number" step="0.1" min="0" className="input text-gray-800" value={editWorkOrderForm.km} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, km: e.target.value })} />
-                          </div>
-                        </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsFromAddress')}</label>
-                          <input type="text" className="input text-gray-800" placeholder={t('fieldsFromAddressPlaceholder')} value={editWorkOrderForm.fromAddress} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, fromAddress: e.target.value })} />
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsTimeSpent')}</label>
+                          <input type="number" step="0.5" className="input text-gray-800" value={editWorkOrderForm.timeSpent} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, timeSpent: e.target.value })} />
                         </div>
+                        {!editWorkOrderForm.internal && (
+                          <>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
+                                <input type="date" className="input text-gray-800" value={editWorkOrderForm.startDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startDate: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
+                                <input type="time" className="input text-gray-800" value={editWorkOrderForm.startTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startTime: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
+                                <input type="date" className="input text-gray-800" value={editWorkOrderForm.endDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endDate: e.target.value })} />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
+                                <input type="time" className="input text-gray-800" value={editWorkOrderForm.endTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endTime: e.target.value })} />
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsKm')}</label>
+                                <input type="number" step="0.1" min="0" className="input text-gray-800" value={editWorkOrderForm.km} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, km: e.target.value })} />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsFromAddress')}</label>
+                              <input type="text" className="input text-gray-800" placeholder={t('fieldsFromAddressPlaceholder')} value={editWorkOrderForm.fromAddress} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, fromAddress: e.target.value })} />
+                            </div>
+                            {vehicles.length > 0 && (
+                              <div ref={editWoVehicleRef} className="relative">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('vehicle')}</label>
+                                <button type="button" onClick={() => setEditWoVehicleOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
+                                  <span className={editWorkOrderForm.vehicleIds.length ? 'text-gray-800' : 'text-gray-400'}>
+                                    {editWorkOrderForm.vehicleIds.length ? vehicles.filter(v => editWorkOrderForm.vehicleIds.includes(v.id)).map(v => v.plateNumber).join(', ') : t('vehiclePlaceholder')}
+                                  </span>
+                                  <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                {editWoVehicleOpen && (
+                                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                                    {vehicles.map((v) => (
+                                      <div key={v.id} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setEditWorkOrderForm(f => ({ ...f, vehicleIds: f.vehicleIds.includes(v.id) ? f.vehicleIds.filter(id => id !== v.id) : [...f.vehicleIds, v.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${editWorkOrderForm.vehicleIds.includes(v.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                                        <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{editWorkOrderForm.vehicleIds.includes(v.id) ? '✓' : ''}</span>
+                                        <span className="text-sm">{v.plateNumber}{(v.brand || v.model) ? ` — ${[v.brand, v.model].filter(Boolean).join(' ')}` : ''}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {technicians.filter(tech => tech.id !== intervention.assignedTo?.id).length > 0 && (
+                          <div ref={editWoHelperRef} className="relative">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">{t('helpers')}</label>
+                            <button type="button" onClick={() => setEditWoHelperOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
+                              <span className={editWorkOrderForm.helperIds.length ? 'text-gray-800' : 'text-gray-400'}>
+                                {editWorkOrderForm.helperIds.length ? technicians.filter(tech => editWorkOrderForm.helperIds.includes(tech.id)).map(tech => tech.name).join(', ') : '—'}
+                              </span>
+                              <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </button>
+                            {editWoHelperOpen && (
+                              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                                {technicians.filter(tech => tech.id !== intervention.assignedTo?.id).map((tech) => (
+                                  <div key={tech.id} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setEditWorkOrderForm(f => ({ ...f, helperIds: f.helperIds.includes(tech.id) ? f.helperIds.filter(id => id !== tech.id) : [...f.helperIds, tech.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${editWorkOrderForm.helperIds.includes(tech.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                                    <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{editWorkOrderForm.helperIds.includes(tech.id) ? '✓' : ''}</span>
+                                    <span className="text-sm">{tech.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {intervention.location && intervention.location.equipment.length > 0 && (
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">{t('workOrderEquipment')}</label>
@@ -1278,27 +1488,48 @@ export default function InterventionDetailPage() {
                       <>
                         <div className="flex justify-between mb-2">
                           <div className="text-xs text-gray-500 space-y-0.5">
-                            {wo.reference && (
-                              <div className="font-mono font-semibold text-gray-700 text-sm">{wo.reference}</div>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {wo.reference && (
+                                <span className="font-mono font-semibold text-gray-700 text-sm">{wo.reference}</span>
+                              )}
+                              {wo.internal && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{t('internal')}</span>
+                              )}
+                            </div>
                             <div>
                               {new Date(wo.createdAt).toLocaleString()} — {wo.createdBy.name}
                               {wo.timeSpent ? <span> · {wo.timeSpent}h</span> : null}
-                              {wo.km ? <span> · {wo.km} km{wo.fromAddress ? ` (${wo.fromAddress})` : ''}</span> : (wo.fromAddress ? <span> · {wo.fromAddress}</span> : null)}
+                              {!wo.internal && wo.km ? <span> · {wo.km} km{wo.fromAddress ? ` (${wo.fromAddress})` : ''}</span> : (!wo.internal && wo.fromAddress ? <span> · {wo.fromAddress}</span> : null)}
+                              {!wo.internal && wo.vehicles?.length > 0 && wo.vehicles.map(v => (
+                                <span key={v.vehicleId} className="ml-1 px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded font-mono text-xs">
+                                  {v.plateNumber}{(v.brand || v.model) ? ` · ${[v.brand, v.model].filter(Boolean).join(' ')}` : ''}
+                                </span>
+                              ))}
                             </div>
-                            {(wo.startDate || wo.endDate) && (
+                            {wo.helpers?.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <span className="text-xs text-gray-400">{t('helpers')}:</span>
+                                {wo.helpers.map(h => (
+                                  <span key={h.userId} className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-xs">{h.name}</span>
+                                ))}
+                              </div>
+                            )}
+                            {!wo.internal && (wo.startDate || wo.endDate) && (
                               <div className="flex gap-3">
                                 {wo.startDate && <span>▶ {wo.startDate}{wo.startTime ? ` ${wo.startTime}` : ''}</span>}
                                 {wo.endDate && <span>■ {wo.endDate}{wo.endTime ? ` ${wo.endTime}` : ''}</span>}
                               </div>
                             )}
                           </div>
-                          {canEdit && (
-                            <div className="flex gap-3 shrink-0">
-                              <button onClick={() => startEditWorkOrder(wo)} className="text-blue-600 hover:text-blue-800 text-xs">{tCommon('edit')}</button>
-                              <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-600 hover:text-red-800 text-xs">{tCommon('delete')}</button>
-                            </div>
-                          )}
+                          <div className="flex gap-3 shrink-0 items-start">
+                            <button onClick={() => handlePrintWorkOrder(wo)} className="text-gray-500 hover:text-gray-700 text-xs font-medium">PDF</button>
+                            {canEdit && (
+                              <>
+                                <button onClick={() => startEditWorkOrder(wo)} className="text-blue-600 hover:text-blue-800 text-xs">{tCommon('edit')}</button>
+                                <button onClick={() => deleteWorkOrder(wo.id)} className="text-red-600 hover:text-red-800 text-xs">{tCommon('delete')}</button>
+                              </>
+                            )}
+                          </div>
                         </div>
                         <p className="text-gray-900 whitespace-pre-wrap mb-3">{wo.description}</p>
 
@@ -1337,7 +1568,7 @@ export default function InterventionDetailPage() {
                                   </button>
                                 )}
                                 {showWarehousePartsForWOId !== wo.id && (
-                                  <button onClick={() => { setShowWarehousePartsForWOId(wo.id); setWarehousePartItemId(''); setWarehousePartQty('1'); setWhItemSearch(''); setWhItemSelectorOpen(false) }} className="text-green-600 hover:text-green-800 text-xs font-medium">
+                                  <button onClick={() => { setShowWarehousePartsForWOId(wo.id); setWarehouseCart([]); setWarehousePickerItemId(''); setWarehousePickerQty('1'); setWarehouseSnPicker(null); setWhItemSearch(''); setWhItemSelectorOpen(false) }} className="text-green-600 hover:text-green-800 text-xs font-medium">
                                     {t('addFromWarehouse')}
                                   </button>
                                 )}
@@ -1396,92 +1627,200 @@ export default function InterventionDetailPage() {
                           )}
                           {/* Warehouse parts inline */}
                           {showWarehousePartsForWOId === wo.id && (
-                            <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 space-y-2">
+                            <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 space-y-3">
                               <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">{t('addFromWarehouse')}</p>
-                              <div className="flex gap-2 flex-wrap items-start">
-                                <div ref={whItemSelectorRef} className="relative flex-1 min-w-0">
+
+                              {/* SN picker for a serialized item */}
+                              {warehouseSnPicker ? (
+                                <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <div>
+                                      <p className="text-sm font-semibold text-gray-900">{warehouseSnPicker.itemName}</p>
+                                      <p className="text-xs text-gray-500">{warehouseSnPicker.partNumber}</p>
+                                    </div>
+                                    <button type="button" onClick={() => setWarehouseSnPicker(null)} className="text-gray-400 hover:text-gray-600 text-xs px-2">✕</button>
+                                  </div>
+                                  <div>
+                                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                                      {t('warehousePartQty')}
+                                    </label>
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      max={warehouseSnPicker.sns.length}
+                                      value={warehouseSnPicker.qty}
+                                      onChange={(e) => setWarehouseSnPicker(p => p ? { ...p, qty: parseInt(e.target.value) || 1, selected: [] } : p)}
+                                      className="input text-gray-800 text-sm w-24"
+                                    />
+                                    <p className="text-xs text-gray-400 mt-1">{warehouseSnPicker.sns.length} available</p>
+                                  </div>
+                                  <div className="border rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
+                                    {warehouseSnPicker.sns.length === 0 ? (
+                                      <p className="text-xs text-gray-400 p-1">No serial numbers available</p>
+                                    ) : warehouseSnPicker.sns.map((sn) => (
+                                      <label key={sn.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-sm ${warehouseSnPicker.selected.includes(sn.id) ? 'bg-blue-100' : 'hover:bg-gray-50'}`}>
+                                        <input
+                                          type="checkbox"
+                                          checked={warehouseSnPicker.selected.includes(sn.id)}
+                                          onChange={() => setWarehouseSnPicker(p => {
+                                            if (!p) return p
+                                            const sel = p.selected.includes(sn.id)
+                                              ? p.selected.filter(id => id !== sn.id)
+                                              : p.selected.length < p.qty ? [...p.selected, sn.id] : p.selected
+                                            return { ...p, selected: sel }
+                                          })}
+                                          disabled={!warehouseSnPicker.selected.includes(sn.id) && warehouseSnPicker.selected.length >= warehouseSnPicker.qty}
+                                          className="w-3.5 h-3.5"
+                                        />
+                                        <span className="font-mono text-xs">{sn.serialNumber}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <p className="text-xs text-gray-500">{warehouseSnPicker.selected.length} / {warehouseSnPicker.qty} selected</p>
                                   <button
                                     type="button"
-                                    onClick={() => setWhItemSelectorOpen((o) => !o)}
-                                    className="input text-gray-800 text-sm w-full text-left flex items-center justify-between"
+                                    onClick={confirmWarehouseSnSelection}
+                                    disabled={warehouseSnPicker.selected.length !== warehouseSnPicker.qty}
+                                    className="btn btn-primary text-xs py-1 px-3 w-full"
                                   >
-                                    <span className={warehousePartItemId ? 'text-gray-800' : 'text-gray-400'}>
-                                      {warehousePartItemId
-                                        ? (() => {
-                                            const found = warehouseItems.find((i) => i.id === warehousePartItemId)
-                                            return found ? `${found.itemName} (${found.partNumber})` : t('workOrderEquipmentPlaceholder')
-                                          })()
-                                        : t('workOrderEquipmentPlaceholder')}
-                                    </span>
-                                    <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                    </svg>
+                                    {t('addToList')}
                                   </button>
-                                  {whItemSelectorOpen && (
-                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                                      <div className="p-2 border-b border-gray-200">
-                                        <input
-                                          type="text"
-                                          autoFocus
-                                          placeholder={tCommon('search')}
-                                          value={whItemSearch}
-                                          onChange={(e) => setWhItemSearch(e.target.value)}
-                                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                        />
-                                      </div>
-                                      <ul className="overflow-y-auto" style={{ maxHeight: '13rem' }}>
-                                        {warehouseItems
-                                          .filter((item) =>
-                                            `${item.itemName} ${item.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())
-                                          )
-                                          .map((item) => (
-                                            <li
-                                              key={item.id}
-                                              onMouseDown={() => {
-                                                setWarehousePartItemId(item.id)
-                                                setWhItemSelectorOpen(false)
-                                                setWhItemSearch('')
-                                              }}
-                                              className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${
-                                                warehousePartItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
-                                              }`}
-                                            >
-                                              {item.itemName} ({item.partNumber})
-                                            </li>
-                                          ))}
-                                        {warehouseItems.filter((item) =>
-                                          `${item.itemName} ${item.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())
-                                        ).length === 0 && (
-                                          <li className="px-3 py-2 text-sm text-gray-400">{tCommon('noResults')}</li>
-                                        )}
-                                      </ul>
+                                </div>
+                              ) : (
+                                <>
+                                  {/* Cart list */}
+                                  {warehouseCart.length > 0 && (
+                                    <div className="space-y-1">
+                                      {warehouseCart.map((entry) => (
+                                        <div key={entry.tempId} className="flex items-center gap-2 bg-white border border-green-200 rounded px-2 py-1">
+                                          <div className="flex-1 min-w-0">
+                                            <span className="text-sm text-gray-800 truncate block">{entry.itemName}</span>
+                                            <span className="text-xs text-gray-500">{entry.partNumber}</span>
+                                            {entry.tracksSerialNumbers && (
+                                              <span className="text-xs text-blue-600">{entry.serialNumberIds.length} SN(s)</span>
+                                            )}
+                                          </div>
+                                          {!entry.tracksSerialNumbers && (
+                                            <input
+                                              type="number"
+                                              min="1"
+                                              value={entry.qty}
+                                              onChange={(e) => setWarehouseCart(prev => prev.map(c => c.tempId === entry.tempId ? { ...c, qty: parseInt(e.target.value) || 1 } : c))}
+                                              className="w-14 text-center border border-gray-300 rounded px-1 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => setWarehouseCart(prev => prev.filter(c => c.tempId !== entry.tempId))}
+                                            className="text-red-400 hover:text-red-600 text-xs px-1"
+                                          >
+                                            ✕
+                                          </button>
+                                        </div>
+                                      ))}
                                     </div>
                                   )}
-                                </div>
-                                <input
-                                  type="number"
-                                  min="1"
-                                  className="input text-gray-800 text-sm w-20 shrink-0"
-                                  value={warehousePartQty}
-                                  onChange={(e) => setWarehousePartQty(e.target.value)}
-                                  placeholder={t('warehousePartQty')}
-                                />
-                              </div>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => addWarehousePart(wo.id)}
-                                  disabled={warehousePartLoading || !warehousePartItemId || !warehousePartQty}
-                                  className="btn btn-primary text-xs py-1 px-3"
-                                >
-                                  {warehousePartLoading ? tCommon('saving') : t('addWarehousePart')}
-                                </button>
-                                <button
-                                  onClick={() => setShowWarehousePartsForWOId(null)}
-                                  className="btn btn-secondary text-xs py-1 px-3"
-                                >
-                                  {tCommon('cancel')}
-                                </button>
-                              </div>
+                                  {/* Picker row */}
+                                  <div className="flex gap-2 flex-wrap items-start">
+                                    <div ref={whItemSelectorRef} className="relative flex-1 min-w-0">
+                                      <button
+                                        type="button"
+                                        onClick={() => setWhItemSelectorOpen((o) => !o)}
+                                        className="input text-gray-800 text-sm w-full text-left flex items-center justify-between"
+                                      >
+                                        <span className={warehousePickerItemId ? 'text-gray-800' : 'text-gray-400'}>
+                                          {warehousePickerItemId
+                                            ? (() => {
+                                                const found = warehouseItems.find((i) => i.id === warehousePickerItemId)
+                                                return found ? `${found.itemName} (${found.partNumber})` : t('workOrderEquipmentPlaceholder')
+                                              })()
+                                            : t('workOrderEquipmentPlaceholder')}
+                                        </span>
+                                        <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                      </button>
+                                      {whItemSelectorOpen && (
+                                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                                          <div className="p-2 border-b border-gray-200">
+                                            <input
+                                              type="text"
+                                              autoFocus
+                                              placeholder={tCommon('search')}
+                                              value={whItemSearch}
+                                              onChange={(e) => setWhItemSearch(e.target.value)}
+                                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            />
+                                          </div>
+                                          <ul className="overflow-y-auto" style={{ maxHeight: '13rem' }}>
+                                            {warehouseItems
+                                              .filter((item) =>
+                                                `${item.itemName} ${item.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())
+                                              )
+                                              .map((item) => (
+                                                <li
+                                                  key={item.id}
+                                                  onMouseDown={() => {
+                                                    setWarehousePickerItemId(item.id)
+                                                    setWhItemSelectorOpen(false)
+                                                    setWhItemSearch('')
+                                                  }}
+                                                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${
+                                                    warehousePickerItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
+                                                  }`}
+                                                >
+                                                  {item.itemName} ({item.partNumber}){item.tracksSerialNumbers ? ' 🔢' : ''}
+                                                </li>
+                                              ))}
+                                            {warehouseItems.filter((item) =>
+                                              `${item.itemName} ${item.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())
+                                            ).length === 0 && (
+                                              <li className="px-3 py-2 text-sm text-gray-400">{tCommon('noResults')}</li>
+                                            )}
+                                          </ul>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {/* Only show qty input for non-serialized; for serialized, qty is set in the SN picker */}
+                                    {(() => {
+                                      const sel = warehouseItems.find(i => i.id === warehousePickerItemId)
+                                      return !sel?.tracksSerialNumbers ? (
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          className="input text-gray-800 text-sm w-20 shrink-0"
+                                          value={warehousePickerQty}
+                                          onChange={(e) => setWarehousePickerQty(e.target.value)}
+                                          placeholder={t('warehousePartQty')}
+                                        />
+                                      ) : null
+                                    })()}
+                                    <button
+                                      type="button"
+                                      onClick={addToWarehouseCart}
+                                      disabled={!warehousePickerItemId || warehouseSnLoading}
+                                      className="btn btn-secondary text-xs py-1 px-3 shrink-0"
+                                    >
+                                      {warehouseSnLoading ? '…' : '+'}
+                                    </button>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => submitWarehouseCart(wo.id)}
+                                      disabled={warehousePartLoading || warehouseCart.length === 0}
+                                      className="btn btn-primary text-xs py-1 px-3"
+                                    >
+                                      {warehousePartLoading ? tCommon('saving') : `${t('addWarehousePart')}${warehouseCart.length > 0 ? ` (${warehouseCart.length})` : ''}`}
+                                    </button>
+                                    <button
+                                      onClick={() => { setShowWarehousePartsForWOId(null); setWarehouseCart([]); setWarehouseSnPicker(null) }}
+                                      className="btn btn-secondary text-xs py-1 px-3"
+                                    >
+                                      {tCommon('cancel')}
+                                    </button>
+                                  </div>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1578,28 +1917,6 @@ export default function InterventionDetailPage() {
               <input type="checkbox" checked={editData.warranty} onChange={(e) => setEditData({ ...editData, warranty: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
               <span className="text-sm font-medium text-gray-700">{t('warranty')}</span>
             </label>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('internal')} / {t('external')}
-            </label>
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={() => setEditData({ ...editData, internal: true })}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${editData.internal ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {t('internal')}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditData({ ...editData, internal: false })}
-                className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!editData.internal ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-              >
-                {t('external')}
-              </button>
-            </div>
           </div>
 
           <div className="flex gap-3">

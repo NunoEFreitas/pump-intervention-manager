@@ -27,16 +27,49 @@ export async function GET(
     orderBy: { createdAt: 'asc' },
   })
 
-  // Fetch new fields via raw SQL (Prisma client may be stale)
   const woIds = workOrders.map((wo: any) => wo.id)
+
+  // Fetch extra scalar fields
   const extraRows = woIds.length > 0
-    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; interventionType: string | null; transportGuide: string | null; startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; fromAddress: string | null }[]>`
-        SELECT id, reference, km, "locationEquipmentId", "interventionType", "transportGuide", "startDate", "startTime", "endDate", "endTime", "fromAddress" FROM "WorkOrder" WHERE id::text = ANY(${woIds}::text[])
+    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; interventionType: string | null; transportGuide: string | null; startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; fromAddress: string | null; internal: boolean }[]>`
+        SELECT wo.id, wo.reference, wo.km, wo."locationEquipmentId", wo."interventionType", wo."transportGuide", wo."startDate", wo."startTime", wo."endDate", wo."endTime", wo."fromAddress", wo."internal"
+        FROM "WorkOrder" wo
+        WHERE wo.id::text = ANY(${woIds}::text[])
       `
     : []
   const extraMap = Object.fromEntries(extraRows.map((r) => [r.id, r]))
 
-  // Fetch usedById + usedByName for all WorkOrderParts
+  // Fetch vehicles per work order
+  const vehicleRows = woIds.length > 0
+    ? await prisma.$queryRaw<{ workOrderId: string; vehicleId: string; plateNumber: string; brand: string | null; model: string | null }[]>`
+        SELECT wov."workOrderId", wov."vehicleId", cv."plateNumber", cv.brand, cv.model
+        FROM "WorkOrderVehicle" wov
+        JOIN "CompanyVehicle" cv ON cv.id = wov."vehicleId"
+        WHERE wov."workOrderId"::text = ANY(${woIds}::text[])
+      `
+    : []
+  const vehicleMap: Record<string, typeof vehicleRows> = {}
+  for (const r of vehicleRows) {
+    if (!vehicleMap[r.workOrderId]) vehicleMap[r.workOrderId] = []
+    vehicleMap[r.workOrderId].push(r)
+  }
+
+  // Fetch helpers per work order
+  const helperRows = woIds.length > 0
+    ? await prisma.$queryRaw<{ workOrderId: string; userId: string; name: string }[]>`
+        SELECT woh."workOrderId", woh."userId", u.name
+        FROM "WorkOrderHelper" woh
+        JOIN "User" u ON u.id = woh."userId"
+        WHERE woh."workOrderId"::text = ANY(${woIds}::text[])
+      `
+    : []
+  const helperMap: Record<string, typeof helperRows> = {}
+  for (const r of helperRows) {
+    if (!helperMap[r.workOrderId]) helperMap[r.workOrderId] = []
+    helperMap[r.workOrderId].push(r)
+  }
+
+  // Fetch usedById for parts
   const allPartIds = workOrders.flatMap((wo: any) => wo.parts.map((p: any) => p.id))
   const partUserRows = allPartIds.length > 0
     ? await prisma.$queryRaw<{ id: string; usedByName: string | null; createdAt: Date }[]>`
@@ -48,7 +81,6 @@ export async function GET(
     : []
   const partUserMap = Object.fromEntries(partUserRows.map((r) => [r.id, r]))
 
-  // Enrich serialized parts with actual SN values
   const enriched = await Promise.all(
     workOrders.map(async (wo: any) => ({
       ...wo,
@@ -62,6 +94,9 @@ export async function GET(
       endDate: extraMap[wo.id]?.endDate ?? null,
       endTime: extraMap[wo.id]?.endTime ?? null,
       fromAddress: extraMap[wo.id]?.fromAddress ?? null,
+      internal: extraMap[wo.id]?.internal ?? false,
+      vehicles: vehicleMap[wo.id] ?? [],
+      helpers: helperMap[wo.id] ?? [],
       parts: await Promise.all(
         wo.parts.map(async (part: any) => {
           const partMeta = partUserMap[part.id]
@@ -95,7 +130,7 @@ export async function POST(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: interventionId } = await params
-  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, startDate, startTime, endDate, endTime, fromAddress } = await request.json()
+  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, startDate, startTime, endDate, endTime, fromAddress, internal, vehicleIds, helperIds } = await request.json()
 
   if (!description?.trim()) {
     return NextResponse.json({ error: 'Description is required' }, { status: 400 })
@@ -110,9 +145,7 @@ export async function POST(
       timeSpent: timeSpent ? parseFloat(timeSpent) : null,
       createdById: payload.userId,
     },
-    include: {
-      createdBy: { select: { id: true, name: true } },
-    },
+    include: { createdBy: { select: { id: true, name: true } } },
   })
 
   await prisma.$executeRaw`
@@ -126,9 +159,38 @@ export async function POST(
         "startTime"           = ${startTime || null},
         "endDate"             = ${endDate || null},
         "endTime"             = ${endTime || null},
-        "fromAddress"         = ${fromAddress || null}
+        "fromAddress"         = ${fromAddress || null},
+        "internal"            = ${internal ? true : false}
     WHERE id = ${workOrder.id}
   `
+
+  const safeVehicleIds: string[] = Array.isArray(vehicleIds) ? vehicleIds.filter(Boolean) : []
+  for (const vehicleId of safeVehicleIds) {
+    const vid = crypto.randomUUID()
+    await prisma.$executeRaw`INSERT INTO "WorkOrderVehicle" (id, "workOrderId", "vehicleId", "createdAt") VALUES (${vid}, ${workOrder.id}, ${vehicleId}, NOW()) ON CONFLICT DO NOTHING`
+  }
+
+  const safeHelperIds: string[] = Array.isArray(helperIds) ? helperIds.filter(Boolean) : []
+  for (const userId of safeHelperIds) {
+    const hid = crypto.randomUUID()
+    await prisma.$executeRaw`INSERT INTO "WorkOrderHelper" (id, "workOrderId", "userId", "createdAt") VALUES (${hid}, ${workOrder.id}, ${userId}, NOW()) ON CONFLICT DO NOTHING`
+  }
+
+  const vehicles = safeVehicleIds.length > 0
+    ? await prisma.$queryRaw<{ workOrderId: string; vehicleId: string; plateNumber: string; brand: string | null; model: string | null }[]>`
+        SELECT wov."workOrderId", wov."vehicleId", cv."plateNumber", cv.brand, cv.model
+        FROM "WorkOrderVehicle" wov JOIN "CompanyVehicle" cv ON cv.id = wov."vehicleId"
+        WHERE wov."workOrderId" = ${workOrder.id}
+      `
+    : []
+
+  const helpers = safeHelperIds.length > 0
+    ? await prisma.$queryRaw<{ workOrderId: string; userId: string; name: string }[]>`
+        SELECT woh."workOrderId", woh."userId", u.name
+        FROM "WorkOrderHelper" woh JOIN "User" u ON u.id = woh."userId"
+        WHERE woh."workOrderId" = ${workOrder.id}
+      `
+    : []
 
   return NextResponse.json({
     ...workOrder,
@@ -142,6 +204,9 @@ export async function POST(
     endDate: endDate || null,
     endTime: endTime || null,
     fromAddress: fromAddress || null,
+    internal: internal ? true : false,
+    vehicles,
+    helpers,
     parts: [],
   }, { status: 201 })
 }

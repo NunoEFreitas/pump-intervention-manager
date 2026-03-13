@@ -35,11 +35,7 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const extras = await prisma.$queryRaw<[{ plateNumber: string | null }]>`
-      SELECT "plateNumber" FROM "User" WHERE id = ${id}
-    `
-
-    return NextResponse.json({ ...user, plateNumber: extras[0]?.plateNumber ?? null })
+    return NextResponse.json(user)
   } catch (error) {
     console.error('Error fetching user:', error)
     return NextResponse.json(
@@ -95,11 +91,7 @@ export async function PUT(
       },
     })
 
-    await prisma.$executeRaw`
-      UPDATE "User" SET "plateNumber" = ${data.plateNumber ?? null} WHERE id = ${id}
-    `
-
-    return NextResponse.json({ ...user, plateNumber: data.plateNumber ?? null })
+    return NextResponse.json(user)
   } catch (error) {
     console.error('Error updating user:', error)
     return NextResponse.json(
@@ -146,10 +138,9 @@ export async function DELETE(
     // Check if user has assigned interventions
     const user = await prisma.user.findUnique({
       where: { id },
-      include: {
-        _count: {
-          select: { assignedInterventions: true }
-        }
+      select: {
+        id: true,
+        _count: { select: { assignedInterventions: true } }
       }
     })
 

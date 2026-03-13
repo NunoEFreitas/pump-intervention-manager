@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
       where: { email: data.email },
+      select: { id: true },
     })
 
     if (existingUser) {
@@ -92,13 +93,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    if (data.plateNumber) {
-      await prisma.$executeRaw`
-        UPDATE "User" SET "plateNumber" = ${data.plateNumber} WHERE id = ${user.id}
-      `
-    }
-
-    return NextResponse.json({ ...user, plateNumber: data.plateNumber || null }, { status: 201 })
+    return NextResponse.json(user, { status: 201 })
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json(

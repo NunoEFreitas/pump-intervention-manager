@@ -137,8 +137,7 @@ export async function POST(request: NextRequest) {
       UPDATE "Intervention"
       SET "bill"      = ${data.bill      ? true : false},
           "contract"  = ${data.contract  ? true : false},
-          "warranty"  = ${data.warranty  ? true : false},
-          "internal"  = ${data.internal  ? true : false}
+          "warranty"  = ${data.warranty  ? true : false}
       WHERE id = ${intervention.id}
     `
 
@@ -147,7 +146,6 @@ export async function POST(request: NextRequest) {
       bill: data.bill ?? false,
       contract: data.contract ?? false,
       warranty: data.warranty ?? false,
-      internal: data.internal ?? false,
     }, { status: 201 })
   } catch (error) {
     console.error('Error creating intervention:', error)

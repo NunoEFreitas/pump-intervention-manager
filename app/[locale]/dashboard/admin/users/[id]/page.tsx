@@ -28,7 +28,6 @@ export default function EditUserPage() {
     email: '',
     password: '',
     role: 'TECHNICIAN',
-    plateNumber: '',
   })
 
   const tAdmin = useTranslations('admin')
@@ -66,7 +65,6 @@ export default function EditUserPage() {
         email: data.email,
         password: '',
         role: data.role,
-        plateNumber: data.plateNumber || '',
       })
     } catch (error) {
       console.error('Error fetching user:', error)
@@ -213,20 +211,6 @@ export default function EditUserPage() {
           <p className="text-xs text-gray-500 mt-1">
             {tAdmin('passwordNote')}
           </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAdmin('plateNumber')}
-          </label>
-          <input
-            type="text"
-            name="plateNumber"
-            className="input text-gray-800"
-            value={formData.plateNumber}
-            onChange={handleChange}
-            placeholder={tAdmin('plateNumberPlaceholder')}
-          />
         </div>
 
         <div>

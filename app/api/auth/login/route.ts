@@ -13,9 +13,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
+    const rows = await prisma.$queryRaw<[{ id: string; email: string; name: string; role: string; password: string; blocked: boolean }]>`
+      SELECT id, email, name, role, password, blocked FROM "User" WHERE email = ${email}
+    `
+    const user = rows[0]
 
     if (!user) {
       return NextResponse.json(
@@ -33,10 +34,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const blockedRow = await prisma.$queryRaw<[{ blocked: boolean }]>`
-      SELECT blocked FROM "User" WHERE id = ${user.id}
-    `
-    if (blockedRow[0]?.blocked) {
+    if (user.blocked) {
       return NextResponse.json(
         { error: 'Account is blocked. Contact your administrator.' },
         { status: 403 }

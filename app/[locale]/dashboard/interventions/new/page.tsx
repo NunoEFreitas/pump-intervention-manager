@@ -51,7 +51,6 @@ function NewInterventionContent() {
     bill: false,
     contract: false,
     warranty: false,
-    internal: false,
   })
 
   useEffect(() => {
@@ -239,28 +238,6 @@ function NewInterventionContent() {
             <input type="checkbox" name="warranty" checked={formData.warranty} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
             <span className="text-sm font-medium text-gray-700">{t('warranty')}</span>
           </label>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            {t('internal')} / {t('external')}
-          </label>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, internal: true })}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${formData.internal ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-            >
-              {t('internal')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, internal: false })}
-              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${!formData.internal ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
-            >
-              {t('external')}
-            </button>
-          </div>
         </div>
 
         <div>
