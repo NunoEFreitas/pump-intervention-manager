@@ -152,7 +152,8 @@ export function printWorkOrderPDF(
   .lbl { font-weight: bold; white-space: nowrap; }
   .text-td { padding: 5px; vertical-align: top; min-height: 18mm; white-space: pre-wrap; line-height: 1.5; }
   .footer { text-align: center; font-size: 7.5pt; border-top: 1px solid #000; padding-top: 3px; margin-top: 6mm; }
-  .sig-page { page-break-before: always; padding: 14mm; }
+  .sig-page { page-break-before: always; padding: 14mm; display: flex; flex-direction: column; min-height: 267mm; }
+  .sig-content { flex: 1; }
   .sig-row { display: flex; justify-content: space-around; margin-top: 25mm; }
   .sig-box { text-align: center; }
   .sig-label { font-size: 9pt; margin-bottom: 18mm; }
@@ -284,17 +285,19 @@ export function printWorkOrderPDF(
 
 <!-- Signature page -->
 <div class="sig-page">
-  <div class="sig-row">
-    <div class="sig-box">
-      <div class="sig-label">Assinatura do Cliente</div>
-      <div class="sig-line"></div>
-    </div>
-    <div class="sig-box">
-      <div class="sig-label">Assinatura do Técnico</div>
-      <div class="sig-line"></div>
+  <div class="sig-content">
+    <div class="sig-row">
+      <div class="sig-box">
+        <div class="sig-label">Assinatura do Cliente</div>
+        <div class="sig-line"></div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-label">Assinatura do Técnico</div>
+        <div class="sig-line"></div>
+      </div>
     </div>
   </div>
-  <div class="footer" style="position:absolute;bottom:14mm;left:14mm;right:14mm;">${footerHtml}</div>
+  <div class="footer">${footerHtml}</div>
 </div>
 
 </body>
