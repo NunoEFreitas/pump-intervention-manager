@@ -138,6 +138,13 @@ export async function POST(
 
   const reference = await generateWorkOrderReference()
 
+  // Auto-advance status from ASSIGNED → IN_PROGRESS when a work order is created
+  await prisma.$executeRaw`
+    UPDATE "Intervention"
+    SET status = 'IN_PROGRESS'
+    WHERE id = ${interventionId} AND status = 'ASSIGNED'
+  `
+
   const workOrder = await (prisma as any).workOrder.create({
     data: {
       interventionId,

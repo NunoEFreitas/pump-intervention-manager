@@ -402,6 +402,7 @@ export default function InterventionDetailPage() {
         setShowWorkOrderForm(false)
         setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [], helperIds: [] })
         fetchWorkOrders()
+        fetchIntervention()
       }
     } catch (error) {
       console.error('Error creating work order:', error)
