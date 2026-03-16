@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 import { generateClientReference } from '@/lib/reference'
+import { randomUUID } from 'crypto'
 
 // GET all clients
 export async function GET(request: NextRequest) {
@@ -66,6 +67,16 @@ export async function POST(request: NextRequest) {
           "district"  = ${data.district || null}
       WHERE id = ${client.id}
     `
+
+    // Auto-create first location from client address
+    if (data.name) {
+      const locId = randomUUID()
+      const now = new Date().toISOString()
+      await prisma.$executeRaw`
+        INSERT INTO "CompanyLocation" (id, "clientId", name, country, district, address, city, "postalCode", phone, "contactPerson", notes, "createdAt", "updatedAt")
+        VALUES (${locId}, ${client.id}, ${data.name}, ${data.country || null}, ${data.district || null}, ${data.address || null}, ${data.city || null}, ${data.postalCode || null}, ${data.phone || null}, ${data.contactPerson || null}, ${data.notes || null}, ${now}::timestamptz, ${now}::timestamptz)
+      `
+    }
 
     return NextResponse.json({ ...client, vatNumber: data.vatNumber || null, country: data.country || null, district: data.district || null }, { status: 201 })
   } catch (error) {
