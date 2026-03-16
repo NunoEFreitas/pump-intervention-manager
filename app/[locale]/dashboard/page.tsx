@@ -433,25 +433,23 @@ export default function DashboardPage() {
           {/* Week bar */}
           <div className="card">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Esta Semana</h2>
-            <div className="flex items-end gap-1.5 h-16">
+            <div className="flex items-end gap-1.5">
               {data.weekDayCounts.map((count, i) => (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full flex items-end justify-center" style={{ height: '44px' }}>
-                    <div
-                      className={`w-full rounded-t transition-all ${
-                        i === weekDayIndex
-                          ? 'bg-indigo-500'
-                          : count > 0 ? 'bg-indigo-200' : 'bg-gray-100'
-                      }`}
-                      style={{ height: `${Math.max(4, Math.round((count / maxWeek) * 44))}px` }}
-                    />
-                  </div>
-                  <span className={`text-xs ${i === weekDayIndex ? 'font-bold text-indigo-600' : 'text-gray-400'}`}>
-                    {DAY_LABELS[i]}
-                  </span>
                   {count > 0 && (
                     <span className="text-xs font-semibold text-gray-600">{count}</span>
                   )}
+                  <div
+                    className={`w-full rounded-t transition-all ${
+                      i === weekDayIndex
+                        ? 'bg-indigo-500'
+                        : count > 0 ? 'bg-indigo-200' : 'bg-gray-100'
+                    }`}
+                    style={{ height: `${Math.max(4, Math.round((count / maxWeek) * 80))}px` }}
+                  />
+                  <span className={`text-xs ${i === weekDayIndex ? 'font-bold text-indigo-600' : 'text-gray-400'}`}>
+                    {DAY_LABELS[i]}
+                  </span>
                 </div>
               ))}
             </div>
