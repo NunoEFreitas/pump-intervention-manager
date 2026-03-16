@@ -10,7 +10,8 @@ export interface OVMData {
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] },
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] }
   ]
-  medidaPadrao: string // selected key: 'p1_5' | 'p2_5' | 'p1_20' | 'p2_20' | 'p3_20' | ''
+  medidaPadraoDiv5: string  // 'p1_5' | 'p2_5' | ''
+  medidaPadraoDiv20: string // 'p1_20' | 'p2_20' | 'p3_20' | ''
   reparacao: boolean
   substituicao: boolean
   despachoModelo: string
@@ -23,7 +24,8 @@ export function emptyOVMData(): OVMData {
     equipmentId: '',
     fuelColumns: ['', '', '', ''],
     ensaios: [emptyEnsaio(), emptyEnsaio(), emptyEnsaio()],
-    medidaPadrao: '',
+    medidaPadraoDiv5: '',
+    medidaPadraoDiv20: '',
     reparacao: false,
     substituicao: false,
     despachoModelo: '',
@@ -43,8 +45,10 @@ export function migrateOVMData(raw: unknown): OVMData {
     ensaios: Array.isArray(r.ensaios) && r.ensaios.length === 3
       ? r.ensaios as OVMData['ensaios']
       : base.ensaios,
-    // old shape was { p1_5, p2_5, ... } — treat as empty
-    medidaPadrao: typeof r.medidaPadrao === 'string' ? r.medidaPadrao : '',
+    medidaPadraoDiv5: typeof r.medidaPadraoDiv5 === 'string' ? r.medidaPadraoDiv5
+      : typeof r.medidaPadrao === 'string' && ['p1_5', 'p2_5'].includes(r.medidaPadrao) ? r.medidaPadrao : '',
+    medidaPadraoDiv20: typeof r.medidaPadraoDiv20 === 'string' ? r.medidaPadraoDiv20
+      : typeof r.medidaPadrao === 'string' && ['p1_20', 'p2_20', 'p3_20'].includes(r.medidaPadrao) ? r.medidaPadrao : '',
     reparacao: typeof r.reparacao === 'boolean' ? r.reparacao : false,
     substituicao: typeof r.substituicao === 'boolean' ? r.substituicao : false,
     despachoModelo: typeof r.despachoModelo === 'string' ? r.despachoModelo : '',
@@ -64,9 +68,11 @@ interface OVMFormProps {
 
 const ROWS = ['20dm3', '5dm3', '2dm3'] as const
 const ENSAIO_LABELS = ['1º ensaio', '2º ensaio', '3º ensaio']
-const PADRAO_OPTIONS: { key: string; label: string }[] = [
-  { key: 'p1_5',  label: 'Padrão 1/5' },
-  { key: 'p2_5',  label: 'Padrão 2/5' },
+const PADRAO_DIV5:  { key: string; label: string }[] = [
+  { key: 'p1_5', label: 'Padrão 1/5' },
+  { key: 'p2_5', label: 'Padrão 2/5' },
+]
+const PADRAO_DIV20: { key: string; label: string }[] = [
   { key: 'p1_20', label: 'Padrão 1/20' },
   { key: 'p2_20', label: 'Padrão 2/20' },
   { key: 'p3_20', label: 'Padrão 3/20' },
@@ -206,22 +212,38 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, eq
 
         {/* Right: side panels */}
         <div className="flex flex-col gap-4 w-52 shrink-0">
-          {/* Medida Padrão — single selection */}
+          {/* Medida Padrão — one from /5 group, one from /20 group */}
           <table className="border-collapse text-xs w-full">
             <tbody>
               <tr>
                 <td className={`${cell('text-center font-semibold')} bg-gray-50`} colSpan={2}>Medida Padrão</td>
               </tr>
-              {PADRAO_OPTIONS.map(opt => (
+              {PADRAO_DIV5.map(opt => (
                 <tr key={opt.key}>
                   <td className={cell('font-medium text-xs')}>{opt.label}</td>
                   <td className={cell('w-8 text-center')}>
                     <input
                       type="checkbox"
-                      checked={data.medidaPadrao === opt.key}
+                      checked={data.medidaPadraoDiv5 === opt.key}
                       onChange={() => setData(prev => ({
                         ...prev,
-                        medidaPadrao: prev.medidaPadrao === opt.key ? '' : opt.key,
+                        medidaPadraoDiv5: prev.medidaPadraoDiv5 === opt.key ? '' : opt.key,
+                      }))}
+                      className="cursor-pointer"
+                    />
+                  </td>
+                </tr>
+              ))}
+              {PADRAO_DIV20.map(opt => (
+                <tr key={opt.key}>
+                  <td className={cell('font-medium text-xs')}>{opt.label}</td>
+                  <td className={cell('w-8 text-center')}>
+                    <input
+                      type="checkbox"
+                      checked={data.medidaPadraoDiv20 === opt.key}
+                      onChange={() => setData(prev => ({
+                        ...prev,
+                        medidaPadraoDiv20: prev.medidaPadraoDiv20 === opt.key ? '' : opt.key,
                       }))}
                       className="cursor-pointer"
                     />

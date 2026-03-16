@@ -12,6 +12,9 @@ interface PrintCompany {
 interface PrintIntervention {
   reference: string | null
   client: { name: string }
+  location?: {
+    equipment: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
+  } | null
 }
 
 function esc(s: string | null | undefined): string {
@@ -51,14 +54,14 @@ export function printOVMPDF(
   const fuelColumns: [string, string, string, string] = Array.isArray(data.fuelColumns) && data.fuelColumns.length === 4
     ? data.fuelColumns as [string, string, string, string]
     : ['', '', '', '']
-  const selectedPadrao = typeof data.medidaPadrao === 'string' ? data.medidaPadrao : ''
-  const PADRAO_OPTIONS = [
-    { key: 'p1_5',  label: 'Padrão 1/5' },
-    { key: 'p2_5',  label: 'Padrão 2/5' },
-    { key: 'p1_20', label: 'Padrão 1/20' },
-    { key: 'p2_20', label: 'Padrão 2/20' },
-    { key: 'p3_20', label: 'Padrão 3/20' },
-  ]
+  const div5  = typeof data.medidaPadraoDiv5  === 'string' ? data.medidaPadraoDiv5  : ''
+  const div20 = typeof data.medidaPadraoDiv20 === 'string' ? data.medidaPadraoDiv20 : ''
+  const PADRAO_DIV5  = [{ key: 'p1_5',  label: 'Padrão 1/5'  }, { key: 'p2_5',  label: 'Padrão 2/5'  }]
+  const PADRAO_DIV20 = [{ key: 'p1_20', label: 'Padrão 1/20' }, { key: 'p2_20', label: 'Padrão 2/20' }, { key: 'p3_20', label: 'Padrão 3/20' }]
+  const locationEquipment = intervention.location?.equipment.find(e => e.id === data.equipmentId)
+  const equipmentLine = locationEquipment
+    ? `${esc(locationEquipment.equipmentType.name)} — ${esc(locationEquipment.brand.name)} ${esc(locationEquipment.model)}${locationEquipment.serialNumber ? ` (${esc(locationEquipment.serialNumber)})` : ''}`
+    : ''
   const footerLines = [
     company.address ? esc(company.address) : '',
     company.phones.length ? `Telefones: ${company.phones.map(esc).join(' / ')}` : '',
@@ -108,7 +111,7 @@ export function printOVMPDF(
 
   <div class="main-title">
     <div class="t1">boletin de intervenção CMAC</div>
-    <div>${esc(intervention.client.name)}</div>
+    ${equipmentLine ? `<div style="font-size:9pt">${equipmentLine}</div>` : ''}
     <div>Registo de erros dos ensaios efetuados</div>
   </div>
 
@@ -120,9 +123,13 @@ export function printOVMPDF(
       <!-- Medida Padrão -->
       <table>
         <tr><td class="sect" colspan="2" style="text-align:center;font-weight:bold">Medida Padrão</td></tr>
-        ${PADRAO_OPTIONS.map(opt => `<tr>
+        ${PADRAO_DIV5.map(opt => `<tr>
           <td class="lbl">${opt.label}</td>
-          <td class="check" style="width:10mm">${selectedPadrao === opt.key ? '✓' : ''}</td>
+          <td class="check" style="width:10mm">${div5 === opt.key ? '✓' : ''}</td>
+        </tr>`).join('')}
+        ${PADRAO_DIV20.map(opt => `<tr>
+          <td class="lbl">${opt.label}</td>
+          <td class="check" style="width:10mm">${div20 === opt.key ? '✓' : ''}</td>
         </tr>`).join('')}
       </table>
 
