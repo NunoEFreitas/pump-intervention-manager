@@ -74,7 +74,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [view, setView] = useState<'board' | 'calendar'>('board')
+  const [view, setView] = useState<'board' | 'calendar' | 'today'>('board')
 
   const fetchData = useCallback(async () => {
     try {
@@ -147,6 +147,48 @@ export default function DashboardPage() {
     }
   })
 
+  // Today view: hourly grid per technician
+  const HOUR_START = 7   // 07:00
+  const HOUR_END   = 19  // 19:00
+  const PX_PER_HOUR = 64 // px height per hour slot
+  const TOTAL_H = (HOUR_END - HOUR_START) * PX_PER_HOUR
+  const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i)
+
+  const todayItems = calendarColumns[0].items // already filtered to today
+
+  // Build tech columns (sorted by name, unassigned at end)
+  const techMap = new Map<string, { id: string; name: string; items: Intervention[] }>()
+  for (const iv of todayItems) {
+    const key = iv.assignedTo?.id ?? '__none__'
+    if (!techMap.has(key)) techMap.set(key, { id: key, name: iv.assignedTo?.name ?? 'Sem Atribuição', items: [] })
+    techMap.get(key)!.items.push(iv)
+  }
+  const techCols = Array.from(techMap.values()).sort((a, b) =>
+    a.id === '__none__' ? 1 : b.id === '__none__' ? -1 : a.name.localeCompare(b.name)
+  )
+
+  function ivTop(iv: Intervention): number {
+    if (!iv.scheduledDate) return 0
+    const d = new Date(iv.scheduledDate)
+    const mins = (d.getHours() - HOUR_START) * 60 + d.getMinutes()
+    return Math.max(0, Math.min(mins / 60 * PX_PER_HOUR, TOTAL_H - 4))
+  }
+
+  const STATUS_BG: Record<string, string> = {
+    OPEN:               'bg-amber-50  border-amber-300  text-amber-900',
+    ASSIGNED:           'bg-blue-50   border-blue-300   text-blue-900',
+    IN_PROGRESS:        'bg-indigo-100 border-indigo-400 text-indigo-900',
+    QUALITY_ASSESSMENT: 'bg-purple-50 border-purple-300 text-purple-900',
+    COMPLETED:          'bg-green-50  border-green-300  text-green-900',
+    CANCELED:           'bg-gray-50   border-gray-300   text-gray-500',
+  }
+
+  const nowMinutes = (() => {
+    const n = new Date()
+    return (n.getHours() - HOUR_START) * 60 + n.getMinutes()
+  })()
+  const nowTop = nowMinutes / 60 * PX_PER_HOUR
+
   const STATUS_BORDER: Record<string, string> = {
     OPEN:               'border-l-amber-400',
     ASSIGNED:           'border-l-blue-400',
@@ -180,11 +222,20 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => setView('calendar')}
-              title="Vista de calendário"
+              title="Vista de calendário — semana"
               className={`px-2.5 py-1.5 transition-colors ${view === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+            <button
+              onClick={() => setView('today')}
+              title="Vista do dia — horário"
+              className={`px-2.5 py-1.5 transition-colors ${view === 'today' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </button>
           </div>
@@ -247,6 +298,91 @@ export default function DashboardPage() {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'today' && (
+        <div className="card p-0 overflow-hidden">
+          {/* Column headers: time gutter + one col per tech */}
+          <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+            <div className="w-14 shrink-0 border-r border-gray-200" />
+            {techCols.map(tc => (
+              <div key={tc.id} className="flex-1 min-w-32 px-2 py-2 border-r border-gray-200 last:border-r-0 text-center">
+                <div className={`text-xs font-semibold truncate ${tc.id === '__none__' ? 'text-amber-600' : 'text-gray-800'}`}>
+                  {tc.name}
+                </div>
+                <div className="text-xs text-gray-400">{tc.items.length} intervenção{tc.items.length !== 1 ? 'ões' : ''}</div>
+              </div>
+            ))}
+            {techCols.length === 0 && (
+              <div className="flex-1 px-4 py-2 text-xs text-gray-400">Nenhuma intervenção hoje.</div>
+            )}
+          </div>
+
+          {/* Scrollable time grid */}
+          <div className="overflow-y-auto max-h-[75vh]">
+            <div className="flex">
+              {/* Time gutter */}
+              <div className="w-14 shrink-0 border-r border-gray-200 select-none">
+                {hours.map(h => (
+                  <div key={h} className="border-b border-gray-100 flex items-start justify-end pr-2 pt-1" style={{ height: PX_PER_HOUR }}>
+                    <span className="text-xs text-gray-400 font-mono leading-none">{String(h).padStart(2, '0')}:00</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Tech columns */}
+              {techCols.map(tc => (
+                <div key={tc.id} className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 relative">
+                  {/* Hour lines */}
+                  {hours.map(h => (
+                    <div key={h} className="border-b border-gray-100" style={{ height: PX_PER_HOUR }} />
+                  ))}
+
+                  {/* "Now" line — only show if in range */}
+                  {nowMinutes >= 0 && nowMinutes <= (HOUR_END - HOUR_START) * 60 && (
+                    <div
+                      className="absolute left-0 right-0 z-10 pointer-events-none"
+                      style={{ top: nowTop }}
+                    >
+                      <div className="flex items-center gap-0">
+                        <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+                        <div className="flex-1 h-px bg-red-400" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Intervention blocks */}
+                  {tc.items.map(iv => (
+                    <div
+                      key={iv.id}
+                      onClick={() => goTo(iv.id)}
+                      className={`absolute left-1 right-1 rounded border cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${STATUS_BG[iv.status] ?? STATUS_BG.OPEN}`}
+                      style={{ top: ivTop(iv) + 2, minHeight: 52, maxHeight: PX_PER_HOUR - 6 }}
+                      title={`${iv.client.name}${iv.scheduledDate ? ' — ' + new Date(iv.scheduledDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : ''}`}
+                    >
+                      <div className="px-1.5 py-1 h-full flex flex-col justify-between">
+                        <div>
+                          {iv.scheduledDate && (
+                            <div className="text-xs font-bold tabular-nums leading-none mb-0.5">
+                              {new Date(iv.scheduledDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                          )}
+                          <div className="text-xs font-semibold leading-tight truncate">{iv.client.name}</div>
+                          {(iv.location?.city || iv.client.city) && (
+                            <div className="text-xs opacity-70 truncate leading-tight">{iv.location?.city || iv.client.city}</div>
+                          )}
+                        </div>
+                        <div className={`text-xs font-medium truncate ${STATUS_META[iv.status]?.badge.split(' ')[1] ?? ''}`}>
+                          {STATUS_META[iv.status]?.label}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
