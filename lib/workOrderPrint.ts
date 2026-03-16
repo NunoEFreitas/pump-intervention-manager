@@ -47,7 +47,7 @@ interface PrintIntervention {
     name: string
     address: string | null
     city: string | null
-    equipment: { id: string; model: string; equipmentType: { name: string }; brand: { name: string } }[]
+    equipment: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
   } | null
   assignedTo: { name: string } | null
 }
@@ -113,16 +113,18 @@ export function printWorkOrderPDF(
 
   const equipmentSection = locationEquipment
     ? `<table>
-        ${sectionHeader('BOMBAS / EQUIPAMENTOS', 3)}
+        ${sectionHeader('BOMBAS / EQUIPAMENTOS', 4)}
         <tr>
-          <th style="width:33%">Tipo</th>
-          <th style="width:33%">Marca</th>
-          <th style="width:34%">Modelo</th>
+          <th style="width:25%">Tipo</th>
+          <th style="width:25%">Marca</th>
+          <th style="width:25%">Modelo</th>
+          <th style="width:25%">Série</th>
         </tr>
         <tr>
           <td>${esc(locationEquipment.equipmentType.name)}</td>
           <td>${esc(locationEquipment.brand.name)}</td>
           <td>${esc(locationEquipment.model)}</td>
+          <td>${esc(locationEquipment.serialNumber)}</td>
         </tr>
       </table>`
     : ''

@@ -37,7 +37,7 @@ interface WorkOrderSignatureModalProps {
       name: string
       address: string | null
       city: string | null
-      equipment: { id: string; model: string; equipmentType: { name: string }; brand: { name: string } }[]
+      equipment: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
     } | null
   }
   onGenerate: (clientSig: string | null, techSig: string | null) => void
@@ -313,6 +313,7 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
                     <th className="border border-gray-400 px-2 py-1 font-bold text-left">Tipo</th>
                     <th className="border border-gray-400 px-2 py-1 font-bold text-left">Marca</th>
                     <th className="border border-gray-400 px-2 py-1 font-bold text-left">Modelo</th>
+                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Série</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -320,6 +321,7 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
                     <td className="border border-gray-400 px-2 py-1">{locationEquipment.equipmentType.name}</td>
                     <td className="border border-gray-400 px-2 py-1">{locationEquipment.brand.name}</td>
                     <td className="border border-gray-400 px-2 py-1">{locationEquipment.model}</td>
+                    <td className="border border-gray-400 px-2 py-1">{locationEquipment.serialNumber ?? '—'}</td>
                   </tr>
                 </tbody>
               </table>

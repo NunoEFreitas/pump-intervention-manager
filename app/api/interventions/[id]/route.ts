@@ -25,7 +25,10 @@ export async function GET(
         location: {
           include: {
             equipment: {
-              include: {
+              select: {
+                id: true,
+                model: true,
+                serialNumber: true,
                 equipmentType: { select: { name: true } },
                 brand: { select: { name: true } },
               },

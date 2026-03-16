@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
-type Tab = 'users' | 'types' | 'brands' | 'vehicles' | 'settings' | 'company'
+type Tab = 'users' | 'types' | 'brands' | 'vehicles' | 'settings' | 'company' | 'fuelTypes'
 
 interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
 
@@ -20,6 +20,7 @@ interface User {
 
 interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
+interface FuelType { id: string; translations: { en: string; pt: string; es: string }; createdAt: string }
 
 export default function AdminPage() {
   const router = useRouter()
@@ -59,6 +60,12 @@ export default function AdminPage() {
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
 
+  // Fuel types state
+  const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
+  const [fuelTypeForm, setFuelTypeForm] = useState({ en: '', pt: '', es: '' })
+  const [editingFuelType, setEditingFuelType] = useState<FuelType | null>(null)
+  const [fuelTypeLoading, setFuelTypeLoading] = useState(false)
+
   // Company state
   const [company, setCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string }>({ name: '', email: '', address: '', phones: [], faxes: [], logo: '' })
   const [companyLoading, setCompanyLoading] = useState(false)
@@ -85,6 +92,7 @@ export default function AdminPage() {
     fetchVehicles()
     fetchSettings()
     fetchCompany()
+    fetchFuelTypes()
   }, [router])
 
   // Fetch lazy: only reload when switching to that tab if not yet loaded
@@ -148,6 +156,60 @@ export default function AdminPage() {
     } finally {
       setCompanyLoading(false)
     }
+  }
+
+  const fetchFuelTypes = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/fuel-types', { headers: { Authorization: `Bearer ${token}` } })
+      setFuelTypes(await res.json())
+    } catch (error) {
+      console.error('Error fetching fuel types:', error)
+    }
+  }
+
+  const saveFuelType = async () => {
+    if (!fuelTypeForm.en.trim() && !fuelTypeForm.pt.trim() && !fuelTypeForm.es.trim()) return
+    setFuelTypeLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const translations = { en: fuelTypeForm.en.trim(), pt: fuelTypeForm.pt.trim(), es: fuelTypeForm.es.trim() }
+      if (editingFuelType) {
+        const res = await fetch(`/api/admin/fuel-types/${editingFuelType.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ translations }),
+        })
+        if (res.ok) {
+          const updated = await res.json()
+          setFuelTypes(prev => prev.map(f => f.id === editingFuelType.id ? updated : f))
+          setEditingFuelType(null)
+          setFuelTypeForm({ en: '', pt: '', es: '' })
+        }
+      } else {
+        const res = await fetch('/api/admin/fuel-types', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ translations }),
+        })
+        if (res.ok) {
+          const created = await res.json()
+          setFuelTypes(prev => [...prev, created])
+          setFuelTypeForm({ en: '', pt: '', es: '' })
+        }
+      }
+    } catch (error) {
+      console.error('Error saving fuel type:', error)
+    } finally {
+      setFuelTypeLoading(false)
+    }
+  }
+
+  const deleteFuelType = async (id: string) => {
+    if (!confirm('Delete this fuel type?')) return
+    const token = localStorage.getItem('token')
+    await fetch(`/api/admin/fuel-types/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    setFuelTypes(prev => prev.filter(f => f.id !== id))
   }
 
   const fetchSettings = async () => {
@@ -416,6 +478,12 @@ export default function AdminPage() {
           </button>
           <button className={tabClass('company')} onClick={() => setActiveTab('company')}>
             {tAdmin('companySettings')}
+          </button>
+          <button className={tabClass('fuelTypes')} onClick={() => setActiveTab('fuelTypes')}>
+            {tAdmin('fuelTypes')}
+            <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
+              {fuelTypes.length}
+            </span>
           </button>
         </nav>
       </div>
@@ -899,6 +967,97 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Fuel Types tab ────────────────────────────────────────────────── */}
+      {activeTab === 'fuelTypes' && (
+        <div className="card max-w-2xl">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">{tAdmin('fuelTypes')}</h2>
+
+          {/* Add / Edit form */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-700">
+              {editingFuelType ? tAdmin('editFuelType') : tAdmin('addFuelType')}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{tAdmin('fuelTypeNameEn')}</label>
+                <input
+                  className="input text-gray-800"
+                  placeholder="e.g. Diesel"
+                  value={fuelTypeForm.en}
+                  onChange={e => setFuelTypeForm(f => ({ ...f, en: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{tAdmin('fuelTypeNamePt')}</label>
+                <input
+                  className="input text-gray-800"
+                  placeholder="ex. Gasóleo"
+                  value={fuelTypeForm.pt}
+                  onChange={e => setFuelTypeForm(f => ({ ...f, pt: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">{tAdmin('fuelTypeNameEs')}</label>
+                <input
+                  className="input text-gray-800"
+                  placeholder="ej. Diésel"
+                  value={fuelTypeForm.es}
+                  onChange={e => setFuelTypeForm(f => ({ ...f, es: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="btn btn-primary text-sm"
+                disabled={fuelTypeLoading || (!fuelTypeForm.en.trim() && !fuelTypeForm.pt.trim() && !fuelTypeForm.es.trim())}
+                onClick={saveFuelType}
+              >
+                {fuelTypeLoading ? tCommon('saving') : editingFuelType ? tCommon('save') : tAdmin('addFuelType')}
+              </button>
+              {editingFuelType && (
+                <button
+                  className="btn btn-secondary text-sm"
+                  onClick={() => { setEditingFuelType(null); setFuelTypeForm({ en: '', pt: '', es: '' }) }}
+                >
+                  {tCommon('cancel')}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* List */}
+          {fuelTypes.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">{tAdmin('noFuelTypes')}</p>
+          ) : (
+            <div className="space-y-2">
+              {fuelTypes.map(ft => (
+                <div key={ft.id} className="flex items-center justify-between border border-gray-200 rounded-lg px-4 py-2.5">
+                  <div className="flex gap-4 text-sm">
+                    <span><span className="text-xs text-gray-400 mr-1">EN</span>{ft.translations.en || '—'}</span>
+                    <span><span className="text-xs text-gray-400 mr-1">PT</span>{ft.translations.pt || '—'}</span>
+                    <span><span className="text-xs text-gray-400 mr-1">ES</span>{ft.translations.es || '—'}</span>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      className="text-xs text-blue-600 hover:underline"
+                      onClick={() => { setEditingFuelType(ft); setFuelTypeForm({ en: ft.translations.en, pt: ft.translations.pt, es: ft.translations.es }) }}
+                    >
+                      {tCommon('edit')}
+                    </button>
+                    <button
+                      className="text-xs text-red-500 hover:underline"
+                      onClick={() => deleteFuelType(ft.id)}
+                    >
+                      {tCommon('delete')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

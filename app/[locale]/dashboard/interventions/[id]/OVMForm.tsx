@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export interface OVMData {
+  equipmentId: string
+  fuelColumns: [string, string, string, string]
   ensaios: [
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] },
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] },
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] }
   ]
-  medidaPadrao: { p1_5: string; p2_5: string; p1_20: string; p2_20: string; p3_20: string }
+  medidaPadrao: string // selected key: 'p1_5' | 'p2_5' | 'p1_20' | 'p2_20' | 'p3_20' | ''
   reparacao: boolean
   substituicao: boolean
   despachoModelo: string
@@ -18,13 +20,38 @@ export function emptyOVMData(): OVMData {
   const emptyRow = (): [string, string, string, string] => ['', '', '', '']
   const emptyEnsaio = () => ({ '20dm3': emptyRow(), '5dm3': emptyRow(), '2dm3': emptyRow() })
   return {
+    equipmentId: '',
+    fuelColumns: ['', '', '', ''],
     ensaios: [emptyEnsaio(), emptyEnsaio(), emptyEnsaio()],
-    medidaPadrao: { p1_5: '', p2_5: '', p1_20: '', p2_20: '', p3_20: '' },
+    medidaPadrao: '',
     reparacao: false,
     substituicao: false,
     despachoModelo: '',
   }
 }
+
+// Migrate legacy OVMData loaded from DB that may have old shapes
+export function migrateOVMData(raw: unknown): OVMData {
+  const base = emptyOVMData()
+  if (!raw || typeof raw !== 'object') return base
+  const r = raw as Record<string, unknown>
+  return {
+    equipmentId: typeof r.equipmentId === 'string' ? r.equipmentId : '',
+    fuelColumns: Array.isArray(r.fuelColumns) && r.fuelColumns.length === 4
+      ? r.fuelColumns as [string, string, string, string]
+      : ['', '', '', ''],
+    ensaios: Array.isArray(r.ensaios) && r.ensaios.length === 3
+      ? r.ensaios as OVMData['ensaios']
+      : base.ensaios,
+    // old shape was { p1_5, p2_5, ... } — treat as empty
+    medidaPadrao: typeof r.medidaPadrao === 'string' ? r.medidaPadrao : '',
+    reparacao: typeof r.reparacao === 'boolean' ? r.reparacao : false,
+    substituicao: typeof r.substituicao === 'boolean' ? r.substituicao : false,
+    despachoModelo: typeof r.despachoModelo === 'string' ? r.despachoModelo : '',
+  }
+}
+
+interface FuelType { id: string; translations: { en: string; pt: string; es: string } }
 
 interface OVMFormProps {
   initial?: OVMData
@@ -32,44 +59,83 @@ interface OVMFormProps {
   onCancel: () => void
   onPrint?: (data: OVMData) => void
   saving?: boolean
+  equipment?: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
 }
 
 const ROWS = ['20dm3', '5dm3', '2dm3'] as const
 const ENSAIO_LABELS = ['1º ensaio', '2º ensaio', '3º ensaio']
+const PADRAO_OPTIONS: { key: string; label: string }[] = [
+  { key: 'p1_5',  label: 'Padrão 1/5' },
+  { key: 'p2_5',  label: 'Padrão 2/5' },
+  { key: 'p1_20', label: 'Padrão 1/20' },
+  { key: 'p2_20', label: 'Padrão 2/20' },
+  { key: 'p3_20', label: 'Padrão 3/20' },
+]
 
 function cell(className?: string) {
   return `border border-gray-400 px-1 py-0.5 ${className ?? ''}`
 }
 
-export default function OVMForm({ initial, onSave, onCancel, onPrint, saving }: OVMFormProps) {
+export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, equipment = [] }: OVMFormProps) {
   const [data, setData] = useState<OVMData>(initial ?? emptyOVMData())
+  const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
 
-  const setCell = (ensaioIdx: number, row: typeof ROWS[number], colIdx: number, value: string) => {
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    fetch('/api/admin/fuel-types', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setFuelTypes)
+      .catch(() => {})
+  }, [])
+
+  const stepCell = (ensaioIdx: number, row: typeof ROWS[number], colIdx: number, delta: number) => {
     setData(prev => {
       const next = structuredClone(prev)
-      next.ensaios[ensaioIdx][row][colIdx] = value
+      const cur = next.ensaios[ensaioIdx][row][colIdx]
+      const num = cur === '' ? 0 : parseFloat(cur) || 0
+      const stepped = Math.round((num + delta) * 10) / 10
+      if (stepped < -0.5 || stepped > 0.5) return prev
+      next.ensaios[ensaioIdx][row][colIdx] = stepped.toFixed(1)
       return next
     })
   }
 
-  const setPadrao = (key: keyof OVMData['medidaPadrao'], value: string) => {
-    setData(prev => ({ ...prev, medidaPadrao: { ...prev.medidaPadrao, [key]: value } }))
+  const setFuelColumn = (colIdx: number, label: string) => {
+    setData(prev => {
+      const cols = [...prev.fuelColumns] as [string, string, string, string]
+      cols[colIdx] = label
+      return { ...prev, fuelColumns: cols }
+    })
   }
 
-  const inputCls = 'w-full text-xs text-center border-0 bg-transparent outline-none focus:bg-blue-50 p-0'
+  const fuelSelectCls = 'w-full text-xs border-0 bg-transparent outline-none focus:bg-blue-50 p-0 cursor-pointer'
 
   return (
     <div className="space-y-4">
       {/* Document header */}
       <div className="text-center text-sm space-y-0.5 text-gray-700">
         <div className="font-semibold">boletin de intervenção CMAC</div>
-        <div>equipamento do cliente</div>
+        <div className="flex items-center justify-center gap-2">
+          <span>equipamento do cliente:</span>
+          <select
+            className="border border-gray-300 rounded px-2 py-0.5 text-xs text-gray-800 bg-white"
+            value={data.equipmentId}
+            onChange={e => setData(prev => ({ ...prev, equipmentId: e.target.value }))}
+          >
+            <option value="">— selecionar —</option>
+            {equipment.map(eq => (
+              <option key={eq.id} value={eq.id}>
+                {eq.equipmentType.name} — {eq.brand.name} {eq.model}{eq.serialNumber ? ` (${eq.serialNumber})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         <div>Registo de erros dos ensaios efetuados</div>
       </div>
 
-      {/* Main grid: left tables + right panels */}
+      {/* Main grid */}
       <div className="flex gap-6 items-start">
-        {/* Left: 3 ensaio tables — inlined to avoid sub-component remount on each keystroke */}
+        {/* Left: 3 ensaio tables */}
         <div className="flex-1 min-w-0">
           {([0, 1, 2] as const).map(idx => (
             <table key={idx} className="border-collapse text-xs w-full mb-3">
@@ -80,22 +146,57 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving }: 
                 </tr>
                 <tr>
                   <td className={cell()}></td>
-                  {[0, 1, 2, 3].map(c => (
-                    <td key={c} className={`${cell('text-center')} w-16`}>combustível</td>
+                  {([0, 1, 2, 3] as const).map(c => (
+                    <td key={c} className={`${cell()} w-20`}>
+                      {/* Only render selects in first ensaio; others show the same label read-only */}
+                      {idx === 0 ? (
+                        <select
+                          className={fuelSelectCls}
+                          value={fuelTypes.find(ft => (ft.translations.pt || ft.translations.en) === data.fuelColumns[c])?.id ?? ''}
+                          onChange={e => {
+                            const ft = fuelTypes.find(f => f.id === e.target.value)
+                            setFuelColumn(c, ft ? (ft.translations.pt || ft.translations.en || '') : '')
+                          }}
+                        >
+                          <option value="">—</option>
+                          {fuelTypes.map(ft => (
+                            <option key={ft.id} value={ft.id}>
+                              {ft.translations.pt || ft.translations.en || ft.id}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="text-xs text-center block">{data.fuelColumns[c] || '—'}</span>
+                      )}
+                    </td>
                   ))}
                 </tr>
                 {ROWS.map(row => (
                   <tr key={row}>
                     <td className={`${cell('font-medium')} w-16`}>{row}</td>
-                    {([0, 1, 2, 3] as const).map(c => (
-                      <td key={c} className={cell('w-16')}>
-                        <input
-                          className={inputCls}
-                          value={data.ensaios[idx][row][c]}
-                          onChange={e => setCell(idx, row, c, e.target.value)}
-                        />
-                      </td>
-                    ))}
+                    {([0, 1, 2, 3] as const).map(c => {
+                      const val = data.ensaios[idx][row][c]
+                      const num = val === '' ? 0 : parseFloat(val) || 0
+                      return (
+                        <td key={c} className={cell('w-20')}>
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              type="button"
+                              className="text-gray-500 hover:text-gray-800 px-0.5 leading-none disabled:opacity-30"
+                              disabled={num <= -0.5}
+                              onMouseDown={e => { e.preventDefault(); stepCell(idx, row, c, -0.1) }}
+                            >−</button>
+                            <span className="text-xs w-8 text-center tabular-nums">{val === '' ? '0.0' : val}</span>
+                            <button
+                              type="button"
+                              className="text-gray-500 hover:text-gray-800 px-0.5 leading-none disabled:opacity-30"
+                              disabled={num >= 0.5}
+                              onMouseDown={e => { e.preventDefault(); stepCell(idx, row, c, 0.1) }}
+                            >+</button>
+                          </div>
+                        </td>
+                      )
+                    })}
                   </tr>
                 ))}
               </tbody>
@@ -105,40 +206,28 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving }: 
 
         {/* Right: side panels */}
         <div className="flex flex-col gap-4 w-52 shrink-0">
-          {/* Medida Padrão */}
+          {/* Medida Padrão — single selection */}
           <table className="border-collapse text-xs w-full">
             <tbody>
               <tr>
-                <td className={`${cell('text-center font-semibold')} bg-gray-50`} colSpan={4}>Medida Padrão</td>
+                <td className={`${cell('text-center font-semibold')} bg-gray-50`} colSpan={2}>Medida Padrão</td>
               </tr>
-              <tr>
-                <td className={cell('font-medium text-xs')}>Padão 1/5</td>
-                <td className={cell('w-14')}>
-                  <input className={inputCls} value={data.medidaPadrao.p1_5} onChange={e => setPadrao('p1_5', e.target.value)} />
-                </td>
-                <td className={cell('font-medium text-xs')}>Padão 1/20</td>
-                <td className={cell('w-14')}>
-                  <input className={inputCls} value={data.medidaPadrao.p1_20} onChange={e => setPadrao('p1_20', e.target.value)} />
-                </td>
-              </tr>
-              <tr>
-                <td className={cell('font-medium text-xs')}>Padão 2/5</td>
-                <td className={cell('w-14')}>
-                  <input className={inputCls} value={data.medidaPadrao.p2_5} onChange={e => setPadrao('p2_5', e.target.value)} />
-                </td>
-                <td className={cell('font-medium text-xs')}>Padão 2/20</td>
-                <td className={cell('w-14')}>
-                  <input className={inputCls} value={data.medidaPadrao.p2_20} onChange={e => setPadrao('p2_20', e.target.value)} />
-                </td>
-              </tr>
-              <tr>
-                <td className={cell()}></td>
-                <td className={cell()}></td>
-                <td className={cell('font-medium text-xs')}>Padão 3/20</td>
-                <td className={cell('w-14')}>
-                  <input className={inputCls} value={data.medidaPadrao.p3_20} onChange={e => setPadrao('p3_20', e.target.value)} />
-                </td>
-              </tr>
+              {PADRAO_OPTIONS.map(opt => (
+                <tr key={opt.key}>
+                  <td className={cell('font-medium text-xs')}>{opt.label}</td>
+                  <td className={cell('w-8 text-center')}>
+                    <input
+                      type="checkbox"
+                      checked={data.medidaPadrao === opt.key}
+                      onChange={() => setData(prev => ({
+                        ...prev,
+                        medidaPadrao: prev.medidaPadrao === opt.key ? '' : opt.key,
+                      }))}
+                      className="cursor-pointer"
+                    />
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
 
@@ -154,7 +243,7 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving }: 
                   <input
                     type="checkbox"
                     checked={data.reparacao}
-                    onChange={e => setData(prev => ({ ...prev, reparacao: e.target.checked }))}
+                    onChange={e => setData(prev => ({ ...prev, reparacao: e.target.checked, substituicao: e.target.checked ? false : prev.substituicao }))}
                     className="cursor-pointer"
                   />
                 </td>
@@ -165,7 +254,7 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving }: 
                   <input
                     type="checkbox"
                     checked={data.substituicao}
-                    onChange={e => setData(prev => ({ ...prev, substituicao: e.target.checked }))}
+                    onChange={e => setData(prev => ({ ...prev, substituicao: e.target.checked, reparacao: e.target.checked ? false : prev.reparacao }))}
                     className="cursor-pointer"
                   />
                 </td>

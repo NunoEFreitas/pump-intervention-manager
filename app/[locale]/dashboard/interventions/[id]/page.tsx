@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
 import PartsSelector from './PartsSelector'
 import WorkOrderSignatureModal from './WorkOrderSignatureModal'
-import OVMForm, { type OVMData } from './OVMForm'
+import OVMForm, { type OVMData, migrateOVMData } from './OVMForm'
 import { printWorkOrderPDF } from '@/lib/workOrderPrint'
 import { printOVMPDF } from '@/lib/ovmPrint'
 
@@ -115,6 +115,7 @@ interface Intervention {
     equipment: Array<{
       id: string
       model: string
+      serialNumber: string | null
       equipmentType: { name: string }
       brand: { name: string }
     }>
@@ -320,7 +321,7 @@ export default function InterventionDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
-      setOvms(Array.isArray(data) ? data : [])
+      setOvms(Array.isArray(data) ? data.map((o: { id: string; data: unknown; createdAt: string }) => ({ ...o, data: migrateOVMData(o.data) })) : [])
     } catch { /* non-blocking */ }
   }
 
@@ -1618,7 +1619,7 @@ export default function InterventionDetailPage() {
                               const eq = intervention.location?.equipment.find((e) => e.id === wo.locationEquipmentId)
                               return eq ? (
                                 <span className="px-2 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded">
-                                  {eq.equipmentType.name} — {eq.brand.name} {eq.model}
+                                  {eq.equipmentType.name} — {eq.brand.name} {eq.model}{eq.serialNumber ? ` · ${eq.serialNumber}` : ''}
                                 </span>
                               ) : null
                             })()}
@@ -1966,6 +1967,7 @@ export default function InterventionDetailPage() {
               onSave={saveOVM}
               onCancel={() => setShowOVMForm(false)}
               onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+              equipment={intervention?.location?.equipment ?? []}
             />
           )}
 
@@ -2009,6 +2011,7 @@ export default function InterventionDetailPage() {
                   onSave={saveOVM}
                   onCancel={() => setEditingOVMId(null)}
                   onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                  equipment={intervention?.location?.equipment ?? []}
                 />
               )}
             </div>

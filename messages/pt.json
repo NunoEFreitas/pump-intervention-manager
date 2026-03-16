@@ -326,7 +326,14 @@
     "companyLogo": "Logótipo",
     "addPhone": "+ Adicionar Telefone",
     "addFax": "+ Adicionar Fax",
-    "removeLogo": "Remover"
+    "removeLogo": "Remover",
+    "fuelTypes": "Tipos de Combustível",
+    "addFuelType": "Adicionar Tipo",
+    "editFuelType": "Editar Tipo",
+    "noFuelTypes": "Nenhum tipo de combustível definido.",
+    "fuelTypeNameEn": "Nome (Inglês)",
+    "fuelTypeNamePt": "Nome (Português)",
+    "fuelTypeNameEs": "Nome (Espanhol)"
   },
   "errors": {
     "unauthorized": "Não autorizado",

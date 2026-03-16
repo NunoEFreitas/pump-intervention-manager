@@ -22,7 +22,7 @@ function esc(s: string | null | undefined): string {
 const ROWS = ['20dm3', '5dm3', '2dm3'] as const
 const ENSAIO_LABELS = ['1º ensaio', '2º ensaio', '3º ensaio']
 
-function ensaioTable(idx: number, ensaio: OVMData['ensaios'][number]): string {
+function ensaioTable(idx: number, ensaio: OVMData['ensaios'][number], fuelColumns: [string, string, string, string]): string {
   const dataRows = ROWS.map(
     row => `<tr>
       <td class="lbl" style="width:60px">${row}</td>
@@ -37,10 +37,7 @@ function ensaioTable(idx: number, ensaio: OVMData['ensaios'][number]): string {
     </tr>
     <tr>
       <td></td>
-      <td style="text-align:center;font-weight:bold">combustível</td>
-      <td style="text-align:center;font-weight:bold">combustível</td>
-      <td style="text-align:center;font-weight:bold">combustível</td>
-      <td style="text-align:center;font-weight:bold">combustível</td>
+      ${fuelColumns.map(f => `<td style="text-align:center;font-weight:bold">${esc(f || 'combustível')}</td>`).join('')}
     </tr>
     ${dataRows}
   </table>`
@@ -51,7 +48,17 @@ export function printOVMPDF(
   intervention: PrintIntervention,
   company: PrintCompany
 ): void {
-  const mp = data.medidaPadrao
+  const fuelColumns: [string, string, string, string] = Array.isArray(data.fuelColumns) && data.fuelColumns.length === 4
+    ? data.fuelColumns as [string, string, string, string]
+    : ['', '', '', '']
+  const selectedPadrao = typeof data.medidaPadrao === 'string' ? data.medidaPadrao : ''
+  const PADRAO_OPTIONS = [
+    { key: 'p1_5',  label: 'Padrão 1/5' },
+    { key: 'p2_5',  label: 'Padrão 2/5' },
+    { key: 'p1_20', label: 'Padrão 1/20' },
+    { key: 'p2_20', label: 'Padrão 2/20' },
+    { key: 'p3_20', label: 'Padrão 3/20' },
+  ]
   const footerLines = [
     company.address ? esc(company.address) : '',
     company.phones.length ? `Telefones: ${company.phones.map(esc).join(' / ')}` : '',
@@ -107,24 +114,16 @@ export function printOVMPDF(
 
   <div class="grid">
     <div class="left">
-      ${data.ensaios.map((e, i) => ensaioTable(i, e)).join('')}
+      ${data.ensaios.map((e, i) => ensaioTable(i, e, fuelColumns)).join('')}
     </div>
     <div class="right">
       <!-- Medida Padrão -->
       <table>
-        <tr><td class="sect" colspan="4" style="text-align:center;font-weight:bold">Medida Padrão</td></tr>
-        <tr>
-          <td class="lbl" style="width:22mm">Padão 1/5</td><td style="width:10mm">${esc(mp.p1_5)}</td>
-          <td class="lbl" style="width:22mm">Padão 1/20</td><td style="width:10mm">${esc(mp.p1_20)}</td>
-        </tr>
-        <tr>
-          <td class="lbl">Padão 2/5</td><td>${esc(mp.p2_5)}</td>
-          <td class="lbl">Padão 2/20</td><td>${esc(mp.p2_20)}</td>
-        </tr>
-        <tr>
-          <td></td><td></td>
-          <td class="lbl">Padão 3/20</td><td>${esc(mp.p3_20)}</td>
-        </tr>
+        <tr><td class="sect" colspan="2" style="text-align:center;font-weight:bold">Medida Padrão</td></tr>
+        ${PADRAO_OPTIONS.map(opt => `<tr>
+          <td class="lbl">${opt.label}</td>
+          <td class="check" style="width:10mm">${selectedPadrao === opt.key ? '✓' : ''}</td>
+        </tr>`).join('')}
       </table>
 
       <!-- Tipo Intervenção -->

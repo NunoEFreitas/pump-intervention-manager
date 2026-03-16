@@ -360,3 +360,9 @@ model OVM {
 
   @@index([interventionId])
 }
+
+model FuelType {
+  id           String   @id @default(uuid())
+  translations Json     // { en: string, pt: string, es: string }
+  createdAt    DateTime @default(now())
+}
