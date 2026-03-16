@@ -29,7 +29,7 @@ function ensaioTable(idx: number, ensaio: OVMData['ensaios'][number], fuelColumn
   const dataRows = ROWS.map(
     row => `<tr>
       <td class="lbl" style="width:60px">${row}</td>
-      ${ensaio[row].map(v => `<td>${esc(v)}</td>`).join('')}
+      ${ensaio[row].map((v, c) => `<td style="text-align:center">${fuelColumns[c] ? esc(v) || '0.0' : esc(v)}</td>`).join('')}
     </tr>`
   ).join('')
 
