@@ -5,7 +5,10 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
 import PartsSelector from './PartsSelector'
+import WorkOrderSignatureModal from './WorkOrderSignatureModal'
+import OVMForm, { type OVMData } from './OVMForm'
 import { printWorkOrderPDF } from '@/lib/workOrderPrint'
+import { printOVMPDF } from '@/lib/ovmPrint'
 
 interface ClientPart {
   id: string
@@ -192,22 +195,26 @@ export default function InterventionDetailPage() {
     warranty: false,
   })
   const [printCompany, setPrintCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string } | null>(null)
+  const [signatureModalWO, setSignatureModalWO] = useState<WorkOrder | null>(null)
+  const [savedPdfs, setSavedPdfs] = useState<Record<string, { id: string; createdAt: string; clientSignature: string | null; techSignature: string | null }[]>>({})
+  const [ovms, setOvms] = useState<{ id: string; data: OVMData; createdAt: string }[]>([])
+  const [showOVMForm, setShowOVMForm] = useState(false)
+  const [editingOVMId, setEditingOVMId] = useState<string | null>(null)
+  const [ovmSaving, setOvmSaving] = useState(false)
 
   const handlePrintWorkOrder = async (wo: WorkOrder) => {
     if (!intervention) return
-    let company = printCompany
-    if (!company) {
+    if (!printCompany) {
       try {
         const token = localStorage.getItem('token')
         const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
         const data = await res.json()
-        company = { name: data.name || '', email: data.email || '', address: data.address || '', phones: Array.isArray(data.phones) ? data.phones : [], faxes: Array.isArray(data.faxes) ? data.faxes : [], logo: data.logo || '' }
-        setPrintCompany(company)
+        setPrintCompany({ name: data.name || '', email: data.email || '', address: data.address || '', phones: Array.isArray(data.phones) ? data.phones : [], faxes: Array.isArray(data.faxes) ? data.faxes : [], logo: data.logo || '' })
       } catch {
-        company = { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }
+        setPrintCompany({ name: '', email: '', address: '', phones: [], faxes: [], logo: '' })
       }
     }
-    printWorkOrderPDF(wo, intervention, company)
+    setSignatureModalWO(wo)
   }
 
   useEffect(() => {
@@ -239,6 +246,7 @@ export default function InterventionDetailPage() {
       fetchWorkOrders()
       fetchTechnicians()
       fetchVehicles()
+      fetchOVMs()
       fetchClientParts()
       fetchWarehouseItems()
     }
@@ -283,10 +291,80 @@ export default function InterventionDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
-      setWorkOrders(Array.isArray(data) ? data : [])
+      const orders: WorkOrder[] = Array.isArray(data) ? data : []
+      setWorkOrders(orders)
+      // Load saved PDFs for each work order in parallel
+      const pdfEntries = await Promise.all(
+        orders.map(async (wo) => {
+          try {
+            const r = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/pdf`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            const pdfs = await r.json()
+            return [wo.id, Array.isArray(pdfs) ? pdfs : []] as const
+          } catch {
+            return [wo.id, []] as const
+          }
+        })
+      )
+      setSavedPdfs(Object.fromEntries(pdfEntries))
     } catch (error) {
       console.error('Error fetching work orders:', error)
     }
+  }
+
+  const fetchOVMs = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/ovm`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setOvms(Array.isArray(data) ? data : [])
+    } catch { /* non-blocking */ }
+  }
+
+  const saveOVM = async (data: OVMData) => {
+    setOvmSaving(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (editingOVMId) {
+        const res = await fetch(`/api/interventions/${params.id}/ovm/${editingOVMId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ data }),
+        })
+        if (res.ok) {
+          const updated = await res.json()
+          setOvms(prev => prev.map(o => o.id === editingOVMId ? updated : o))
+          setEditingOVMId(null)
+        }
+      } else {
+        const res = await fetch(`/api/interventions/${params.id}/ovm`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ data }),
+        })
+        if (res.ok) {
+          const created = await res.json()
+          setOvms(prev => [created, ...prev])
+          setShowOVMForm(false)
+        }
+      }
+    } finally {
+      setOvmSaving(false)
+    }
+  }
+
+  const deleteOVM = async (id: string) => {
+    if (!confirm('Eliminar este OVM?')) return
+    const token = localStorage.getItem('token')
+    await fetch(`/api/interventions/${params.id}/ovm/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    setOvms(prev => prev.filter(o => o.id !== id))
+    if (editingOVMId === id) setEditingOVMId(null)
   }
 
   const fetchTechnicians = async () => {
@@ -1626,6 +1704,31 @@ export default function InterventionDetailPage() {
                               />
                             </div>
                           )}
+                          {/* Saved PDFs */}
+                          {(savedPdfs[wo.id]?.length ?? 0) > 0 && (
+                            <div className="mt-3 border-t pt-3">
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">PDFs Guardados</p>
+                              <div className="flex flex-col gap-1">
+                                {savedPdfs[wo.id].map((pdf, idx) => (
+                                  <div key={pdf.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
+                                    <span className="text-xs text-gray-600">
+                                      #{savedPdfs[wo.id].length - idx} — {new Date(pdf.createdAt).toLocaleString()}
+                                    </span>
+                                    <button
+                                      onClick={() => {
+                                        if (!intervention) return
+                                        printWorkOrderPDF(wo, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, pdf.clientSignature, pdf.techSignature)
+                                      }}
+                                      className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                    >
+                                      Re-imprimir
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
                           {/* Warehouse parts inline */}
                           {showWarehousePartsForWOId === wo.id && (
                             <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 space-y-3">
@@ -1842,6 +1945,76 @@ export default function InterventionDetailPage() {
               </div>
             )}
           </div>
+        {/* OVM section */}
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900">OVM</h2>
+            {!showOVMForm && !editingOVMId && (
+              <button
+                onClick={() => setShowOVMForm(true)}
+                className="btn btn-primary text-sm px-3 py-1.5"
+              >
+                + Novo OVM
+              </button>
+            )}
+          </div>
+
+          {/* New OVM form */}
+          {showOVMForm && (
+            <OVMForm
+              saving={ovmSaving}
+              onSave={saveOVM}
+              onCancel={() => setShowOVMForm(false)}
+              onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+            />
+          )}
+
+          {/* OVM list */}
+          {ovms.length === 0 && !showOVMForm && (
+            <p className="text-sm text-gray-400 text-center py-4">Nenhum OVM criado.</p>
+          )}
+
+          {ovms.map((ovm, idx) => (
+            <div key={ovm.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-gray-700">
+                  OVM #{ovms.length - idx} — {new Date(ovm.createdAt).toLocaleString()}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => intervention && printOVMPDF(ovm.data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                  >
+                    PDF
+                  </button>
+                  <button
+                    onClick={() => setEditingOVMId(editingOVMId === ovm.id ? null : ovm.id)}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    {editingOVMId === ovm.id ? 'Fechar' : 'Editar'}
+                  </button>
+                  <button
+                    onClick={() => deleteOVM(ovm.id)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+
+              {editingOVMId === ovm.id && (
+                <OVMForm
+                  initial={ovm.data}
+                  saving={ovmSaving}
+                  onSave={saveOVM}
+                  onCancel={() => setEditingOVMId(null)}
+                  onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
         </>
       ) : (
         <form onSubmit={handleUpdate} className="card space-y-4">
@@ -1933,6 +2106,31 @@ export default function InterventionDetailPage() {
             </button>
           </div>
         </form>
+      )}
+
+      {signatureModalWO && intervention && (
+        <WorkOrderSignatureModal
+          workOrder={signatureModalWO}
+          intervention={intervention}
+          onClose={() => setSignatureModalWO(null)}
+          onGenerate={async (clientSig, techSig) => {
+            const wo = signatureModalWO
+            printWorkOrderPDF(wo, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, clientSig, techSig)
+            setSignatureModalWO(null)
+            try {
+              const token = localStorage.getItem('token')
+              const res = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/pdf`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ clientSignature: clientSig, techSignature: techSig }),
+              })
+              if (res.ok) {
+                const saved = await res.json()
+                setSavedPdfs(prev => ({ ...prev, [wo.id]: [saved, ...(prev[wo.id] ?? [])] }))
+              }
+            } catch { /* non-blocking */ }
+          }}
+        />
       )}
 
     </div>

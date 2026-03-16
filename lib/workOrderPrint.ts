@@ -77,7 +77,9 @@ function sectionHeader(label: string, colspan = 2): string {
 export function printWorkOrderPDF(
   workOrder: PrintWorkOrder,
   intervention: PrintIntervention,
-  company: PrintCompany
+  company: PrintCompany,
+  clientSignature?: string | null,
+  techSignature?: string | null
 ): void {
   const ref = workOrder.reference || '—'
   const locationAddr = [intervention.location?.address, intervention.location?.city].filter(Boolean).join(', ')
@@ -289,10 +291,16 @@ export function printWorkOrderPDF(
     <div class="sig-row">
       <div class="sig-box">
         <div class="sig-label">Assinatura do Cliente</div>
+        ${clientSignature
+          ? `<img src="${clientSignature}" style="width:70mm;height:30mm;object-fit:contain;display:block;margin:0 auto;" />`
+          : `<div style="height:30mm;"></div>`}
         <div class="sig-line"></div>
       </div>
       <div class="sig-box">
         <div class="sig-label">Assinatura do Técnico</div>
+        ${techSignature
+          ? `<img src="${techSignature}" style="width:70mm;height:30mm;object-fit:contain;display:block;margin:0 auto;" />`
+          : `<div style="height:30mm;"></div>`}
         <div class="sig-line"></div>
       </div>
     </div>

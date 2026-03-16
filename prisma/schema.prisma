@@ -340,3 +340,23 @@ model SystemSetting {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+model WorkOrderPDF {
+  id              String   @id @default(uuid())
+  workOrderId     String
+  clientSignature String?
+  techSignature   String?
+  createdAt       DateTime @default(now())
+
+  @@index([workOrderId])
+}
+
+model OVM {
+  id             String   @id @default(uuid())
+  interventionId String
+  data           Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([interventionId])
+}
