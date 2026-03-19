@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
-type Tab = 'users' | 'types' | 'brands' | 'vehicles' | 'settings' | 'company' | 'fuelTypes'
+type Tab = 'users' | 'types' | 'brands' | 'vehicles' | 'settings' | 'company' | 'fuelTypes' | 'ovmRegulators'
 
 interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
 
@@ -21,6 +21,7 @@ interface User {
 interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
 interface FuelType { id: string; translations: { en: string; pt: string; es: string }; createdAt: string }
+interface OvmRegulator { id: string; name: string; createdAt: string }
 
 export default function AdminPage() {
   const router = useRouter()
@@ -66,6 +67,12 @@ export default function AdminPage() {
   const [editingFuelType, setEditingFuelType] = useState<FuelType | null>(null)
   const [fuelTypeLoading, setFuelTypeLoading] = useState(false)
 
+  // OVM regulators state
+  const [ovmRegulators, setOvmRegulators] = useState<OvmRegulator[]>([])
+  const [ovmRegulatorName, setOvmRegulatorName] = useState('')
+  const [editingOvmRegulator, setEditingOvmRegulator] = useState<OvmRegulator | null>(null)
+  const [ovmRegulatorLoading, setOvmRegulatorLoading] = useState(false)
+
   // Company state
   const [company, setCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string }>({ name: '', email: '', address: '', phones: [], faxes: [], logo: '' })
   const [companyLoading, setCompanyLoading] = useState(false)
@@ -93,6 +100,7 @@ export default function AdminPage() {
     fetchSettings()
     fetchCompany()
     fetchFuelTypes()
+    fetchOvmRegulators()
   }, [router])
 
   // Fetch lazy: only reload when switching to that tab if not yet loaded
@@ -210,6 +218,59 @@ export default function AdminPage() {
     const token = localStorage.getItem('token')
     await fetch(`/api/admin/fuel-types/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
     setFuelTypes(prev => prev.filter(f => f.id !== id))
+  }
+
+  const fetchOvmRegulators = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/admin/ovm-regulators', { headers: { Authorization: `Bearer ${token}` } })
+      setOvmRegulators(await res.json())
+    } catch (error) {
+      console.error('Error fetching OVM regulators:', error)
+    }
+  }
+
+  const saveOvmRegulator = async () => {
+    const name = editingOvmRegulator ? editingOvmRegulator.name : ovmRegulatorName
+    if (!name.trim()) return
+    setOvmRegulatorLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (editingOvmRegulator) {
+        const res = await fetch(`/api/admin/ovm-regulators/${editingOvmRegulator.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name }),
+        })
+        if (res.ok) {
+          const updated = await res.json()
+          setOvmRegulators(prev => prev.map(r => r.id === editingOvmRegulator.id ? { ...r, name: updated.name } : r))
+          setEditingOvmRegulator(null)
+        }
+      } else {
+        const res = await fetch('/api/admin/ovm-regulators', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name }),
+        })
+        if (res.ok) {
+          const created = await res.json()
+          setOvmRegulators(prev => [...prev, created])
+          setOvmRegulatorName('')
+        }
+      }
+    } catch (error) {
+      console.error('Error saving OVM regulator:', error)
+    } finally {
+      setOvmRegulatorLoading(false)
+    }
+  }
+
+  const deleteOvmRegulator = async (id: string) => {
+    if (!confirm(tAdmin('deleteConfirm'))) return
+    const token = localStorage.getItem('token')
+    await fetch(`/api/admin/ovm-regulators/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } })
+    setOvmRegulators(prev => prev.filter(r => r.id !== id))
   }
 
   const fetchSettings = async () => {
@@ -483,6 +544,12 @@ export default function AdminPage() {
             {tAdmin('fuelTypes')}
             <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
               {fuelTypes.length}
+            </span>
+          </button>
+          <button className={tabClass('ovmRegulators')} onClick={() => setActiveTab('ovmRegulators')}>
+            {tAdmin('ovmRegulators')}
+            <span className="ml-2 bg-gray-100 text-gray-600 text-xs px-1.5 py-0.5 rounded-full">
+              {ovmRegulators.length}
             </span>
           </button>
         </nav>
@@ -1050,6 +1117,66 @@ export default function AdminPage() {
                     <button
                       className="text-xs text-red-500 hover:underline"
                       onClick={() => deleteFuelType(ft.id)}
+                    >
+                      {tCommon('delete')}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── OVM Regulators tab ───────────────────────────────────────────── */}
+      {activeTab === 'ovmRegulators' && (
+        <div className="card max-w-lg">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">{tAdmin('ovmRegulators')}</h2>
+
+          {/* Add / Edit form */}
+          <div className="flex gap-2 mb-6">
+            <input
+              type="text"
+              className="input text-gray-800 flex-1"
+              placeholder={tAdmin('ovmRegulatorName')}
+              value={editingOvmRegulator ? editingOvmRegulator.name : ovmRegulatorName}
+              onChange={(e) => editingOvmRegulator
+                ? setEditingOvmRegulator({ ...editingOvmRegulator, name: e.target.value })
+                : setOvmRegulatorName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') saveOvmRegulator(); if (e.key === 'Escape') { setEditingOvmRegulator(null); setOvmRegulatorName('') } }}
+            />
+            <button
+              className="btn btn-primary text-sm"
+              disabled={ovmRegulatorLoading || !(editingOvmRegulator ? editingOvmRegulator.name.trim() : ovmRegulatorName.trim())}
+              onClick={saveOvmRegulator}
+            >
+              {ovmRegulatorLoading ? tCommon('saving') : editingOvmRegulator ? tCommon('save') : tAdmin('addOvmRegulator')}
+            </button>
+            {editingOvmRegulator && (
+              <button className="btn btn-secondary text-sm" onClick={() => setEditingOvmRegulator(null)}>
+                {tCommon('cancel')}
+              </button>
+            )}
+          </div>
+
+          {/* List */}
+          {ovmRegulators.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">{tAdmin('noOvmRegulators')}</p>
+          ) : (
+            <div className="space-y-2">
+              {ovmRegulators.map(r => (
+                <div key={r.id} className="flex items-center justify-between border border-gray-200 rounded-lg px-4 py-2.5">
+                  <span className="text-sm text-gray-900">{r.name}</span>
+                  <div className="flex gap-3">
+                    <button
+                      className="text-xs text-blue-600 hover:underline"
+                      onClick={() => { setEditingOvmRegulator(r); setOvmRegulatorName('') }}
+                    >
+                      {tCommon('edit')}
+                    </button>
+                    <button
+                      className="text-xs text-red-500 hover:underline"
+                      onClick={() => deleteOvmRegulator(r.id)}
                     >
                       {tCommon('delete')}
                     </button>

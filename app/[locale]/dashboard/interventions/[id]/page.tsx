@@ -112,6 +112,7 @@ interface Intervention {
     address: string | null
     city: string | null
     postalCode: string | null
+    ovmRegulatorId: string | null
     equipment: Array<{
       id: string
       model: string
@@ -1968,6 +1969,7 @@ export default function InterventionDetailPage() {
               onCancel={() => setShowOVMForm(false)}
               onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
               equipment={intervention?.location?.equipment ?? []}
+              locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
             />
           )}
 
@@ -2012,6 +2014,7 @@ export default function InterventionDetailPage() {
                   onCancel={() => setEditingOVMId(null)}
                   onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
                   equipment={intervention?.location?.equipment ?? []}
+                  locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
                 />
               )}
             </div>

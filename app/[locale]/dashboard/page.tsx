@@ -75,6 +75,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [view, setView] = useState<'board' | 'calendar' | 'today'>('board')
+  const [filterTechId, setFilterTechId] = useState('')
 
   const fetchData = useCallback(async () => {
     try {
@@ -115,6 +116,15 @@ export default function DashboardPage() {
   const maxWeek = Math.max(...data.weekDayCounts, 1)
   const maxTech  = Math.max(...data.techLoad.map(t => t.count), 1)
 
+  // Unique techs from all calendar interventions (for the filter select)
+  const calendarTechs = Array.from(
+    new Map(
+      data.calendarInterventions
+        .filter(iv => iv.assignedTo)
+        .map(iv => [iv.assignedTo!.id, iv.assignedTo!])
+    ).values()
+  ).sort((a, b) => a.name.localeCompare(b.name))
+
   // Group upcoming by date label
   const upcomingGroups: { label: string; date: string; items: Intervention[] }[] = []
   for (const iv of data.upcoming) {
@@ -136,7 +146,9 @@ export default function DashboardPage() {
       if (!iv.scheduledDate) return false
       const ivd = new Date(iv.scheduledDate)
       ivd.setHours(0, 0, 0, 0)
-      return ivd.toDateString() === key
+      if (ivd.toDateString() !== key) return false
+      if (filterTechId) return iv.assignedTo?.id === filterTechId
+      return true
     })
     return {
       date: d,
@@ -239,6 +251,18 @@ export default function DashboardPage() {
               </svg>
             </button>
           </div>
+          {(view === 'calendar' || view === 'today') && calendarTechs.length > 0 && (
+            <select
+              value={filterTechId}
+              onChange={e => setFilterTechId(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+            >
+              <option value="">Todos os técnicos</option>
+              {calendarTechs.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={fetchData}
             className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors"

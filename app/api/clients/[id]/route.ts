@@ -63,14 +63,15 @@ export async function GET(
     `
 
     // Fetch new CompanyLocation fields via raw SQL
-    const locExtras = await prisma.$queryRaw<Array<{ id: string; country: string | null; district: string | null }>>`
-      SELECT id, "country", "district" FROM "CompanyLocation" WHERE "clientId" = ${id}
+    const locExtras = await prisma.$queryRaw<Array<{ id: string; country: string | null; district: string | null; ovmRegulatorId: string | null }>>`
+      SELECT id, "country", "district", "ovmRegulatorId" FROM "CompanyLocation" WHERE "clientId" = ${id}
     `
     const locExtrasMap = new Map(locExtras.map((l) => [l.id, l]))
     const locationsWithExtras = client.locations.map((loc) => ({
       ...loc,
       country: locExtrasMap.get(loc.id)?.country ?? null,
       district: locExtrasMap.get(loc.id)?.district ?? null,
+      ovmRegulatorId: locExtrasMap.get(loc.id)?.ovmRegulatorId ?? null,
     }))
 
     return NextResponse.json({ ...client, ...(extra[0] ?? {}), locations: locationsWithExtras })

@@ -62,12 +62,13 @@ export async function POST(
 
     await prisma.$executeRaw`
       UPDATE "CompanyLocation"
-      SET "country"  = ${data.country || null},
-          "district" = ${data.district || null}
+      SET "country"         = ${data.country || null},
+          "district"        = ${data.district || null},
+          "ovmRegulatorId"  = ${data.ovmRegulatorId || null}
       WHERE id = ${location.id}
     `
 
-    return NextResponse.json({ ...location, country: data.country || null, district: data.district || null }, { status: 201 })
+    return NextResponse.json({ ...location, country: data.country || null, district: data.district || null, ovmRegulatorId: data.ovmRegulatorId || null }, { status: 201 })
   } catch (error) {
     console.error('Error creating location:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

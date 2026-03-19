@@ -36,12 +36,13 @@ export async function PUT(
 
     await prisma.$executeRaw`
       UPDATE "CompanyLocation"
-      SET "country"  = ${data.country ?? null},
-          "district" = ${data.district ?? null}
+      SET "country"         = ${data.country ?? null},
+          "district"        = ${data.district ?? null},
+          "ovmRegulatorId"  = ${data.ovmRegulatorId ?? null}
       WHERE id = ${locationId}
     `
 
-    return NextResponse.json({ ...location, country: data.country ?? null, district: data.district ?? null })
+    return NextResponse.json({ ...location, country: data.country ?? null, district: data.district ?? null, ovmRegulatorId: data.ovmRegulatorId ?? null })
   } catch (error) {
     console.error('Error updating location:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -82,10 +82,10 @@ export async function GET(
     `
 
     // Fetch new CompanyLocation fields via raw SQL if there's a location
-    let locationExtras: { country: string | null; district: string | null } | null = null
+    let locationExtras: { country: string | null; district: string | null; ovmRegulatorId: string | null } | null = null
     if (intervention.locationId) {
-      const locRows = await prisma.$queryRaw<[{ country: string | null; district: string | null }]>`
-        SELECT "country", "district" FROM "CompanyLocation" WHERE id = ${intervention.locationId}
+      const locRows = await prisma.$queryRaw<[{ country: string | null; district: string | null; ovmRegulatorId: string | null }]>`
+        SELECT "country", "district", "ovmRegulatorId" FROM "CompanyLocation" WHERE id = ${intervention.locationId}
       `
       locationExtras = locRows[0] ?? null
     }

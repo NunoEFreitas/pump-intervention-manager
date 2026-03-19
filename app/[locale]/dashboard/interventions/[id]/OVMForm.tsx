@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 
 export interface OVMData {
   equipmentId: string
+  regulatorId: string
   fuelColumns: [string, string, string, string]
   ensaios: [
     { '20dm3': [string, string, string, string]; '5dm3': [string, string, string, string]; '2dm3': [string, string, string, string] },
@@ -22,6 +23,7 @@ export function emptyOVMData(): OVMData {
   const emptyEnsaio = () => ({ '20dm3': emptyRow(), '5dm3': emptyRow(), '2dm3': emptyRow() })
   return {
     equipmentId: '',
+    regulatorId: '',
     fuelColumns: ['', '', '', ''],
     ensaios: [emptyEnsaio(), emptyEnsaio(), emptyEnsaio()],
     medidaPadraoDiv5: '',
@@ -39,6 +41,7 @@ export function migrateOVMData(raw: unknown): OVMData {
   const r = raw as Record<string, unknown>
   return {
     equipmentId: typeof r.equipmentId === 'string' ? r.equipmentId : '',
+    regulatorId: typeof r.regulatorId === 'string' ? r.regulatorId : '',
     fuelColumns: Array.isArray(r.fuelColumns) && r.fuelColumns.length === 4
       ? r.fuelColumns as [string, string, string, string]
       : ['', '', '', ''],
@@ -56,6 +59,7 @@ export function migrateOVMData(raw: unknown): OVMData {
 }
 
 interface FuelType { id: string; translations: { en: string; pt: string; es: string } }
+interface OvmRegulator { id: string; name: string }
 
 interface OVMFormProps {
   initial?: OVMData
@@ -64,6 +68,7 @@ interface OVMFormProps {
   onPrint?: (data: OVMData) => void
   saving?: boolean
   equipment?: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
+  locationOvmRegulatorId?: string | null
 }
 
 const ROWS = ['20dm3', '5dm3', '2dm3'] as const
@@ -82,15 +87,27 @@ function cell(className?: string) {
   return `border border-gray-400 px-1 py-0.5 ${className ?? ''}`
 }
 
-export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, equipment = [] }: OVMFormProps) {
-  const [data, setData] = useState<OVMData>(initial ?? emptyOVMData())
+export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, equipment = [], locationOvmRegulatorId }: OVMFormProps) {
+  const [data, setData] = useState<OVMData>(() => {
+    const base = initial ?? emptyOVMData()
+    // Pre-fill regulatorId from location if the form doesn't already have one
+    if (!base.regulatorId && locationOvmRegulatorId) {
+      return { ...base, regulatorId: locationOvmRegulatorId }
+    }
+    return base
+  })
   const [fuelTypes, setFuelTypes] = useState<FuelType[]>([])
+  const [ovmRegulators, setOvmRegulators] = useState<OvmRegulator[]>([])
 
   useEffect(() => {
     const token = localStorage.getItem('token')
     fetch('/api/admin/fuel-types', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : [])
       .then(setFuelTypes)
+      .catch(() => {})
+    fetch('/api/admin/ovm-regulators', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then(setOvmRegulators)
       .catch(() => {})
   }, [])
 
@@ -136,6 +153,27 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, eq
             ))}
           </select>
         </div>
+        {ovmRegulators.length > 0 && (
+          <div className="flex items-center justify-center gap-2">
+            <span>regulador:</span>
+            {locationOvmRegulatorId && ovmRegulators.find(r => r.id === locationOvmRegulatorId) ? (
+              <span className="font-medium text-gray-800">
+                {ovmRegulators.find(r => r.id === locationOvmRegulatorId)!.name}
+              </span>
+            ) : (
+              <select
+                className="border border-gray-300 rounded px-2 py-0.5 text-xs text-gray-800 bg-white"
+                value={data.regulatorId}
+                onChange={e => setData(prev => ({ ...prev, regulatorId: e.target.value }))}
+              >
+                <option value="">— selecionar —</option>
+                {ovmRegulators.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
         <div>Registo de erros dos ensaios efetuados</div>
       </div>
 

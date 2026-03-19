@@ -68,11 +68,12 @@ model CompanyLocation {
   city          String?
   postalCode    String?
   phone         String?
-  contactPerson String?
-  notes         String?             @db.Text
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  interventions Intervention[]
+  contactPerson   String?
+  notes           String?             @db.Text
+  ovmRegulatorId  String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  interventions   Intervention[]
   equipment     LocationEquipment[]
 }
 
@@ -365,4 +366,10 @@ model FuelType {
   id           String   @id @default(uuid())
   translations Json     // { en: string, pt: string, es: string }
   createdAt    DateTime @default(now())
+}
+
+model OvmRegulator {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
 }

@@ -333,7 +333,12 @@
     "noFuelTypes": "Nenhum tipo de combustível definido.",
     "fuelTypeNameEn": "Nome (Inglês)",
     "fuelTypeNamePt": "Nome (Português)",
-    "fuelTypeNameEs": "Nome (Espanhol)"
+    "fuelTypeNameEs": "Nome (Espanhol)",
+    "ovmRegulators": "Reguladores OVM",
+    "addOvmRegulator": "Adicionar Regulador",
+    "editOvmRegulator": "Editar Regulador",
+    "noOvmRegulators": "Nenhum regulador definido.",
+    "ovmRegulatorName": "Nome"
   },
   "errors": {
     "unauthorized": "Não autorizado",

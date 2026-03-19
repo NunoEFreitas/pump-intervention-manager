@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import LocationSelector from '@/components/LocationSelector'
+import { validateVAT } from '@/lib/vat-validation'
 
 interface LocationDraft {
   id: string
@@ -16,7 +17,10 @@ interface LocationDraft {
   phone: string
   contactPerson: string
   notes: string
+  ovmRegulatorId: string
 }
+
+interface OvmRegulator { id: string; name: string }
 
 const emptyLocation = (): LocationDraft => ({
   id: crypto.randomUUID(),
@@ -29,6 +33,7 @@ const emptyLocation = (): LocationDraft => ({
   phone: '',
   contactPerson: '',
   notes: '',
+  ovmRegulatorId: '',
 })
 
 export default function NewClientPage() {
@@ -53,21 +58,27 @@ export default function NewClientPage() {
 
   const [locations, setLocations] = useState<LocationDraft[]>([emptyLocation()])
   const [expandedLocationId, setExpandedLocationId] = useState<string | null>(locations[0].id)
+  const [ovmRegulators, setOvmRegulators] = useState<OvmRegulator[]>([])
 
   const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
   const tClients = useTranslations('clients')
   const tNav = useTranslations('nav')
 
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    fetch('/api/admin/ovm-regulators', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(setOvmRegulators).catch(() => {})
+  }, [])
+
+  const vatError = validateVAT(formData.vatNumber, formData.country)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    if (vatError) return
 
     const validLocations = locations.filter(l => l.name.trim())
-    if (validLocations.length === 0) {
-      setError(tClients('noLocations'))
-      return
-    }
 
     setLoading(true)
 
@@ -97,12 +108,15 @@ export default function NewClientPage() {
           },
           body: JSON.stringify({
             name: loc.name.trim(),
+            country: loc.country || null,
+            district: loc.district || null,
             address: loc.address || null,
             city: loc.city || null,
             postalCode: loc.postalCode || null,
             phone: loc.phone || null,
             contactPerson: loc.contactPerson || null,
             notes: loc.notes || null,
+            ovmRegulatorId: loc.ovmRegulatorId || null,
           }),
         })
       }
@@ -173,10 +187,13 @@ export default function NewClientPage() {
             <input
               type="text"
               name="vatNumber"
-              className="input text-gray-800"
+              className={`input text-gray-800 ${vatError && formData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
               value={formData.vatNumber}
               onChange={handleChange}
             />
+            {vatError && formData.vatNumber && (
+              <p className="text-xs text-red-600 mt-1">{vatError}</p>
+            )}
           </div>
 
           <LocationSelector
@@ -272,7 +289,7 @@ export default function NewClientPage() {
         <div className="card space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-gray-900">
-              {tClients('locations')} <span className="text-red-500">*</span>
+              {tClients('locations')}
             </h2>
             <button
               type="button"
@@ -401,6 +418,24 @@ export default function NewClientPage() {
                       onChange={e => handleLocationChange(loc.id, 'notes', e.target.value)}
                     />
                   </div>
+
+                  {ovmRegulators.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        OVM Regulator
+                      </label>
+                      <select
+                        className="input text-gray-800"
+                        value={loc.ovmRegulatorId}
+                        onChange={e => handleLocationChange(loc.id, 'ovmRegulatorId', e.target.value)}
+                      >
+                        <option value="">— none —</option>
+                        {ovmRegulators.map(r => (
+                          <option key={r.id} value={r.id}>{r.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -417,7 +452,7 @@ export default function NewClientPage() {
           <button
             type="submit"
             className="btn btn-primary flex-1"
-            disabled={loading}
+            disabled={loading || !!vatError}
           >
             {loading ? tCommon('creating') : tClients('createButton')}
           </button>

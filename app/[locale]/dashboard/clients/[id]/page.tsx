@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import LocationSelector from '@/components/LocationSelector'
+import { validateVAT } from '@/lib/vat-validation'
 
 interface LocationEquipment {
   id: string
@@ -16,6 +17,8 @@ interface LocationEquipment {
   brand: { name: string }
 }
 
+interface OvmRegulator { id: string; name: string }
+
 interface CompanyLocation {
   id: string
   name: string
@@ -27,6 +30,7 @@ interface CompanyLocation {
   phone: string | null
   contactPerson: string | null
   notes: string | null
+  ovmRegulatorId: string | null
   equipment: LocationEquipment[]
 }
 
@@ -62,7 +66,7 @@ interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
 
 const emptyLocationForm = {
-  name: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', contactPerson: '', notes: '',
+  name: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', contactPerson: '', notes: '', ovmRegulatorId: '',
 }
 
 const emptyEquipmentForm = {
@@ -87,6 +91,8 @@ export default function ClientDetailPage() {
   const [locationForm, setLocationForm] = useState(emptyLocationForm)
   const [locationLoading, setLocationLoading] = useState(false)
 
+  const [ovmRegulators, setOvmRegulators] = useState<OvmRegulator[]>([])
+
   // Equipment state
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
@@ -106,6 +112,9 @@ export default function ClientDetailPage() {
     if (params.id) {
       fetchClient()
       fetchEquipmentMeta()
+      const token = localStorage.getItem('token')
+      fetch('/api/admin/ovm-regulators', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.json()).then(setOvmRegulators).catch(() => {})
     }
   }, [params.id])
 
@@ -215,6 +224,7 @@ export default function ClientDetailPage() {
       phone: loc.phone || '',
       contactPerson: loc.contactPerson || '',
       notes: loc.notes || '',
+      ovmRegulatorId: loc.ovmRegulatorId || '',
     })
     setShowLocationForm(true)
   }
@@ -320,6 +330,8 @@ export default function ClientDetailPage() {
     }
   }
 
+  const editVatError = validateVAT(clientEditData.vatNumber, clientEditData.country)
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -381,7 +393,15 @@ export default function ClientDetailPage() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('vatNumber')}</label>
-                <input type="text" className="input text-gray-800" value={clientEditData.vatNumber} onChange={(e) => setClientEditData({ ...clientEditData, vatNumber: e.target.value })} />
+                <input
+                  type="text"
+                  className={`input text-gray-800 ${editVatError && clientEditData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  value={clientEditData.vatNumber}
+                  onChange={(e) => setClientEditData({ ...clientEditData, vatNumber: e.target.value })}
+                />
+                {editVatError && clientEditData.vatNumber && (
+                  <p className="text-xs text-red-600 mt-1">{editVatError}</p>
+                )}
               </div>
             </div>
             <LocationSelector
@@ -420,7 +440,7 @@ export default function ClientDetailPage() {
               <textarea rows={3} className="input text-gray-800" value={clientEditData.notes} onChange={(e) => setClientEditData({ ...clientEditData, notes: e.target.value })} />
             </div>
             <div className="flex gap-2">
-              <button onClick={saveClient} disabled={clientEditLoading || !clientEditData.name.trim()} className="btn btn-primary text-sm">
+              <button onClick={saveClient} disabled={clientEditLoading || !clientEditData.name.trim() || !!editVatError} className="btn btn-primary text-sm">
                 {clientEditLoading ? tCommon('saving') : tCommon('save')}
               </button>
               <button onClick={() => setIsEditingClient(false)} className="btn btn-secondary text-sm">
@@ -540,6 +560,21 @@ export default function ClientDetailPage() {
                 <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('notes')}</label>
                 <textarea name="notes" rows={2} className="input text-gray-800" value={locationForm.notes} onChange={handleLocationFormChange} />
               </div>
+              {ovmRegulators.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">OVM Regulator</label>
+                  <select
+                    className="input text-gray-800"
+                    value={locationForm.ovmRegulatorId}
+                    onChange={e => setLocationForm({ ...locationForm, ovmRegulatorId: e.target.value })}
+                  >
+                    <option value="">— none —</option>
+                    {ovmRegulators.map(r => (
+                      <option key={r.id} value={r.id}>{r.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex gap-2">
                 <button
                   type="button"
