@@ -17,6 +17,8 @@ model User {
   name                    String
   role                    UserRole       @default(TECHNICIAN)
   blocked                 Boolean        @default(false)
+  clientId                String?
+  clientRef               Client?        @relation("ClientUsers", fields: [clientId], references: [id])
   createdAt               DateTime       @default(now())
   updatedAt               DateTime       @updatedAt
   assignedInterventions   Intervention[] @relation("AssignedInterventions")
@@ -35,6 +37,7 @@ enum UserRole {
   ADMIN
   SUPERVISOR
   TECHNICIAN
+  CLIENT
 }
 
 model Client {
@@ -57,6 +60,7 @@ model Client {
   updatedAt     DateTime          @updatedAt
   interventions Intervention[]
   locations     CompanyLocation[]
+  users         User[]            @relation("ClientUsers")
 }
 
 model CompanyLocation {

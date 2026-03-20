@@ -33,6 +33,10 @@ export default function Navigation() {
     router.push(`/${locale}`)
   }
 
+  if (user?.role === 'CLIENT') {
+    return null
+  }
+
   const navItems = [
     { name: t('dashboard'), path: `/${locale}/dashboard` },
     { name: t('interventions'), path: `/${locale}/dashboard/interventions` },

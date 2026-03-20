@@ -13,8 +13,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const rows = await prisma.$queryRaw<[{ id: string; email: string; name: string; role: string; password: string; blocked: boolean }]>`
-      SELECT id, email, name, role, password, blocked FROM "User" WHERE email = ${email}
+    const rows = await prisma.$queryRaw<[{ id: string; email: string; name: string; role: string; password: string; blocked: boolean; clientId: string | null }]>`
+      SELECT id, email, name, role, password, blocked, "clientId" FROM "User" WHERE email = ${email}
     `
     const user = rows[0]
 
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
+        clientId: user.clientId ?? null,
       },
     })
   } catch (error) {

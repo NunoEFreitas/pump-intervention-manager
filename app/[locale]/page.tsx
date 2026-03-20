@@ -60,7 +60,11 @@ export default function LoginPage() {
 
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
-      router.push(`/${locale}/dashboard`)
+      if (data.user.role === 'CLIENT') {
+        router.push(`/${locale}/dashboard/portal`)
+      } else {
+        router.push(`/${locale}/dashboard`)
+      }
     } catch (err) {
       setError(tErrors('networkError'))
       setLoading(false)

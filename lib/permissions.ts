@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN'
+export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN' | 'CLIENT'
 export type InterventionStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'PENDING_PARTS' | 'QUALITY_ASSESSMENT' | 'COMPLETED' | 'CANCELED'
 
 export const canEditIntervention = (userRole: UserRole, status: InterventionStatus): boolean => {

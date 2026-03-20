@@ -87,6 +87,14 @@ export default function ClientDetailPage() {
   })
   const [clientEditLoading, setClientEditLoading] = useState(false)
 
+  // Create user modal state
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false)
+  const [createUserData, setCreateUserData] = useState({ email: '', password: '', name: '' })
+  const [createUserLoading, setCreateUserLoading] = useState(false)
+  const [createUserError, setCreateUserError] = useState('')
+  const [createUserSuccess, setCreateUserSuccess] = useState(false)
+  const [showCreateUserPassword, setShowCreateUserPassword] = useState(false)
+
   // Location form state
   const [showLocationForm, setShowLocationForm] = useState(false)
   const [editingLocation, setEditingLocation] = useState<CompanyLocation | null>(null)
@@ -365,14 +373,14 @@ export default function ClientDetailPage() {
 
       {/* Client header */}
       <div className="card mb-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-3 mb-4">
-          <div>
+        <div className="flex justify-between items-start gap-3 mb-4">
+          <div className="min-w-0">
             {client.reference && (
               <p className="text-sm font-mono text-gray-500 mb-0.5">{client.reference}</p>
             )}
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{client.name}</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{client.name}</h1>
           </div>
-          <div className="flex gap-2 w-full sm:w-auto">
+          <div className="flex gap-2 flex-shrink-0">
             <button
               onClick={openEditClient}
               className="btn btn-secondary"
@@ -380,8 +388,19 @@ export default function ClientDetailPage() {
               {tCommon('edit')}
             </button>
             <button
+              onClick={() => {
+                setCreateUserData({ name: client.name, email: client.email || '', password: '' })
+                setCreateUserError('')
+                setCreateUserSuccess(false)
+                setShowCreateUserModal(true)
+              }}
+              className="btn btn-secondary"
+            >
+              Criar Acesso
+            </button>
+            <button
               onClick={() => router.push(`/${locale}/dashboard/interventions/new?clientId=${client.id}`)}
-              className="btn btn-primary flex-1 sm:flex-none"
+              className="btn btn-primary"
             >
               {tInterventions('newIntervention')}
             </button>
@@ -862,6 +881,111 @@ export default function ClientDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Create User Modal */}
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-1">Criar Acesso de Cliente</h2>
+            <p className="text-sm text-gray-500 mb-4">Criar uma conta de acesso para {client.name}</p>
+
+            {createUserSuccess ? (
+              <div className="space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 text-sm">
+                  Acesso criado com sucesso.
+                </div>
+                <button
+                  onClick={() => { setShowCreateUserModal(false); setCreateUserSuccess(false) }}
+                  className="btn btn-secondary w-full"
+                >
+                  Fechar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Nome</label>
+                  <input
+                    type="text"
+                    className="input text-gray-800"
+                    value={createUserData.name}
+                    onChange={(e) => setCreateUserData({ ...createUserData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    className="input text-gray-800"
+                    value={createUserData.email}
+                    onChange={(e) => setCreateUserData({ ...createUserData, email: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Palavra-passe</label>
+                  <div className="relative">
+                    <input
+                      type={showCreateUserPassword ? 'text' : 'password'}
+                      className="input text-gray-800 pr-16"
+                      value={createUserData.password}
+                      onChange={(e) => setCreateUserData({ ...createUserData, password: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateUserPassword(!showCreateUserPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      {showCreateUserPassword ? 'Ocultar' : 'Mostrar'}
+                    </button>
+                  </div>
+                </div>
+                {createUserError && (
+                  <div className="bg-red-50 border border-red-200 rounded px-3 py-2 text-red-700 text-sm">
+                    {createUserError}
+                  </div>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={async () => {
+                      if (!createUserData.email || !createUserData.password || !createUserData.name) return
+                      setCreateUserLoading(true)
+                      setCreateUserError('')
+                      try {
+                        const token = localStorage.getItem('token')
+                        const res = await fetch(`/api/clients/${params.id}/create-user`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                          body: JSON.stringify(createUserData),
+                        })
+                        const data = await res.json()
+                        if (!res.ok) {
+                          setCreateUserError(data.error || 'Erro ao criar acesso')
+                        } else {
+                          setCreateUserSuccess(true)
+                        }
+                      } catch {
+                        setCreateUserError('Erro de rede')
+                      } finally {
+                        setCreateUserLoading(false)
+                      }
+                    }}
+                    disabled={createUserLoading || !createUserData.email || !createUserData.password || !createUserData.name}
+                    className="btn btn-primary flex-1"
+                  >
+                    {createUserLoading ? 'A criar...' : 'Criar'}
+                  </button>
+                  <button
+                    onClick={() => { setShowCreateUserModal(false); setCreateUserError('') }}
+                    className="btn btn-secondary"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
