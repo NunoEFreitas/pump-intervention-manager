@@ -204,6 +204,15 @@ export default function InterventionDetailPage() {
   const [editingOVMId, setEditingOVMId] = useState<string | null>(null)
   const [ovmSaving, setOvmSaving] = useState(false)
 
+  // Part Requests
+  type PartRequest = { id: string; warehouseItemId: string; itemName: string; partNumber: string; quantity: number; notes: string | null; status: string; requesterName: string; createdAt: string }
+  const [partRequests, setPartRequests] = useState<PartRequest[]>([])
+  const [showPartRequestForm, setShowPartRequestForm] = useState(false)
+  const [partRequestForm, setPartRequestForm] = useState({ warehouseItemId: '', quantity: 1, notes: '' })
+  const [prItemSearch, setPrItemSearch] = useState('')
+  const [prItemOpen, setPrItemOpen] = useState(false)
+  const [partRequestSaving, setPartRequestSaving] = useState(false)
+
   const handlePrintWorkOrder = async (wo: WorkOrder) => {
     if (!intervention) return
     if (!printCompany) {
@@ -251,6 +260,7 @@ export default function InterventionDetailPage() {
       fetchOVMs()
       fetchClientParts()
       fetchWarehouseItems()
+      fetchPartRequests()
     }
   }, [params.id])
 
@@ -323,6 +333,53 @@ export default function InterventionDetailPage() {
       })
       const data = await res.json()
       setOvms(Array.isArray(data) ? data.map((o: { id: string; data: unknown; createdAt: string }) => ({ ...o, data: migrateOVMData(o.data) })) : [])
+    } catch { /* non-blocking */ }
+  }
+
+  const fetchPartRequests = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/part-requests`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setPartRequests(Array.isArray(data) ? data : [])
+    } catch { /* non-blocking */ }
+  }
+
+  const submitPartRequest = async () => {
+    if (!partRequestForm.warehouseItemId) return
+    setPartRequestSaving(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/part-requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          warehouseItemId: partRequestForm.warehouseItemId,
+          quantity: partRequestForm.quantity,
+          notes: partRequestForm.notes || null,
+        }),
+      })
+      if (res.ok) {
+        const created = await res.json()
+        setPartRequests(prev => [created, ...prev])
+        setPartRequestForm({ warehouseItemId: '', quantity: 1, notes: '' })
+        setPrItemSearch('')
+        setShowPartRequestForm(false)
+      }
+    } catch { /* non-blocking */ }
+    finally { setPartRequestSaving(false) }
+  }
+
+  const deletePartRequest = async (id: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/warehouse/part-requests/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setPartRequests(prev => prev.filter(r => r.id !== id))
     } catch { /* non-blocking */ }
   }
 
@@ -1947,6 +2004,137 @@ export default function InterventionDetailPage() {
               </div>
             )}
           </div>
+        {/* Part Requests section */}
+        <div className="card space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900">Pedidos de Peças</h2>
+            {!showPartRequestForm && (
+              <button onClick={() => setShowPartRequestForm(true)} className="btn btn-primary text-sm px-3 py-1.5">
+                + Novo Pedido
+              </button>
+            )}
+          </div>
+
+          {showPartRequestForm && (() => {
+            const selectedItem = warehouseItems.find(i => i.id === partRequestForm.warehouseItemId)
+            const filteredWHItems = warehouseItems.filter(i =>
+              prItemSearch === '' ||
+              i.itemName.toLowerCase().includes(prItemSearch.toLowerCase()) ||
+              i.partNumber.toLowerCase().includes(prItemSearch.toLowerCase())
+            )
+            return (
+              <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
+                {/* Item search */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Peça *</label>
+                  {selectedItem ? (
+                    <div className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+                      <div>
+                        <span className="font-medium text-gray-900 text-sm">{selectedItem.itemName}</span>
+                        {selectedItem.partNumber && <span className="text-xs font-mono text-gray-500 ml-2">{selectedItem.partNumber}</span>}
+                      </div>
+                      <button type="button" onClick={() => { setPartRequestForm(p => ({ ...p, warehouseItemId: '' })); setPrItemSearch('') }} className="text-xs text-gray-400 hover:text-gray-700">✕</button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        className="input text-gray-800"
+                        placeholder="Pesquisar peça no armazém..."
+                        value={prItemSearch}
+                        onChange={e => { setPrItemSearch(e.target.value); setPrItemOpen(true) }}
+                        onFocus={() => setPrItemOpen(true)}
+                        autoFocus
+                      />
+                      {prItemOpen && filteredWHItems.length > 0 && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                          {filteredWHItems.map(item => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-center justify-between gap-2"
+                              onMouseDown={e => {
+                                e.preventDefault()
+                                setPartRequestForm(p => ({ ...p, warehouseItemId: item.id }))
+                                setPrItemSearch('')
+                                setPrItemOpen(false)
+                              }}
+                            >
+                              <span className="text-sm text-gray-900">{item.itemName}</span>
+                              {item.partNumber && <span className="text-xs font-mono text-gray-400 flex-shrink-0">{item.partNumber}</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Quantidade</label>
+                    <input
+                      type="number" min={1}
+                      className="input text-gray-800"
+                      value={partRequestForm.quantity}
+                      onChange={e => setPartRequestForm(p => ({ ...p, quantity: Math.max(1, parseInt(e.target.value) || 1) }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Notas</label>
+                    <input
+                      className="input text-gray-800"
+                      placeholder="Observações..."
+                      value={partRequestForm.notes}
+                      onChange={e => setPartRequestForm(p => ({ ...p, notes: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={submitPartRequest} disabled={partRequestSaving || !partRequestForm.warehouseItemId} className="btn btn-primary text-sm">
+                    {partRequestSaving ? 'A guardar...' : 'Guardar Pedido'}
+                  </button>
+                  <button onClick={() => { setShowPartRequestForm(false); setPartRequestForm({ warehouseItemId: '', quantity: 1, notes: '' }); setPrItemSearch('') }} className="btn btn-secondary text-sm">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+
+          {partRequests.length === 0 && !showPartRequestForm ? (
+            <p className="text-sm text-gray-500">Nenhum pedido de peças.</p>
+          ) : (
+            <div className="space-y-2">
+              {partRequests.map(req => (
+                <div key={req.id} className="flex items-start justify-between gap-3 border rounded-lg px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-gray-900">{req.itemName}</span>
+                      {req.partNumber && <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{req.partNumber}</span>}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        req.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
+                        req.status === 'ORDERED' ? 'bg-blue-100 text-blue-800' :
+                        req.status === 'RECEIVED' ? 'bg-green-100 text-green-800' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {req.status === 'PENDING' ? 'Pendente' : req.status === 'ORDERED' ? 'Encomendado' : req.status === 'RECEIVED' ? 'Recebido' : 'Cancelado'}
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Qtd: {req.quantity} · {req.requesterName} · {new Date(req.createdAt).toLocaleDateString()}
+                      {req.notes && <span> · {req.notes}</span>}
+                    </div>
+                  </div>
+                  {userRole !== 'TECHNICIAN' || req.status === 'PENDING' ? (
+                    <button onClick={() => deletePartRequest(req.id)} className="text-xs text-red-500 hover:text-red-700 flex-shrink-0">Eliminar</button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* OVM section */}
         <div className="card space-y-4">
           <div className="flex items-center justify-between">

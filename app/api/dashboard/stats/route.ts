@@ -21,10 +21,17 @@ export async function GET(request: NextRequest) {
     const upcomingEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 8, 0, 0, 0)
 
     const include = {
-      client:     { select: { id: true, name: true, city: true } },
-      location:   { select: { id: true, name: true, city: true } },
+      client:     { select: { id: true, name: true, address: true, city: true, postalCode: true, phone: true, contactPerson: true } },
+      location:   { select: { id: true, name: true, address: true, city: true, postalCode: true, phone: true, contactPerson: true } },
       assignedTo: { select: { id: true, name: true } },
     }
+
+    // Unassigned open interventions for today's drag-and-drop panel
+    const unassignedOpen = await prisma.intervention.findMany({
+      where: { status: 'OPEN', assignedToId: null },
+      include,
+      orderBy: { createdAt: 'asc' },
+    })
 
     const activeNow = await prisma.intervention.findMany({
       where: { status: { in: ['IN_PROGRESS', 'QUALITY_ASSESSMENT'] } },
@@ -119,6 +126,7 @@ export async function GET(request: NextRequest) {
       },
       todayList,
       calendarInterventions,
+      unassignedOpen,
       weekStart: weekStart.toISOString(),
       weekDayCounts,
       techLoad,

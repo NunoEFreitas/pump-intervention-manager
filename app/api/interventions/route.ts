@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: { scheduledDate: 'desc' },
+      orderBy: [{ scheduledDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
 
     return NextResponse.json(interventions)

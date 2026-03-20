@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale } from 'next-intl'
+import { printTechDaySchedule, printAllTechsDaySchedule } from '@/lib/techSchedulePrint'
 
 const STATUS_META: Record<string, { label: string; dot: string; badge: string }> = {
   OPEN:               { label: 'Aberta',           dot: 'bg-amber-400',  badge: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -15,13 +16,24 @@ const STATUS_META: Record<string, { label: string; dot: string; badge: string }>
 
 const DAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
+interface ContactInfo {
+  name: string
+  address: string | null
+  city: string | null
+  postalCode: string | null
+  phone: string | null
+  contactPerson: string | null
+}
+
 interface Intervention {
   id: string
   reference: string | null
   status: string
   scheduledDate: string | null
-  client: { name: string; city: string | null }
-  location: { name: string; city: string | null } | null
+  scheduledTime: string | null
+  breakdown: string | null
+  client: ContactInfo
+  location: (ContactInfo & { id: string }) | null
   assignedTo: { id: string; name: string } | null
 }
 
@@ -29,6 +41,7 @@ interface DashboardData {
   counters: { activeNow: number; scheduledToday: number; completedToday: number; needsPlanning: number }
   todayList: Intervention[]
   calendarInterventions: Intervention[]
+  unassignedOpen: Intervention[]
   weekStart: string
   weekDayCounts: number[]
   techLoad: { id: string; name: string; count: number }[]
@@ -76,6 +89,10 @@ export default function DashboardPage() {
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
   const [view, setView] = useState<'board' | 'calendar' | 'today'>('board')
   const [filterTechId, setFilterTechId] = useState('')
+  const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [assigning, setAssigning] = useState(false)
+  const [dropHover, setDropHover] = useState<{ techId: string; hour: number } | null>(null)
+  const gridRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
     try {
@@ -95,6 +112,24 @@ export default function DashboardPage() {
   useEffect(() => { fetchData() }, [fetchData])
 
   const goTo = (id: string) => router.push(`/${locale}/dashboard/interventions/${id}`)
+
+  const assignIntervention = async (interventionId: string, techId: string, time: string) => {
+    if (assigning) return
+    setAssigning(true)
+    try {
+      const token = localStorage.getItem('token')
+      const today = new Date().toISOString().slice(0, 10)
+      await fetch(`/api/interventions/${interventionId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ assignedToId: techId, scheduledDate: today, scheduledTime: time, status: 'ASSIGNED' }),
+      })
+      await fetchData()
+    } finally {
+      setAssigning(false)
+      setDraggingId(null)
+    }
+  }
 
   const todayLabel = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })
 
@@ -160,8 +195,8 @@ export default function DashboardPage() {
   })
 
   // Today view: hourly grid per technician
-  const HOUR_START = 7   // 07:00
-  const HOUR_END   = 19  // 19:00
+  const HOUR_START = 0   // 00:00
+  const HOUR_END   = 24  // 24:00
   const PX_PER_HOUR = 64 // px height per hour slot
   const TOTAL_H = (HOUR_END - HOUR_START) * PX_PER_HOUR
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i)
@@ -180,9 +215,10 @@ export default function DashboardPage() {
   )
 
   function ivTop(iv: Intervention): number {
-    if (!iv.scheduledDate) return 0
-    const d = new Date(iv.scheduledDate)
-    const mins = (d.getHours() - HOUR_START) * 60 + d.getMinutes()
+    const t = iv.scheduledTime ?? (iv.scheduledDate ? new Date(iv.scheduledDate).toTimeString().slice(0, 5) : null)
+    if (!t) return 0
+    const [hh, mm] = t.split(':').map(Number)
+    const mins = (hh - HOUR_START) * 60 + (mm || 0)
     return Math.max(0, Math.min(mins / 60 * PX_PER_HOUR, TOTAL_H - 4))
   }
 
@@ -327,85 +363,160 @@ export default function DashboardPage() {
       )}
 
       {view === 'today' && (
-        <div className="card p-0 overflow-hidden">
-          {/* Column headers: time gutter + one col per tech */}
-          <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
-            <div className="w-14 shrink-0 border-r border-gray-200" />
-            {techCols.map(tc => (
-              <div key={tc.id} className="flex-1 min-w-32 px-2 py-2 border-r border-gray-200 last:border-r-0 text-center">
-                <div className={`text-xs font-semibold truncate ${tc.id === '__none__' ? 'text-amber-600' : 'text-gray-800'}`}>
-                  {tc.name}
-                </div>
-                <div className="text-xs text-gray-400">{tc.items.length} intervenção{tc.items.length !== 1 ? 'ões' : ''}</div>
-              </div>
-            ))}
-            {techCols.length === 0 && (
-              <div className="flex-1 px-4 py-2 text-xs text-gray-400">Nenhuma intervenção hoje.</div>
-            )}
-          </div>
+        <div className="flex gap-4 items-start">
 
-          {/* Scrollable time grid */}
-          <div className="overflow-y-auto max-h-[75vh]">
-            <div className="flex">
-              {/* Time gutter */}
-              <div className="w-14 shrink-0 border-r border-gray-200 select-none">
-                {hours.map(h => (
-                  <div key={h} className="border-b border-gray-100 flex items-start justify-end pr-2 pt-1" style={{ height: PX_PER_HOUR }}>
-                    <span className="text-xs text-gray-400 font-mono leading-none">{String(h).padStart(2, '0')}:00</span>
+          {/* Unassigned interventions panel */}
+          {(data.unassignedOpen?.length ?? 0) > 0 && (
+            <div className="w-52 shrink-0 card p-0 overflow-hidden">
+              <div className="px-3 py-2 bg-amber-50 border-b border-amber-200">
+                <p className="text-xs font-semibold text-amber-800">Sem Atribuição</p>
+                <p className="text-xs text-amber-600">{data.unassignedOpen.length} interv. — arrastar para atribuir</p>
+              </div>
+              <div className="p-2 space-y-1.5 max-h-[75vh] overflow-y-auto">
+                {data.unassignedOpen.map(iv => (
+                  <div
+                    key={iv.id}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData('interventionId', iv.id); setDraggingId(iv.id) }}
+                    onDragEnd={() => setDraggingId(null)}
+                    onClick={() => goTo(iv.id)}
+                    className={`rounded border px-2 py-1.5 cursor-grab active:cursor-grabbing text-xs select-none transition-opacity ${draggingId === iv.id ? 'opacity-40' : 'opacity-100'} bg-amber-50 border-amber-300 text-amber-900 hover:shadow-sm`}
+                  >
+                    <div className="font-semibold truncate">{iv.client.name}</div>
+                    {iv.reference && <div className="font-mono text-amber-600 text-[10px]">{iv.reference}</div>}
+                    {(iv.location?.city || iv.client.city) && (
+                      <div className="text-amber-700 truncate">{iv.location?.city || iv.client.city}</div>
+                    )}
+                    {iv.breakdown && <div className="text-amber-600 truncate mt-0.5 italic">{iv.breakdown}</div>}
                   </div>
                 ))}
               </div>
+            </div>
+          )}
 
-              {/* Tech columns */}
-              {techCols.map(tc => (
-                <div key={tc.id} className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 relative">
-                  {/* Hour lines */}
+          {/* Time grid */}
+          <div className="flex-1 card p-0 overflow-hidden min-w-0">
+            {/* Column headers */}
+            <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+              <div className="w-14 shrink-0 border-r border-gray-200 flex items-center justify-center">
+                <button
+                  onClick={() => printAllTechsDaySchedule(techCols.filter(tc => tc.id !== '__none__'), todayLabel)}
+                  title="Imprimir agenda de todos os técnicos"
+                  className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                </button>
+              </div>
+              {techCols.filter(tc => tc.id !== '__none__').map(tc => (
+                <div key={tc.id} className="flex-1 min-w-32 px-2 py-2 border-r border-gray-200 last:border-r-0">
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="text-xs font-semibold text-gray-800 truncate">{tc.name}</div>
+                    <button
+                      onClick={() => printTechDaySchedule(tc.name, tc.items, todayLabel)}
+                      title="Imprimir agenda"
+                      className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div className="text-xs text-gray-400">{tc.items.length} interv.</div>
+                </div>
+              ))}
+              {techCols.filter(tc => tc.id !== '__none__').length === 0 && (
+                <div className="flex-1 px-4 py-2 text-xs text-gray-400">Nenhuma intervenção agendada hoje. Arraste intervenções para atribuir.</div>
+              )}
+            </div>
+
+            {/* Scrollable time grid */}
+            <div className="overflow-y-auto max-h-[75vh]" ref={gridRef}>
+              <div className="flex">
+                {/* Time gutter */}
+                <div className="w-14 shrink-0 border-r border-gray-200 select-none">
                   {hours.map(h => (
-                    <div key={h} className="border-b border-gray-100" style={{ height: PX_PER_HOUR }} />
-                  ))}
-
-                  {/* "Now" line — only show if in range */}
-                  {nowMinutes >= 0 && nowMinutes <= (HOUR_END - HOUR_START) * 60 && (
-                    <div
-                      className="absolute left-0 right-0 z-10 pointer-events-none"
-                      style={{ top: nowTop }}
-                    >
-                      <div className="flex items-center gap-0">
-                        <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 shrink-0" />
-                        <div className="flex-1 h-px bg-red-400" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Intervention blocks */}
-                  {tc.items.map(iv => (
-                    <div
-                      key={iv.id}
-                      onClick={() => goTo(iv.id)}
-                      className={`absolute left-1 right-1 rounded border cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${STATUS_BG[iv.status] ?? STATUS_BG.OPEN}`}
-                      style={{ top: ivTop(iv) + 2, minHeight: 52, maxHeight: PX_PER_HOUR - 6 }}
-                      title={`${iv.client.name}${iv.scheduledDate ? ' — ' + new Date(iv.scheduledDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }) : ''}`}
-                    >
-                      <div className="px-1.5 py-1 h-full flex flex-col justify-between">
-                        <div>
-                          {iv.scheduledDate && (
-                            <div className="text-xs font-bold tabular-nums leading-none mb-0.5">
-                              {new Date(iv.scheduledDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          )}
-                          <div className="text-xs font-semibold leading-tight truncate">{iv.client.name}</div>
-                          {(iv.location?.city || iv.client.city) && (
-                            <div className="text-xs opacity-70 truncate leading-tight">{iv.location?.city || iv.client.city}</div>
-                          )}
-                        </div>
-                        <div className={`text-xs font-medium truncate ${STATUS_META[iv.status]?.badge.split(' ')[1] ?? ''}`}>
-                          {STATUS_META[iv.status]?.label}
-                        </div>
-                      </div>
+                    <div key={h} className="border-b border-gray-100 flex items-start justify-end pr-2 pt-1" style={{ height: PX_PER_HOUR }}>
+                      <span className="text-xs text-gray-400 font-mono leading-none">{String(h).padStart(2,'0')}:00</span>
                     </div>
                   ))}
                 </div>
-              ))}
+
+                {/* Tech columns — only real techs, no __none__ */}
+                {techCols.filter(tc => tc.id !== '__none__').map(tc => (
+                  <div
+                    key={tc.id}
+                    className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 relative"
+                    onDragOver={e => {
+                      e.preventDefault()
+                      const colRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      const relY = e.clientY - colRect.top
+                      const hour = Math.floor(relY / PX_PER_HOUR) + HOUR_START
+                      setDropHover({ techId: tc.id, hour: Math.max(HOUR_START, Math.min(hour, HOUR_END - 1)) })
+                    }}
+                    onDragLeave={() => setDropHover(null)}
+                    onDrop={e => {
+                      e.preventDefault()
+                      setDropHover(null)
+                      const ivId = e.dataTransfer.getData('interventionId')
+                      if (!ivId) return
+                      const colRect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                      const relY = e.clientY - colRect.top
+                      const totalMins = Math.round((relY / PX_PER_HOUR) * 60 / 15) * 15
+                      const hh = HOUR_START + Math.floor(totalMins / 60)
+                      const mm = totalMins % 60
+                      const time = `${String(Math.min(hh, HOUR_END - 1)).padStart(2,'0')}:${String(mm).padStart(2,'0')}`
+                      assignIntervention(ivId, tc.id, time)
+                    }}
+                  >
+                    {/* Hour lines — highlight hovered slot */}
+                    {hours.map(h => (
+                      <div
+                        key={h}
+                        className={`border-b border-gray-100 transition-colors ${dropHover?.techId === tc.id && dropHover.hour === h ? 'bg-blue-100 border-blue-300' : ''}`}
+                        style={{ height: PX_PER_HOUR }}
+                      />
+                    ))}
+
+                    {/* Now line */}
+                    {nowMinutes >= 0 && nowMinutes <= (HOUR_END - HOUR_START) * 60 && (
+                      <div className="absolute left-0 right-0 z-10 pointer-events-none" style={{ top: nowTop }}>
+                        <div className="flex items-center">
+                          <div className="w-2 h-2 rounded-full bg-red-500 -ml-1 shrink-0" />
+                          <div className="flex-1 h-px bg-red-400" />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Intervention blocks */}
+                    {tc.items.map(iv => (
+                      <div
+                        key={iv.id}
+                        onClick={() => goTo(iv.id)}
+                        className={`absolute left-1 right-1 rounded border cursor-pointer hover:shadow-md transition-shadow overflow-hidden ${STATUS_BG[iv.status] ?? STATUS_BG.OPEN}`}
+                        style={{ top: ivTop(iv) + 2, minHeight: 52, maxHeight: PX_PER_HOUR - 6 }}
+                        title={`${iv.client.name}${iv.scheduledTime ? ' — ' + iv.scheduledTime : ''}`}
+                      >
+                        <div className="px-1.5 py-1 h-full flex flex-col justify-between">
+                          <div>
+                            {iv.scheduledTime && (
+                              <div className="text-xs font-bold tabular-nums leading-none mb-0.5">{iv.scheduledTime}</div>
+                            )}
+                            <div className="text-xs font-semibold leading-tight truncate">{iv.client.name}</div>
+                            {(iv.location?.city || iv.client.city) && (
+                              <div className="text-xs opacity-70 truncate leading-tight">{iv.location?.city || iv.client.city}</div>
+                            )}
+                          </div>
+                          <div className={`text-xs font-medium truncate ${STATUS_META[iv.status]?.badge.split(' ')[1] ?? ''}`}>
+                            {STATUS_META[iv.status]?.label}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getStatusColor } from '@/lib/permissions'
+import { printOpenInterventionsPDF } from '@/lib/openInterventionsPrint'
 
 interface Intervention {
   id: string
@@ -12,11 +13,17 @@ interface Intervention {
   scheduledDate: string | null
   scheduledTime: string | null
   createdAt: string
+  breakdown: string | null
   client: {
     id: string
     name: string
     city: string | null
   }
+  location: {
+    id: string
+    name: string
+    city: string | null
+  } | null
   assignedTo: {
     name: string
   } | null
@@ -35,6 +42,18 @@ function InterventionsContent() {
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'ALL')
   const [clientSearch, setClientSearch] = useState('')
+
+  const getStatusBorder = (status: string): string => {
+    switch (status) {
+      case 'OPEN':               return 'border-yellow-400'
+      case 'ASSIGNED':           return 'border-orange-400'
+      case 'IN_PROGRESS':        return 'border-blue-500'
+      case 'QUALITY_ASSESSMENT': return 'border-purple-500'
+      case 'COMPLETED':          return 'border-green-500'
+      case 'CANCELED':           return 'border-red-400'
+      default:                   return 'border-gray-300'
+    }
+  }
 
   // Helper function to get translated status labels
   const getTranslatedStatusLabel = (status: string): string => {
@@ -109,7 +128,19 @@ function InterventionsContent() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{t('title')}</h1>
           <p className="text-gray-600">{t('subtitle')}</p>
         </div>
-        <button onClick={() => router.push(`/${locale}/dashboard/interventions/new`)} className="btn btn-primary w-full sm:w-auto">{t('newIntervention')}</button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => {
+              const label = statusFilter === 'ALL' ? 'Todas' : getTranslatedStatusLabel(statusFilter)
+              printOpenInterventionsPDF(filteredInterventions, label, '')
+            }}
+            className="btn btn-secondary flex-1 sm:flex-none"
+            title="Imprimir lista filtrada"
+          >
+            🖨 Imprimir
+          </button>
+          <button onClick={() => router.push(`/${locale}/dashboard/interventions/new`)} className="btn btn-primary flex-1 sm:flex-none">{t('newIntervention')}</button>
+        </div>
       </div>
 
       <div className="card mb-6">
@@ -145,38 +176,45 @@ function InterventionsContent() {
           <button onClick={() => router.push(`/${locale}/dashboard/interventions/new`)} className="btn btn-primary">{t('createFirst')}</button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {filteredInterventions.map((intervention) => (
             <div
               key={intervention.id}
-              className="card hover:shadow-lg transition-shadow cursor-pointer"
+              className={`card hover:shadow-lg transition-shadow cursor-pointer border-2 ${getStatusBorder(intervention.status)}`}
               onClick={() => router.push(`/${locale}/dashboard/interventions/${intervention.id}`)}
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(intervention.status as any)}`}>
+              <div className="flex-1 min-w-0">
+                  {/* Top row: client name + reference + status */}
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h3 className="text-base font-bold text-gray-900">{intervention.client.name}</h3>
+                    {intervention.reference && (
+                      <span className="text-xs font-mono text-gray-400">{intervention.reference}</span>
+                    )}
+                    <span className={`text-sm font-semibold px-3 py-0.5 rounded-full ml-auto ${getStatusColor(intervention.status as any)}`}>
                       {getTranslatedStatusLabel(intervention.status)}
                     </span>
+                  </div>
+
+                  {/* Breakdown */}
+                  {intervention.breakdown && (
+                    <p className="text-sm text-gray-700 mb-1.5 line-clamp-2">{intervention.breakdown}</p>
+                  )}
+
+                  {/* Meta row */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
+                    {intervention.location ? (
+                      <span>{intervention.location.name}{intervention.location.city ? ` — ${intervention.location.city}` : ''}</span>
+                    ) : intervention.client.city ? (
+                      <span>{intervention.client.city}</span>
+                    ) : null}
                     {intervention.scheduledDate && (
-                      <span className="text-sm text-gray-600">
-                        {t('scheduled')}: {new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime}
-                      </span>
+                      <span>{new Date(intervention.scheduledDate).toLocaleDateString()} {intervention.scheduledTime ?? ''}</span>
                     )}
-                  </div>
-                  <div className="flex items-baseline gap-2 mb-2">
-                    <h3 className="text-xl font-semibold text-gray-900">{t('scheduledIntervention')}</h3>
-                    {intervention.reference && (
-                      <span className="text-sm font-mono text-gray-500">{intervention.reference}</span>
+                    {intervention.assignedTo && (
+                      <span>{t('technician')}: {intervention.assignedTo.name}</span>
                     )}
-                  </div>
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                    <span className="flex items-center">{t('fieldsClient')}: {intervention.client.name}</span>
-                    {intervention.assignedTo && <span className="flex items-center">{t('technician')}: {intervention.assignedTo.name}</span>}
-                    {intervention.client.city && <span>{intervention.client.city}</span>}
                   </div>
                 </div>
-              </div>
             </div>
           ))}
         </div>

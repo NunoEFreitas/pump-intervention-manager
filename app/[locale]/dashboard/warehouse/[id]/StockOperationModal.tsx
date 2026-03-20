@@ -59,11 +59,47 @@ export default function StockOperationModal({
   // Print step — set after a successful ADD_STOCK with serial numbers
   const [printSerialNumbers, setPrintSerialNumbers] = useState<string[] | null>(null)
 
+  // Ordered part requests for this item
+  type OrderedRequest = { id: string; quantity: number; interventionReference: string | null; clientName: string; requesterName: string }
+  const [orderedRequests, setOrderedRequests] = useState<OrderedRequest[]>([])
+  const [receivedRequestIds, setReceivedRequestIds] = useState<string[]>([])
+
   useEffect(() => {
     // Only TRANSFER_TO_TECH needs the full technicians list; TRANSFER_FROM_TECH uses technicianStocks
     if (operation === 'TRANSFER_TO_TECH') fetchTechnicians()
     if (tracksSerialNumbers) fetchAvailableSerialNumbers()
+    if (operation === 'ADD_STOCK') fetchOrderedRequests()
   }, [operation, tracksSerialNumbers])
+
+  const fetchOrderedRequests = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/warehouse/part-requests?status=ORDERED`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      const forThisItem = (Array.isArray(data) ? data : []).filter((r: any) => r.warehouseItemId === itemId)
+      setOrderedRequests(forThisItem)
+    } catch { /* non-blocking */ }
+  }
+
+  const toggleReceived = (id: string) => {
+    setReceivedRequestIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const markRequestsReceived = async () => {
+    if (receivedRequestIds.length === 0) return
+    const token = localStorage.getItem('token')
+    await Promise.allSettled(
+      receivedRequestIds.map(id =>
+        fetch(`/api/warehouse/part-requests/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ status: 'RECEIVED' }),
+        })
+      )
+    )
+  }
 
   const fetchTechnicians = async () => {
     try {
@@ -197,6 +233,7 @@ export default function StockOperationModal({
             addedSNs = serialNumbers
           }
 
+          await markRequestsReceived()
           // Show label print modal — onSuccess called when label modal closes
           setPrintSerialNumbers(addedSNs)
         } else {
@@ -272,6 +309,7 @@ export default function StockOperationModal({
         })
 
         if (response.ok) {
+          await markRequestsReceived()
           onSuccess()
         } else {
           const data = await response.json()
@@ -473,6 +511,38 @@ export default function StockOperationModal({
               <p className="text-xs text-gray-500 mt-1">
                 {t('nSelected', { count: selectedSerialNumbers.length })}
               </p>
+            </div>
+          )}
+
+          {/* Ordered part requests for this item */}
+          {operation === 'ADD_STOCK' && orderedRequests.length > 0 && (
+            <div className="border border-yellow-200 rounded-lg p-3 bg-yellow-50">
+              <p className="text-sm font-medium text-yellow-900 mb-2">
+                Pedidos encomendados ({orderedRequests.length}) — marcar como recebido:
+              </p>
+              <div className="space-y-2">
+                {orderedRequests.map(req => (
+                  <label key={req.id} className="flex items-start gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={receivedRequestIds.includes(req.id)}
+                      onChange={() => toggleReceived(req.id)}
+                      className="mt-0.5 w-4 h-4 rounded border-yellow-400 text-green-600"
+                    />
+                    <span className="text-sm text-yellow-900">
+                      <span className="font-medium">Qtd: {req.quantity}</span>
+                      {req.interventionReference && <span className="text-yellow-700"> · #{req.interventionReference}</span>}
+                      <span className="text-yellow-700"> · {req.clientName}</span>
+                      <span className="text-yellow-600 text-xs"> ({req.requesterName})</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {receivedRequestIds.length > 0 && (
+                <p className="text-xs text-green-700 mt-2 font-medium">
+                  ✓ {receivedRequestIds.length} pedido(s) serão marcados como Recebido ao guardar
+                </p>
+              )}
             </div>
           )}
 
