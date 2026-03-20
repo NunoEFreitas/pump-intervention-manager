@@ -139,8 +139,10 @@ export async function PUT(
       brandName = b?.name || ''
     }
 
-    const itemName = [typeName, brandName, data.partNumber].filter(Boolean).join(' ') || data.itemName
-    const newAutoSn = data.autoSn === true || data.autoSn === 'true'
+    const computedName = [typeName, brandName, data.partNumber].filter(Boolean).join(' ')
+    const itemName = data.itemName?.trim() || computedName
+    const newTracksSerialNumbers = data.tracksSerialNumbers === true || data.tracksSerialNumbers === 'true'
+    const newAutoSn = newTracksSerialNumbers && (data.autoSn === true || data.autoSn === 'true')
     const newSnExample = newAutoSn ? (data.snExample || null) : null
 
     const item = await prisma.warehouseItem.update({
@@ -155,7 +157,8 @@ export async function PUT(
     await prisma.$executeRaw`
       UPDATE "WarehouseItem"
       SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample},
-          "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId}
+          "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId},
+          "tracksSerialNumbers" = ${newTracksSerialNumbers}
       WHERE id = ${id}
     `
 

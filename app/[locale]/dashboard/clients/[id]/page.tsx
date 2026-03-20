@@ -48,6 +48,8 @@ interface Client {
   email: string
   contactPerson: string
   notes: string
+  contract: boolean
+  contractDate: string | null
   locations: CompanyLocation[]
   interventions: Intervention[]
 }
@@ -81,7 +83,7 @@ export default function ClientDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isEditingClient, setIsEditingClient] = useState(false)
   const [clientEditData, setClientEditData] = useState({
-    name: '', vatNumber: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', email: '', contactPerson: '', notes: '',
+    name: '', vatNumber: '', country: '', district: '', address: '', city: '', postalCode: '', phone: '', email: '', contactPerson: '', notes: '', contract: false, contractDate: '',
   })
   const [clientEditLoading, setClientEditLoading] = useState(false)
 
@@ -147,6 +149,8 @@ export default function ClientDetailPage() {
       email: client.email || '',
       contactPerson: client.contactPerson || '',
       notes: client.notes || '',
+      contract: client.contract ?? false,
+      contractDate: client.contractDate ? client.contractDate.slice(0, 10) : '',
     })
     setIsEditingClient(true)
   }
@@ -439,6 +443,24 @@ export default function ClientDetailPage() {
               <label className="block text-xs font-medium text-gray-700 mb-1">{tClients('notes')}</label>
               <textarea rows={3} className="input text-gray-800" value={clientEditData.notes} onChange={(e) => setClientEditData({ ...clientEditData, notes: e.target.value })} />
             </div>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                id="clientContract"
+                checked={clientEditData.contract}
+                onChange={(e) => setClientEditData({ ...clientEditData, contract: e.target.checked, contractDate: e.target.checked ? clientEditData.contractDate : '' })}
+                className="w-4 h-4 rounded border-gray-300 text-blue-600"
+              />
+              <label htmlFor="clientContract" className="text-xs font-medium text-gray-700 cursor-pointer">{tClients('contract')}</label>
+              {clientEditData.contract && (
+                <input
+                  type="date"
+                  className="input text-gray-800 w-40 text-xs"
+                  value={clientEditData.contractDate}
+                  onChange={(e) => setClientEditData({ ...clientEditData, contractDate: e.target.value })}
+                />
+              )}
+            </div>
             <div className="flex gap-2">
               <button onClick={saveClient} disabled={clientEditLoading || !clientEditData.name.trim() || !!editVatError} className="btn btn-primary text-sm">
                 {clientEditLoading ? tCommon('saving') : tCommon('save')}
@@ -498,6 +520,16 @@ export default function ClientDetailPage() {
                 <p className="text-gray-600 mt-1">{client.notes}</p>
               </div>
             )}
+            <div className="md:col-span-2 pt-2 border-t flex gap-3">
+              <span className={`px-3 py-1 rounded-full text-xs font-medium ${client.contract ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+                {client.contract ? '✓' : '✗'} {tClients('contract')}
+              </span>
+              {client.contract && client.contractDate && (
+                <span className="text-xs text-gray-600 self-center">
+                  {new Date(client.contractDate).toLocaleDateString()}
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

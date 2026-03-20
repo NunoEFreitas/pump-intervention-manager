@@ -19,10 +19,12 @@ export default function NewWarehouseItemPage() {
   const [error, setError] = useState('')
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
+  const [itemNameEdited, setItemNameEdited] = useState(false)
   const [formData, setFormData] = useState({
     equipmentTypeId: '',
     brandId: '',
     partNumber: '',
+    itemName: '',
     value: '',
     mainWarehouse: '0',
     tracksSerialNumbers: false,
@@ -45,6 +47,18 @@ export default function NewWarehouseItemPage() {
   const typeName = equipmentTypes.find(t => t.id === formData.equipmentTypeId)?.name || ''
   const brandName = equipmentBrands.find(b => b.id === formData.brandId)?.name || ''
   const computedItemName = [typeName, brandName, formData.partNumber].filter(Boolean).join(' ')
+
+  const updateSourceField = (patch: Partial<typeof formData>) => {
+    setFormData(prev => {
+      const next = { ...prev, ...patch }
+      if (!itemNameEdited) {
+        const t = equipmentTypes.find(x => x.id === next.equipmentTypeId)?.name || ''
+        const b = equipmentBrands.find(x => x.id === next.brandId)?.name || ''
+        next.itemName = [t, b, next.partNumber].filter(Boolean).join(' ')
+      }
+      return next
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -94,7 +108,7 @@ export default function NewWarehouseItemPage() {
           <select
             className="input text-gray-800"
             value={formData.equipmentTypeId}
-            onChange={(e) => setFormData({ ...formData, equipmentTypeId: e.target.value })}
+            onChange={(e) => updateSourceField({ equipmentTypeId: e.target.value })}
             required
           >
             <option value="">{t('selectType')}</option>
@@ -111,7 +125,7 @@ export default function NewWarehouseItemPage() {
           <select
             className="input text-gray-800"
             value={formData.brandId}
-            onChange={(e) => setFormData({ ...formData, brandId: e.target.value })}
+            onChange={(e) => updateSourceField({ brandId: e.target.value })}
             required
           >
             <option value="">{t('selectBrand')}</option>
@@ -129,18 +143,31 @@ export default function NewWarehouseItemPage() {
             type="text"
             className="input text-gray-800"
             value={formData.partNumber}
-            onChange={(e) => setFormData({ ...formData, partNumber: e.target.value })}
+            onChange={(e) => updateSourceField({ partNumber: e.target.value })}
             placeholder="e.g., PS-2024-001"
             required
           />
         </div>
 
-        {computedItemName && (
-          <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <p className="text-xs text-gray-500 mb-1">{t('itemNamePreview')}</p>
-            <p className="font-semibold text-gray-900">{computedItemName}</p>
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-gray-700">{t('itemNamePreview')}</label>
+            {itemNameEdited && computedItemName && (
+              <button type="button" onClick={() => { setFormData(f => ({ ...f, itemName: computedItemName })); setItemNameEdited(false) }}
+                className="text-xs text-blue-600 hover:text-blue-800">↺ Repor automático</button>
+            )}
           </div>
-        )}
+          <input
+            type="text"
+            className="input text-gray-800"
+            value={formData.itemName}
+            onChange={e => { setFormData(f => ({ ...f, itemName: e.target.value })); setItemNameEdited(true) }}
+            placeholder={computedItemName || 'Nome do artigo'}
+          />
+          {!itemNameEdited && computedItemName && (
+            <p className="text-xs text-gray-400 mt-1">Gerado automaticamente a partir do tipo, marca e referência</p>
+          )}
+        </div>
 
         <div className="border-t pt-4 space-y-3">
           <div className="flex items-start gap-3">

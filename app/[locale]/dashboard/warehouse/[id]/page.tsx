@@ -71,11 +71,14 @@ export default function WarehouseItemDetailPage() {
   const [snExpanded, setSnExpanded] = useState<Record<string, boolean>>({})
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
+  const [itemNameEdited, setItemNameEdited] = useState(false)
   const [editData, setEditData] = useState({
     equipmentTypeId: '',
     brandId: '',
     partNumber: '',
+    itemName: '',
     value: '',
+    tracksSerialNumbers: false,
     autoSn: false,
     snExample: '',
   })
@@ -107,10 +110,13 @@ export default function WarehouseItemDetailPage() {
         equipmentTypeId: data.equipmentTypeId || '',
         brandId: data.brandId || '',
         partNumber: data.partNumber,
+        itemName: data.itemName || '',
         value: data.value.toString(),
+        tracksSerialNumbers: data.tracksSerialNumbers ?? false,
         autoSn: data.autoSn ?? false,
         snExample: data.snExample || '',
       })
+      setItemNameEdited(false)
 
       // Fetch serial numbers if item tracks them
       if (data.tracksSerialNumbers) {
@@ -225,6 +231,18 @@ export default function WarehouseItemDetailPage() {
   const editTypeName = equipmentTypes.find(x => x.id === editData.equipmentTypeId)?.name || ''
   const editBrandName = equipmentBrands.find(x => x.id === editData.brandId)?.name || ''
   const editComputedName = [editTypeName, editBrandName, editData.partNumber].filter(Boolean).join(' ')
+
+  const updateEditSourceField = (patch: Partial<typeof editData>) => {
+    setEditData(prev => {
+      const next = { ...prev, ...patch }
+      if (!itemNameEdited) {
+        const tn = equipmentTypes.find(x => x.id === next.equipmentTypeId)?.name || ''
+        const bn = equipmentBrands.find(x => x.id === next.brandId)?.name || ''
+        next.itemName = [tn, bn, next.partNumber].filter(Boolean).join(' ')
+      }
+      return next
+    })
+  }
 
   return (
     <div>
@@ -620,7 +638,7 @@ export default function WarehouseItemDetailPage() {
             <select
               className="input text-gray-800"
               value={editData.equipmentTypeId}
-              onChange={(e) => setEditData({ ...editData, equipmentTypeId: e.target.value })}
+              onChange={(e) => updateEditSourceField({ equipmentTypeId: e.target.value })}
             >
               <option value="">{t('selectType')}</option>
               {equipmentTypes.map(type => (
@@ -636,7 +654,7 @@ export default function WarehouseItemDetailPage() {
             <select
               className="input text-gray-800"
               value={editData.brandId}
-              onChange={(e) => setEditData({ ...editData, brandId: e.target.value })}
+              onChange={(e) => updateEditSourceField({ brandId: e.target.value })}
             >
               <option value="">{t('selectBrand')}</option>
               {equipmentBrands.map(brand => (
@@ -653,17 +671,30 @@ export default function WarehouseItemDetailPage() {
               type="text"
               className="input text-gray-800"
               value={editData.partNumber}
-              onChange={(e) => setEditData({ ...editData, partNumber: e.target.value })}
+              onChange={(e) => updateEditSourceField({ partNumber: e.target.value })}
               required
             />
           </div>
 
-          {editComputedName && (
-            <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">{t('itemNamePreview')}</p>
-              <p className="font-semibold text-gray-900">{editComputedName}</p>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium text-gray-700">{t('itemNamePreview')}</label>
+              {itemNameEdited && editComputedName && (
+                <button type="button" onClick={() => { setEditData(d => ({ ...d, itemName: editComputedName })); setItemNameEdited(false) }}
+                  className="text-xs text-blue-600 hover:text-blue-800">↺ Repor automático</button>
+              )}
             </div>
-          )}
+            <input
+              type="text"
+              className="input text-gray-800"
+              value={editData.itemName}
+              onChange={e => { setEditData(d => ({ ...d, itemName: e.target.value })); setItemNameEdited(true) }}
+              placeholder={editComputedName || 'Nome do artigo'}
+            />
+            {!itemNameEdited && editComputedName && (
+              <p className="text-xs text-gray-400 mt-1">Gerado automaticamente a partir do tipo, marca e referência</p>
+            )}
+          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -679,10 +710,25 @@ export default function WarehouseItemDetailPage() {
             />
           </div>
 
-          {item.tracksSerialNumbers && (
-            <div className="p-4 bg-purple-50 border border-purple-200 rounded-lg space-y-3">
-              <p className="text-sm font-medium text-purple-900">{t('serialNumberTracking')}</p>
-              <div className="flex items-start gap-3">
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="editTracksSerialNumbers"
+                checked={editData.tracksSerialNumbers}
+                onChange={(e) => setEditData({ ...editData, tracksSerialNumbers: e.target.checked, autoSn: false })}
+                className="mt-1"
+              />
+              <div className="flex-1">
+                <label htmlFor="editTracksSerialNumbers" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  {t('tracksSerialNumbers')}
+                </label>
+                <p className="text-xs text-gray-500 mt-1">{t('tracksSnHelp')}</p>
+              </div>
+            </div>
+
+            {editData.tracksSerialNumbers && (
+              <div className="ml-6 flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="editAutoSn"
@@ -691,9 +737,10 @@ export default function WarehouseItemDetailPage() {
                   className="mt-1"
                 />
                 <div className="flex-1">
-                  <label htmlFor="editAutoSn" className="text-sm font-medium text-purple-900 cursor-pointer">
+                  <label htmlFor="editAutoSn" className="text-sm font-medium text-gray-700 cursor-pointer">
                     {t('autoSnGeneration')}
                   </label>
+                  <p className="text-xs text-gray-500 mt-1">{t('autoSnGenerationHelp')}</p>
                   {editData.autoSn && (
                     <div className="mt-2 space-y-2">
                       <input
@@ -714,8 +761,8 @@ export default function WarehouseItemDetailPage() {
                   )}
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex gap-3">
             <button type="submit" className="btn btn-primary flex-1">

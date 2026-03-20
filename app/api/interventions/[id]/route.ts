@@ -77,8 +77,8 @@ export async function GET(
     `
 
     // Fetch new Client fields via raw SQL (Prisma client may be stale)
-    const clientExtras = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null }]>`
-      SELECT "vatNumber", "country", "district" FROM "Client" WHERE id = ${intervention.clientId}
+    const clientExtras = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null; contract: boolean; contractDate: Date | null }]>`
+      SELECT "vatNumber", "country", "district", "contract", "contractDate" FROM "Client" WHERE id = ${intervention.clientId}
     `
 
     // Fetch new CompanyLocation fields via raw SQL if there's a location

@@ -15,6 +15,7 @@ const STATUS_LABEL: Record<string, string> = {
   OPEN: 'Por Atribuir',
   ASSIGNED: 'Atribuída',
   IN_PROGRESS: 'Em Curso',
+  PENDING_PARTS: 'Aguarda Peças',
   QUALITY_ASSESSMENT: 'Controlo de Qualidade',
   COMPLETED: 'Concluída',
   CANCELED: 'Cancelada',
@@ -24,6 +25,7 @@ const STATUS_COLOR: Record<string, string> = {
   OPEN: '#b45309',          // amber
   ASSIGNED: '#c2410c',      // orange
   IN_PROGRESS: '#1d4ed8',   // blue
+  PENDING_PARTS: '#e11d48', // rose
   QUALITY_ASSESSMENT: '#7c3aed', // purple
   COMPLETED: '#15803d',     // green
   CANCELED: '#b91c1c',      // red

@@ -58,8 +58,8 @@ export async function GET(
     }
 
     // Fetch new Client fields via raw SQL (Prisma client may be stale)
-    const extra = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null }]>`
-      SELECT "vatNumber", "country", "district" FROM "Client" WHERE id = ${id}
+    const extra = await prisma.$queryRaw<[{ vatNumber: string | null; country: string | null; district: string | null; contract: boolean; contractDate: Date | null }]>`
+      SELECT "vatNumber", "country", "district", "contract", "contractDate" FROM "Client" WHERE id = ${id}
     `
 
     // Fetch new CompanyLocation fields via raw SQL
@@ -113,15 +113,18 @@ export async function PUT(
       },
     })
 
+    const contractDate = data.contract && data.contractDate ? new Date(data.contractDate) : null
     await prisma.$executeRaw`
       UPDATE "Client"
-      SET "vatNumber" = ${data.vatNumber ?? null},
-          "country"   = ${data.country ?? null},
-          "district"  = ${data.district ?? null}
+      SET "vatNumber"     = ${data.vatNumber ?? null},
+          "country"       = ${data.country ?? null},
+          "district"      = ${data.district ?? null},
+          "contract"      = ${data.contract ?? false},
+          "contractDate"  = ${contractDate}
       WHERE id = ${id}
     `
 
-    return NextResponse.json({ ...client, vatNumber: data.vatNumber ?? null, country: data.country ?? null, district: data.district ?? null })
+    return NextResponse.json({ ...client, vatNumber: data.vatNumber ?? null, country: data.country ?? null, district: data.district ?? null, contract: data.contract ?? false, contractDate: contractDate ?? null })
   } catch (error) {
     console.error('Error updating client:', error)
     return NextResponse.json(

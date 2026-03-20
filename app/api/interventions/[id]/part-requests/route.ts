@@ -93,6 +93,14 @@ export async function POST(
       )
     `
 
+    // Set intervention status to PENDING_PARTS (unless already completed/cancelled)
+    await prisma.$executeRaw`
+      UPDATE "Intervention"
+      SET status = 'PENDING_PARTS', "updatedAt" = ${now}::timestamptz
+      WHERE id = ${interventionId}
+        AND status NOT IN ('COMPLETED', 'CANCELED')
+    `
+
     const [row] = await prisma.$queryRaw<Array<{
       id: string; interventionId: string; warehouseItemId: string
       itemName: string; partNumber: string; quantity: number

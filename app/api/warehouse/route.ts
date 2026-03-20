@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
       brandName = b?.name || ''
     }
 
-    const itemName = [typeName, brandName, data.partNumber].filter(Boolean).join(' ')
+    const itemName = data.itemName?.trim() || [typeName, brandName, data.partNumber].filter(Boolean).join(' ')
     const tracksSerialNumbers = data.tracksSerialNumbers === true || data.tracksSerialNumbers === 'true'
     const autoSn = tracksSerialNumbers && (data.autoSn === true || data.autoSn === 'true')
     const snExample = autoSn ? (data.snExample || null) : null

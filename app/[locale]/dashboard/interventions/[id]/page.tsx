@@ -103,6 +103,8 @@ interface Intervention {
     city: string | null
     postalCode: string | null
     phone: string | null
+    contract: boolean
+    contractDate: string | null
   }
   location: {
     id: string
@@ -958,6 +960,14 @@ export default function InterventionDetailPage() {
                       </p>
                     </div>
                   )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${intervention.client.contract ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-500'}`}>
+                      {intervention.client.contract ? '✓' : '✗'} {tClients('contract')}
+                    </span>
+                    {intervention.client.contract && intervention.client.contractDate && (
+                      <span className="text-xs text-gray-500">{new Date(intervention.client.contractDate).toLocaleDateString()}</span>
+                    )}
+                  </div>
                   {intervention.location && (
                     <div>
                       <span className="font-medium text-gray-600">{t('fieldsLocation')}:</span>
@@ -1439,7 +1449,7 @@ export default function InterventionDetailPage() {
                     {t('workOrderInterventionType')}
                   </label>
                   <div className="flex flex-wrap gap-4">
-                    {(['ELECTRONIC', 'HYDRAULIC', 'OTHERS'] as const).map((type) => (
+                    {(['ELECTRONIC', 'HYDRAULIC', 'COMPUTING', 'OTHERS'] as const).map((type) => (
                       <label key={type} className="flex items-center gap-2 cursor-pointer">
                         <input
                           type="checkbox"
@@ -1602,7 +1612,7 @@ export default function InterventionDetailPage() {
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">{t('workOrderInterventionType')}</label>
                           <div className="flex flex-wrap gap-4">
-                            {(['ELECTRONIC', 'HYDRAULIC', 'OTHERS'] as const).map((type) => (
+                            {(['ELECTRONIC', 'HYDRAULIC', 'COMPUTING', 'OTHERS'] as const).map((type) => (
                               <label key={type} className="flex items-center gap-2 cursor-pointer">
                                 <input type="checkbox" checked={editWorkOrderForm.interventionType === type} onChange={() => setEditWorkOrderForm({ ...editWorkOrderForm, interventionType: editWorkOrderForm.interventionType === type ? '' : type })} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
                                 <span className="text-sm font-medium text-gray-700">{t(`type${type.charAt(0) + type.slice(1).toLowerCase()}`)}</span>

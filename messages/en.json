@@ -119,7 +119,8 @@
     "showLess": "Show less",
     "selectClient": "Select a client...",
     "searchClients": "Search clients...",
-    "noClientsInDropdown": "No clients found"
+    "noClientsInDropdown": "No clients found",
+    "contract": "Contract"
   },
   "interventions": {
     "title": "Interventions",
@@ -136,6 +137,7 @@
     "statusInProgress": "In Progress",
     "statusQualityAssessment": "Quality Assessment",
     "statusCompleted": "Completed",
+    "statusPendingParts": "Pending Parts",
     "statusCanceled": "Canceled",
     "fieldsClient": "Client",
     "fieldsLocation": "Location",
@@ -160,6 +162,7 @@
     "typeElectronic": "Electronic",
     "typeHydraulic": "Hydraulic",
     "typeOthers": "Others",
+    "typeComputing": "Computing",
     "transportGuide": "Transport Guide",
     "transportGuidePlaceholder": "e.g. GR-12345",
     "startDate": "Start Date",

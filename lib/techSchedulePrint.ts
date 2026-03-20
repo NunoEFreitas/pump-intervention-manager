@@ -20,10 +20,12 @@ export interface ScheduleIntervention {
 
 const STATUS_LABEL: Record<string, string> = {
   OPEN: 'Por Atribuir', ASSIGNED: 'Atribuída', IN_PROGRESS: 'Em Curso',
+  PENDING_PARTS: 'Aguarda Peças',
   QUALITY_ASSESSMENT: 'Controlo de Qualidade', COMPLETED: 'Concluída', CANCELED: 'Cancelada',
 }
 const STATUS_COLOR: Record<string, string> = {
   OPEN: '#b45309', ASSIGNED: '#c2410c', IN_PROGRESS: '#1d4ed8',
+  PENDING_PARTS: '#e11d48',
   QUALITY_ASSESSMENT: '#7c3aed', COMPLETED: '#15803d', CANCELED: '#b91c1c',
 }
 

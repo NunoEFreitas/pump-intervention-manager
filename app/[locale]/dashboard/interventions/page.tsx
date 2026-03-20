@@ -48,6 +48,7 @@ function InterventionsContent() {
       case 'OPEN':               return 'border-yellow-400'
       case 'ASSIGNED':           return 'border-orange-400'
       case 'IN_PROGRESS':        return 'border-blue-500'
+      case 'PENDING_PARTS':      return 'border-rose-500'
       case 'QUALITY_ASSESSMENT': return 'border-purple-500'
       case 'COMPLETED':          return 'border-green-500'
       case 'CANCELED':           return 'border-red-400'
@@ -66,6 +67,8 @@ function InterventionsContent() {
         return t('statusAssigned')
       case 'IN_PROGRESS':
         return t('statusInProgress')
+      case 'PENDING_PARTS':
+        return t('statusPendingParts')
       case 'QUALITY_ASSESSMENT':
         return t('statusQualityAssessment')
       case 'COMPLETED':
@@ -154,7 +157,7 @@ function InterventionsContent() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {['ALL', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED'].map((status) => (
+          {['ALL', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_PARTS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED'].map((status) => (
             <button
               key={status}
               onClick={() => setStatusFilter(status)}

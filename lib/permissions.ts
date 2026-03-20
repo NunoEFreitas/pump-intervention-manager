@@ -1,5 +1,5 @@
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'TECHNICIAN'
-export type InterventionStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'QUALITY_ASSESSMENT' | 'COMPLETED' | 'CANCELED'
+export type InterventionStatus = 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'PENDING_PARTS' | 'QUALITY_ASSESSMENT' | 'COMPLETED' | 'CANCELED'
 
 export const canEditIntervention = (userRole: UserRole, status: InterventionStatus): boolean => {
   // ADMIN can always edit
@@ -48,10 +48,10 @@ export const getAvailableStatuses = (
   let statuses: InterventionStatus[]
 
   if (userRole === 'ADMIN' || userRole === 'SUPERVISOR') {
-    statuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED']
+    statuses = ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_PARTS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED']
   } else {
     // TECHNICIAN
-    statuses = ['ASSIGNED', 'IN_PROGRESS', 'QUALITY_ASSESSMENT']
+    statuses = ['ASSIGNED', 'IN_PROGRESS', 'PENDING_PARTS', 'QUALITY_ASSESSMENT']
   }
 
   if (!hasTechnician) {
@@ -69,6 +69,8 @@ export const getStatusLabel = (status: InterventionStatus): string => {
       return 'Assigned'
     case 'IN_PROGRESS':
       return 'In Progress'
+    case 'PENDING_PARTS':
+      return 'Pending Parts'
     case 'QUALITY_ASSESSMENT':
       return 'Quality Assessment'
     case 'COMPLETED':
@@ -88,6 +90,8 @@ export const getStatusColor = (status: InterventionStatus): string => {
       return 'bg-orange-100 text-orange-800'
     case 'IN_PROGRESS':
       return 'bg-blue-100 text-blue-800'
+    case 'PENDING_PARTS':
+      return 'bg-rose-100 text-rose-800'
     case 'QUALITY_ASSESSMENT':
       return 'bg-purple-100 text-purple-800'
     case 'COMPLETED':
