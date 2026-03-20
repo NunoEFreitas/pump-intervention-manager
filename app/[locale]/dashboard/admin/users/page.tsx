@@ -68,6 +68,7 @@ export default function AdminUsersPage() {
       case 'ADMIN': return 'bg-purple-100 text-purple-800'
       case 'SUPERVISOR': return 'bg-blue-100 text-blue-800'
       case 'TECHNICIAN': return 'bg-green-100 text-green-800'
+      case 'CLIENT': return 'bg-orange-100 text-orange-800'
       default: return 'bg-gray-100 text-gray-800'
     }
   }
@@ -77,6 +78,7 @@ export default function AdminUsersPage() {
       case 'ADMIN': return t('rolesAdmin')
       case 'SUPERVISOR': return t('rolesSupervisor')
       case 'TECHNICIAN': return t('rolesTechnician')
+      case 'CLIENT': return 'Cliente'
       default: return role
     }
   }
@@ -94,11 +96,12 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4 mb-6">
+      <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-5 mb-6">
         <div className="card"><p className="text-sm font-medium text-gray-600">{t('totalUsers')}</p><p className="text-2xl font-bold text-gray-900">{users.length}</p></div>
         <div className="card"><p className="text-sm font-medium text-gray-600">{t('admins')}</p><p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role === 'ADMIN').length}</p></div>
         <div className="card"><p className="text-sm font-medium text-gray-600">{t('supervisors')}</p><p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role === 'SUPERVISOR').length}</p></div>
         <div className="card"><p className="text-sm font-medium text-gray-600">{t('technicians')}</p><p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role === 'TECHNICIAN').length}</p></div>
+        <div className="card"><p className="text-sm font-medium text-gray-600">Clientes</p><p className="text-2xl font-bold text-gray-900">{users.filter(u => u.role === 'CLIENT').length}</p></div>
       </div>
 
       <div className="card">

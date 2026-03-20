@@ -135,6 +135,7 @@ model Intervention {
   partsUsed        InterventionPart[]  // Parts used in this intervention
   workOrders       WorkOrder[]
   clientParts      SerialNumberStock[] @relation("ClientPartSerialNumbers")
+  photos           InterventionPhoto[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 }
@@ -378,6 +379,19 @@ model OvmRegulator {
   id        String   @id @default(uuid())
   name      String
   createdAt DateTime @default(now())
+}
+
+model InterventionPhoto {
+  id             String       @id @default(uuid())
+  interventionId String
+  intervention   Intervention @relation(fields: [interventionId], references: [id], onDelete: Cascade)
+  filename       String
+  mimeType       String
+  data           String       @db.Text
+  createdAt      DateTime     @default(now())
+  createdById    String?
+
+  @@index([interventionId])
 }
 
 model PartRequest {

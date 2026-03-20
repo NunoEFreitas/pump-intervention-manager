@@ -135,6 +135,22 @@ interface Intervention {
   } | null
 }
 
+// Lazy-loads and displays a photo thumbnail using auth token
+function PhotoThumb({ interventionId, photo, onClick }: { interventionId: string; photo: { id: string; mimeType: string; filename: string }; onClick: () => void }) {
+  const [src, setSrc] = useState('')
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    fetch(`/api/interventions/${interventionId}/photos/${photo.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.json()).then(d => { if (d.data) setSrc(d.data) }).catch(() => {})
+  }, [photo.id, interventionId])
+  if (!src) return <div className="w-full h-full bg-gray-100 animate-pulse" />
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={photo.filename} className="w-full h-full object-cover cursor-pointer" onClick={onClick} />
+  )
+}
+
 export default function InterventionDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -215,6 +231,14 @@ export default function InterventionDetailPage() {
   const [prItemOpen, setPrItemOpen] = useState(false)
   const [partRequestSaving, setPartRequestSaving] = useState(false)
 
+  // Photos
+  type InterventionPhoto = { id: string; filename: string; mimeType: string; createdAt: string }
+  const [photos, setPhotos] = useState<InterventionPhoto[]>([])
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ id: string; filename: string; mimeType: string; data: string } | null>(null)
+  const [lightboxLoading, setLightboxLoading] = useState(false)
+
   const handlePrintWorkOrder = async (wo: WorkOrder) => {
     if (!intervention) return
     if (!printCompany) {
@@ -263,6 +287,7 @@ export default function InterventionDetailPage() {
       fetchClientParts()
       fetchWarehouseItems()
       fetchPartRequests()
+      fetchPhotos()
     }
   }, [params.id])
 
@@ -347,6 +372,81 @@ export default function InterventionDetailPage() {
       const data = await res.json()
       setPartRequests(Array.isArray(data) ? data : [])
     } catch { /* non-blocking */ }
+  }
+
+  const fetchPhotos = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/photos`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setPhotos(Array.isArray(data) ? data : [])
+    } catch { /* non-blocking */ }
+  }
+
+  const uploadPhotos = async (files: FileList) => {
+    setPhotoError('')
+    const token = localStorage.getItem('token')
+    const toUpload = Array.from(files).filter(f => f.type.startsWith('image/'))
+    if (toUpload.length === 0) return
+    if (toUpload.some(f => f.size > 6 * 1024 * 1024)) {
+      setPhotoError('Cada foto deve ter no máximo 6MB.')
+      return
+    }
+    setPhotoUploading(true)
+    try {
+      for (const file of toUpload) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        const res = await fetch(`/api/interventions/${params.id}/photos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ filename: file.name, mimeType: file.type, data: base64 }),
+        })
+        if (!res.ok) {
+          const err = await res.json()
+          setPhotoError(err.error || 'Erro ao enviar foto.')
+          break
+        }
+      }
+      fetchPhotos()
+    } catch {
+      setPhotoError('Erro ao enviar foto.')
+    } finally {
+      setPhotoUploading(false)
+    }
+  }
+
+  const deletePhoto = async (photoId: string) => {
+    if (!confirm('Eliminar esta foto?')) return
+    const token = localStorage.getItem('token')
+    await fetch(`/api/interventions/${params.id}/photos/${photoId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    setPhotos(prev => prev.filter(p => p.id !== photoId))
+  }
+
+  const openLightbox = async (photo: InterventionPhoto) => {
+    setLightboxLoading(true)
+    setLightboxPhoto({ ...photo, data: '' })
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/photos/${photo.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      setLightboxPhoto(data)
+    } catch {
+      setLightboxPhoto(null)
+    } finally {
+      setLightboxLoading(false)
+    }
   }
 
   const submitPartRequest = async () => {
@@ -2144,6 +2244,100 @@ export default function InterventionDetailPage() {
             </div>
           )}
         </div>
+
+        {/* Photos section */}
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-xl font-bold text-gray-900">Fotos</h2>
+            <label className={`btn btn-primary text-sm cursor-pointer ${photoUploading ? 'opacity-50 pointer-events-none' : ''}`}>
+              {photoUploading ? 'A enviar…' : '+ Adicionar Fotos'}
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => { if (e.target.files?.length) uploadPhotos(e.target.files); e.target.value = '' }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 mb-4">Máximo 6MB por foto · JPG, PNG, WEBP</p>
+
+          {photoError && (
+            <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2 mb-3">{photoError}</p>
+          )}
+
+          {photos.length === 0 && !photoUploading ? (
+            <div
+              className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center cursor-pointer hover:border-blue-300 transition-colors"
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) uploadPhotos(e.dataTransfer.files) }}
+              onClick={() => document.getElementById('photo-drop-input')?.click()}
+            >
+              <svg className="w-8 h-8 text-gray-300 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm text-gray-400">Arrastar fotos aqui ou clicar para selecionar</p>
+              <p className="text-xs text-gray-300 mt-1">Máximo 6MB por foto · JPG, PNG, WEBP</p>
+              <input id="photo-drop-input" type="file" accept="image/*" multiple className="hidden"
+                onChange={e => { if (e.target.files?.length) uploadPhotos(e.target.files); e.target.value = '' }} />
+            </div>
+          ) : (
+            <div
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"
+              onDragOver={e => e.preventDefault()}
+              onDrop={e => { e.preventDefault(); if (e.dataTransfer.files.length) uploadPhotos(e.dataTransfer.files) }}
+            >
+              {photos.map(photo => (
+                <div key={photo.id} className="flex flex-col rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                  <div className="relative aspect-square">
+                    <PhotoThumb interventionId={params.id as string} photo={photo} onClick={() => openLightbox(photo)} />
+                  </div>
+                  <div className="flex items-center justify-between gap-1 px-2 py-1.5 bg-white border-t border-gray-100">
+                    <span className="text-xs text-gray-500 truncate flex-1">{photo.filename}</span>
+                    <button
+                      onClick={() => deletePhoto(photo.id)}
+                      className="flex-shrink-0 text-red-400 hover:text-red-600 text-xs font-medium"
+                      title="Eliminar"
+                    >Eliminar</button>
+                  </div>
+                </div>
+              ))}
+              {photoUploading && (
+                <div className="aspect-square rounded-lg border-2 border-dashed border-blue-200 bg-blue-50 flex items-center justify-center">
+                  <span className="text-xs text-blue-400">A enviar…</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Lightbox */}
+        {lightboxPhoto && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div className="relative max-w-4xl max-h-full" onClick={e => e.stopPropagation()}>
+              <button
+                onClick={() => setLightboxPhoto(null)}
+                className="absolute -top-10 right-0 text-white text-2xl leading-none hover:text-gray-300"
+              >✕</button>
+              {lightboxLoading || !lightboxPhoto.data ? (
+                <div className="w-64 h-64 flex items-center justify-center">
+                  <span className="text-white text-sm">A carregar…</span>
+                </div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={lightboxPhoto.data}
+                  alt={lightboxPhoto.filename}
+                  className="max-w-full max-h-[85vh] rounded-lg object-contain"
+                />
+              )}
+              <p className="text-white text-xs text-center mt-2 opacity-60">{lightboxPhoto.filename}</p>
+            </div>
+          </div>
+        )}
 
         {/* OVM section */}
         <div className="card mb-6">

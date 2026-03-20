@@ -217,17 +217,24 @@ export default function EditUserPage() {
           <label className="block text-sm font-medium text-gray-700 mb-1">
             {tAdmin('role')} *
           </label>
-          <select
-            name="role"
-            className="input text-gray-800"
-            value={formData.role}
-            onChange={handleChange}
-            required
-          >
-            <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
-            <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
-            <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
-          </select>
+          {user.role === 'CLIENT' ? (
+            <div className="input text-gray-500 bg-gray-50 flex items-center gap-2 cursor-not-allowed">
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Cliente</span>
+              <span className="text-sm text-gray-400">— não pode ser alterado</span>
+            </div>
+          ) : (
+            <select
+              name="role"
+              className="input text-gray-800"
+              value={formData.role}
+              onChange={handleChange}
+              required
+            >
+              <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
+              <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
+              <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
+            </select>
+          )}
         </div>
 
         {error && (
