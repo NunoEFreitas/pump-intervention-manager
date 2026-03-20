@@ -2015,8 +2015,8 @@ export default function InterventionDetailPage() {
             )}
           </div>
         {/* Part Requests section */}
-        <div className="card space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">Pedidos de Peças</h2>
             {!showPartRequestForm && (
               <button onClick={() => setShowPartRequestForm(true)} className="btn btn-primary text-sm px-3 py-1.5">
@@ -2146,8 +2146,8 @@ export default function InterventionDetailPage() {
         </div>
 
         {/* OVM section */}
-        <div className="card space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">OVM</h2>
             {!showOVMForm && !editingOVMId && (
               <button
