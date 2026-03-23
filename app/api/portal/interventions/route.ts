@@ -75,6 +75,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'breakdown is required' }, { status: 400 })
     }
 
+    // If a location is provided, verify it belongs to this client (prevents IDOR)
+    if (locationId) {
+      const locationRows = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "CompanyLocation" WHERE id = ${locationId} AND "clientId" = ${user.clientId}
+      `
+      if (locationRows.length === 0) {
+        return NextResponse.json({ error: 'Invalid location' }, { status: 400 })
+      }
+    }
+
     const intervention = await prisma.intervention.create({
       data: {
         clientId: user.clientId,

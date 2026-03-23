@@ -22,6 +22,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    if (serialNumberIds.length < 1 || serialNumberIds.length > 500) {
+      return NextResponse.json({ error: 'Invalid serial number count' }, { status: 400 })
+    }
 
     // Validate that all serial numbers exist and are available
     const serialNumbers = await prisma.serialNumberStock.findMany({

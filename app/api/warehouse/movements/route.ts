@@ -23,6 +23,9 @@ export async function POST(request: NextRequest) {
     }
 
     const quantity = parseInt(data.quantity)
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return NextResponse.json({ error: 'Quantity must be a positive integer' }, { status: 400 })
+    }
     
     // Get current item state
     const item = await prisma.warehouseItem.findUnique({

@@ -55,8 +55,9 @@ export async function POST(
     const { id: jobId } = await params
     const { itemId, quantity, notes } = await request.json()
 
-    if (!itemId || !quantity || quantity < 1) {
-      return NextResponse.json({ error: 'itemId and quantity are required' }, { status: 400 })
+    const parsedQty = parseInt(quantity)
+    if (!itemId || !Number.isInteger(parsedQty) || parsedQty < 1) {
+      return NextResponse.json({ error: 'itemId and a positive integer quantity are required' }, { status: 400 })
     }
 
     // Verify job exists and is active
@@ -75,7 +76,7 @@ export async function POST(
     `
     const item = itemRows[0]
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
-    if (item.mainWarehouse < quantity) {
+    if (item.mainWarehouse < parsedQty) {
       return NextResponse.json({ error: `Stock insuficiente. Disponível: ${item.mainWarehouse}` }, { status: 400 })
     }
 
@@ -86,7 +87,7 @@ export async function POST(
     // Deduct from main warehouse
     await prisma.$executeRaw`
       UPDATE "WarehouseItem"
-      SET "mainWarehouse" = "mainWarehouse" - ${quantity}, "updatedAt" = ${now}::timestamptz
+      SET "mainWarehouse" = "mainWarehouse" - ${parsedQty}, "updatedAt" = ${now}::timestamptz
       WHERE id = ${itemId}
     `
 
@@ -97,20 +98,20 @@ export async function POST(
 
     await prisma.$executeRaw`
       INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, notes, "createdById", "createdAt")
-      VALUES (${movId}, ${itemId}, 'USE', ${quantity}, ${movNote}, ${payload.userId}, ${now}::timestamptz)
+      VALUES (${movId}, ${itemId}, 'USE', ${parsedQty}, ${movNote}, ${payload.userId}, ${now}::timestamptz)
     `
 
     // Create RepairJobPart record
     await prisma.$executeRaw`
       INSERT INTO "RepairJobPart" (id, "jobId", "itemId", quantity, notes, "addedById", "addedAt")
-      VALUES (${partId}, ${jobId}, ${itemId}, ${quantity}, ${notes || null}, ${payload.userId}, ${now}::timestamptz)
+      VALUES (${partId}, ${jobId}, ${itemId}, ${parsedQty}, ${notes || null}, ${payload.userId}, ${now}::timestamptz)
     `
 
     return NextResponse.json({
       id: partId,
       jobId,
       itemId,
-      quantity,
+      quantity: parsedQty,
       notes: notes || null,
       addedById: payload.userId,
       addedAt: now,

@@ -36,7 +36,6 @@ function NewInterventionContent() {
   const tNav = useTranslations('nav')
 
   const [loading, setLoading] = useState(false)
-  const [clients, setClients] = useState<Client[]>([])
   const [technicians, setTechnicians] = useState<Technician[]>([])
   const [locations, setLocations] = useState<CompanyLocation[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
@@ -54,33 +53,8 @@ function NewInterventionContent() {
   })
 
   useEffect(() => {
-    fetchClients()
     fetchTechnicians()
   }, [])
-
-  // When clients are loaded and we have a preselected client, load that client's locations
-  useEffect(() => {
-    if (preSelectedClientId && clients.length > 0) {
-      const client = clients.find((c) => c.id === preSelectedClientId)
-      if (client) {
-        setSelectedClient(client)
-        fetchLocations(client.id)
-      }
-    }
-  }, [clients, preSelectedClientId])
-
-  const fetchClients = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/clients', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const data = await response.json()
-      setClients(data)
-    } catch (error) {
-      console.error('Error fetching clients:', error)
-    }
-  }
 
   const fetchTechnicians = async () => {
     try {
@@ -108,12 +82,11 @@ function NewInterventionContent() {
     }
   }
 
-  const handleClientChange = (clientId: string) => {
-    const client = clients.find((c) => c.id === clientId) || null
+  const handleClientChange = (clientId: string, client: Client | null) => {
     setSelectedClient(client)
     setFormData({ ...formData, clientId, locationId: '' })
     setLocations([])
-    fetchLocations(clientId)
+    if (clientId) fetchLocations(clientId)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -174,7 +147,6 @@ function NewInterventionContent() {
         </div>
 
         <ClientSelector
-          clients={clients}
           value={formData.clientId}
           onChange={handleClientChange}
           label={t('fieldsClient')}

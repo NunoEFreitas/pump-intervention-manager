@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { verifyToken } from '@/lib/auth'
 import { requireAdmin } from '@/lib/middleware'
 
 const KEYS = ['company.name', 'company.email', 'company.address', 'company.phones', 'company.faxes', 'company.logo']
 
 export async function GET(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!verifyToken(token || '')) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const rows = await (prisma as any).systemSetting.findMany({
     where: { key: { in: KEYS } },

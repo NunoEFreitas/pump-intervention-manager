@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, hashPassword } from '@/lib/auth'
 import { generateUserReference } from '@/lib/reference'
+import { z } from 'zod'
+
+const CreateClientUserSchema = z.object({
+  email: z.string().email('Invalid email address').max(255),
+  name: z.string().min(1, 'Name is required').max(255),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(255),
+})
 
 export async function POST(
   request: NextRequest,
@@ -36,11 +43,12 @@ export async function POST(
       return NextResponse.json({ error: 'Client not found' }, { status: 404 })
     }
 
-    const { email, password, name } = await request.json()
-
-    if (!email || !password || !name) {
-      return NextResponse.json({ error: 'email, password and name are required' }, { status: 400 })
+    const body = await request.json()
+    const parsed = CreateClientUserSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
     }
+    const { email, password, name } = parsed.data
 
     // Check if email already exists
     const existing = await prisma.$queryRaw<{ id: string }[]>`

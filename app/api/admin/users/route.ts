@@ -3,6 +3,14 @@ import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth'
 import { requireAdmin } from '@/lib/middleware'
 import { generateUserReference } from '@/lib/reference'
+import { z } from 'zod'
+
+const CreateUserSchema = z.object({
+  email: z.string().email('Invalid email address').max(255),
+  name: z.string().min(1, 'Name is required').max(255),
+  password: z.string().min(8, 'Password must be at least 8 characters').max(255),
+  role: z.enum(['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] as const, { message: 'Invalid role' }),
+})
 
 // GET all users (admin only)
 export async function GET(request: NextRequest) {
@@ -52,7 +60,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const data = await request.json()
+    const body = await request.json()
+    const parsed = CreateUserSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 })
+    }
+    const data = parsed.data
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -63,14 +76,6 @@ export async function POST(request: NextRequest) {
     if (existingUser) {
       return NextResponse.json(
         { error: 'User with this email already exists' },
-        { status: 400 }
-      )
-    }
-
-    // Validate role
-    if (!['ADMIN', 'SUPERVISOR', 'TECHNICIAN'].includes(data.role)) {
-      return NextResponse.json(
-        { error: 'Invalid role' },
         { status: 400 }
       )
     }

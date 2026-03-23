@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 
@@ -23,21 +23,30 @@ export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalClients, setTotalClients] = useState(0)
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const tClients = useTranslations('clients')
 
   useEffect(() => {
-    fetchClients()
+    fetchClients(1, '')
   }, [])
 
-  const fetchClients = async () => {
+  const fetchClients = async (page: number, search: string) => {
+    setLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/clients', {
+      const params = new URLSearchParams({ page: String(page), search })
+      const response = await fetch(`/api/clients?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
-      setClients(data)
+      setClients(data.clients ?? [])
+      setTotalPages(data.pages ?? 1)
+      setTotalClients(data.total ?? 0)
+      setCurrentPage(data.page ?? 1)
     } catch (error) {
       console.error('Error fetching clients:', error)
     } finally {
@@ -45,19 +54,13 @@ export default function ClientsPage() {
     }
   }
 
-  const filteredClients = clients.filter((client) =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.reference?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">{tClients('loadingClients')}</div>
-      </div>
-    )
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => fetchClients(1, value), 350)
   }
+
+  const goToPage = (page: number) => fetchClients(page, searchTerm)
 
   return (
     <div>
@@ -80,11 +83,15 @@ export default function ClientsPage() {
           placeholder={tClients('searchPlaceholder')}
           className="input"
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
         />
       </div>
 
-      {filteredClients.length === 0 ? (
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">{tClients('loadingClients')}</div>
+        </div>
+      ) : clients.length === 0 ? (
         <div className="card text-center py-12">
           <p className="text-gray-600 mb-4">
             {searchTerm ? tClients('noClientsFound') : tClients('noClients')}
@@ -99,8 +106,9 @@ export default function ClientsPage() {
           )}
         </div>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredClients.map((client) => (
+          {clients.map((client) => (
             <div
               key={client.id}
               className="card hover:shadow-lg transition-shadow cursor-pointer"
@@ -150,6 +158,33 @@ export default function ClientsPage() {
             </div>
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-6 px-1">
+            <p className="text-sm text-gray-500">
+              {totalClients} {totalClients === 1 ? 'cliente' : 'clientes'}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => goToPage(currentPage - 1)}
+                disabled={currentPage === 1 || loading}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                ← Anterior
+              </button>
+              <span className="text-sm text-gray-700">{currentPage} / {totalPages}</span>
+              <button
+                onClick={() => goToPage(currentPage + 1)}
+                disabled={currentPage === totalPages || loading}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Próximo →
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
     </div>
   )

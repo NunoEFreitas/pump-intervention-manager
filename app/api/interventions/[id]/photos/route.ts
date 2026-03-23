@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
-
-const MAX_SIZE_BYTES = 8 * 1024 * 1024 // 8MB base64 string limit
+import { detectImageMime, stripDataUrl, MAX_PHOTO_BYTES } from '@/lib/photo-validation'
 
 export async function GET(
   request: NextRequest,
@@ -38,25 +37,28 @@ export async function POST(
     const { id: interventionId } = await params
     const { filename, mimeType, data } = await request.json() as { filename: string; mimeType: string; data: string }
 
-    if (!filename || !mimeType || !data) {
-      return NextResponse.json({ error: 'filename, mimeType and data are required' }, { status: 400 })
+    if (!filename || !data) {
+      return NextResponse.json({ error: 'filename and data are required' }, { status: 400 })
     }
-    if (!mimeType.startsWith('image/')) {
-      return NextResponse.json({ error: 'Only image files are allowed' }, { status: 400 })
+    if (data.length > MAX_PHOTO_BYTES) {
+      return NextResponse.json({ error: 'Image too large (max 8MB)' }, { status: 400 })
     }
-    if (data.length > MAX_SIZE_BYTES) {
-      return NextResponse.json({ error: 'Image too large (max 6MB)' }, { status: 400 })
+    // Detect MIME from magic bytes — ignore client-supplied mimeType to prevent spoofing
+    const detectedMime = detectImageMime(data)
+    if (!detectedMime) {
+      return NextResponse.json({ error: 'Only image files are allowed (JPEG, PNG, GIF, WebP, HEIC)' }, { status: 400 })
     }
+    const safeData = stripDataUrl(data)
 
     const photoId = crypto.randomUUID()
     const now = new Date()
 
     await prisma.$executeRaw`
       INSERT INTO "InterventionPhoto" (id, "interventionId", filename, "mimeType", data, "createdAt", "createdById")
-      VALUES (${photoId}, ${interventionId}, ${filename}, ${mimeType}, ${data}, ${now}::timestamptz, ${payload.userId})
+      VALUES (${photoId}, ${interventionId}, ${filename}, ${detectedMime}, ${safeData}, ${now}::timestamptz, ${payload.userId})
     `
 
-    return NextResponse.json({ id: photoId, filename, mimeType, createdAt: now }, { status: 201 })
+    return NextResponse.json({ id: photoId, filename, mimeType: detectedMime, createdAt: now }, { status: 201 })
   } catch (error) {
     console.error('Error uploading photo:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
