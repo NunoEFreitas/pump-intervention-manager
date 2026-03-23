@@ -567,15 +567,12 @@ export default function InterventionDetailPage() {
   const fetchWarehouseItems = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/warehouse', {
+      const response = await fetch('/api/warehouse?limit=100', {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
-      setWarehouseItems(
-        Array.isArray(data)
-          ? data.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers }))
-          : []
-      )
+      const list = Array.isArray(data) ? data : (data.items ?? [])
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     }

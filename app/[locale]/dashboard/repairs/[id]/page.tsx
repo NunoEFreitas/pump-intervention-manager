@@ -164,11 +164,10 @@ export default function RepairDetailPage() {
 
   const fetchWarehouseItems = async () => {
     try {
-      const res = await fetch('/api/warehouse', { headers: { Authorization: `Bearer ${token()}` } })
+      const res = await fetch('/api/warehouse?limit=100', { headers: { Authorization: `Bearer ${token()}` } })
       const data = await res.json()
-      setWarehouseItems(Array.isArray(data)
-        ? data.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, mainWarehouse: i.mainWarehouse }))
-        : [])
+      const list = Array.isArray(data) ? data : (data.items ?? [])
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, mainWarehouse: i.mainWarehouse })))
     } catch { /* ignore */ }
   }
 

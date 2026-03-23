@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 
@@ -17,6 +17,14 @@ interface WarehouseItem {
     technician: { id: string; name: string }
     quantity: number
   }>
+}
+
+interface WarehousePage {
+  items: WarehouseItem[]
+  total: number
+  page: number
+  pages: number
+  limit: number
 }
 
 interface PartRequest {
@@ -70,6 +78,10 @@ export default function WarehousePage() {
   const [items, setItems] = useState<WarehouseItem[]>([])
   const [stockLoading, setStockLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalItems, setTotalItems] = useState(0)
+  const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Part Requests
   const [partRequests, setPartRequests] = useState<PartRequest[]>([])
@@ -84,27 +96,40 @@ export default function WarehousePage() {
   const [snLoading, setSnLoading] = useState(false)
 
   useEffect(() => {
-    fetchItems()
+    fetchItems(1, searchTerm)
   }, [])
 
   useEffect(() => {
     if (tab === 'requests') fetchPartRequests()
   }, [tab])
 
-  const fetchItems = async () => {
+  const fetchItems = async (page: number, search: string) => {
+    setStockLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/warehouse', {
+      const params = new URLSearchParams({ page: String(page), search })
+      const response = await fetch(`/api/warehouse?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       })
-      const data = await response.json()
-      setItems(data)
+      const data: WarehousePage = await response.json()
+      setItems(data.items ?? [])
+      setTotalPages(data.pages ?? 1)
+      setTotalItems(data.total ?? 0)
+      setCurrentPage(data.page ?? 1)
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     } finally {
       setStockLoading(false)
     }
   }
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    if (searchDebounce.current) clearTimeout(searchDebounce.current)
+    searchDebounce.current = setTimeout(() => fetchItems(1, value), 350)
+  }
+
+  const goToPage = (page: number) => fetchItems(page, searchTerm)
 
   const fetchPartRequests = async () => {
     setPrLoading(true)
@@ -210,11 +235,6 @@ export default function WarehousePage() {
     finally { setTransferring(false) }
   }
 
-  const filteredItems = items.filter(item =>
-    item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.partNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
   const filteredRequests = partRequests
     .filter(r => prStatusFilter === 'ALL' || r.status === prStatusFilter)
     .filter(r =>
@@ -227,14 +247,6 @@ export default function WarehousePage() {
 
   // Count pending requests for badge
   const pendingCount = partRequests.filter(r => r.status === 'PENDING' || r.status === 'RECEIVED').length
-
-  if (stockLoading && tab === 'stock') {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-600">{tCommon('loading')}</div>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -280,11 +292,15 @@ export default function WarehousePage() {
               className="input"
               placeholder={`${tCommon('search')}...`}
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
             />
           </div>
 
-          {filteredItems.length === 0 ? (
+          {stockLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="text-gray-600">{tCommon('loading')}</div>
+            </div>
+          ) : items.length === 0 ? (
             <div className="card text-center py-12">
               <p className="text-gray-600 mb-4">{t('noItems')}</p>
               <button onClick={() => router.push(`/${locale}/dashboard/warehouse/new`)} className="btn btn-primary">
@@ -293,7 +309,7 @@ export default function WarehousePage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <div
                   key={item.id}
                   className="card hover:shadow-lg transition-shadow cursor-pointer"
@@ -347,6 +363,34 @@ export default function WarehousePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 px-1">
+              <p className="text-sm text-gray-500">
+                {totalItems} {totalItems === 1 ? 'item' : 'itens'}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goToPage(currentPage - 1)}
+                  disabled={currentPage === 1 || stockLoading}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  ← Anterior
+                </button>
+                <span className="text-sm text-gray-700">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => goToPage(currentPage + 1)}
+                  disabled={currentPage === totalPages || stockLoading}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Próximo →
+                </button>
+              </div>
             </div>
           )}
         </>

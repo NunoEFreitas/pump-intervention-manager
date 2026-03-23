@@ -32,6 +32,8 @@ model User {
   workOrdersCreated       WorkOrder[] @relation("WorkOrderCreatedBy")
   clientPartsPickedUp     SerialNumberStock[] @relation("ClientPartPickedUpBy")
   workOrderPartsUsed      WorkOrderPart[] @relation("WorkOrderPartUsedBy")
+
+  @@index([role])
 }
 
 enum UserRole {
@@ -139,6 +141,11 @@ model Intervention {
   photos           InterventionPhoto[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+
+  @@index([clientId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([scheduledDate])
 }
 
 // Track parts used in interventions
@@ -248,6 +255,9 @@ model SerialNumberStock {
   movements       MovementSerialNumber[]
 
   @@unique([itemId, serialNumber]) // Serial number must be unique per item
+  @@index([itemId])
+  @@index([technicianId])
+  @@index([location])
 }
 
 enum StockLocation {

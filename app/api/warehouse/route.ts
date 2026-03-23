@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 
-// GET all warehouse items
+// GET all warehouse items (paginated + search)
 export async function GET(request: NextRequest) {
   try {
     const token = request.headers.get('authorization')?.replace('Bearer ', '')
@@ -11,37 +11,82 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const items = await prisma.warehouseItem.findMany({
-      include: {
-        technicianStocks: {
-          include: {
-            technician: { select: { id: true, name: true, email: true } },
-          },
-        },
-        _count: { select: { movements: true } },
-      },
-      orderBy: { createdAt: 'desc' },
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get('search')?.trim() || ''
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')))
+    const offset = (page - 1) * limit
+
+    const searchLike = `%${search.toLowerCase()}%`
+
+    const [countRows, items, extraFields] = await Promise.all([
+      prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::bigint AS count FROM "WarehouseItem"
+        WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+      `,
+      prisma.$queryRaw<Array<{
+        id: string
+        itemName: string
+        partNumber: string
+        value: number
+        mainWarehouse: number
+        repairStock: number
+        tracksSerialNumbers: boolean
+        autoSn: boolean
+        snExample: string | null
+        equipmentTypeId: string | null
+        brandId: string | null
+        createdAt: Date
+        updatedAt: Date
+      }>>`
+        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock",
+               "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
+               "createdAt", "updatedAt"
+        FROM "WarehouseItem"
+        WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+        ORDER BY "createdAt" DESC
+        LIMIT ${limit} OFFSET ${offset}
+      `,
+      prisma.$queryRaw<Array<{
+        itemId: string
+        technicianId: string
+        technicianName: string
+        quantity: number
+      }>>`
+        SELECT ts."itemId", ts."technicianId", u.name AS "technicianName", ts.quantity
+        FROM "TechnicianStock" ts
+        JOIN "User" u ON u.id = ts."technicianId"
+        WHERE ts."itemId" IN (
+          SELECT id FROM "WarehouseItem"
+          WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+          ORDER BY "createdAt" DESC
+          LIMIT ${limit} OFFSET ${offset}
+        )
+      `,
+    ])
+
+    const total = Number(countRows[0].count)
+    const pages = Math.ceil(total / limit)
+
+    // Group technician stocks by itemId
+    const techMap = new Map<string, Array<{ technician: { id: string; name: string }; quantity: number }>>()
+    for (const ts of extraFields) {
+      if (!techMap.has(ts.itemId)) techMap.set(ts.itemId, [])
+      techMap.get(ts.itemId)!.push({ technician: { id: ts.technicianId, name: ts.technicianName }, quantity: ts.quantity })
+    }
+
+    const itemsWithTotals = items.map(item => {
+      const techStocks = techMap.get(item.id) ?? []
+      const totalTechnicianStock = techStocks.reduce((s, ts) => s + ts.quantity, 0)
+      return {
+        ...item,
+        technicianStocks: techStocks,
+        totalTechnicianStock,
+        totalStock: item.mainWarehouse + totalTechnicianStock,
+      }
     })
 
-    const extraFields = await prisma.$queryRaw<Array<{
-      id: string
-      autoSn: boolean
-      snExample: string | null
-      equipmentTypeId: string | null
-      brandId: string | null
-    }>>`
-      SELECT id, "autoSn", "snExample", "equipmentTypeId", "brandId" FROM "WarehouseItem"
-    `
-    const extraMap = new Map(extraFields.map(f => [f.id, f]))
-
-    const itemsWithTotals = items.map(item => ({
-      ...item,
-      ...extraMap.get(item.id),
-      totalTechnicianStock: item.technicianStocks.reduce((sum, ts) => sum + ts.quantity, 0),
-      totalStock: item.mainWarehouse + item.technicianStocks.reduce((sum, ts) => sum + ts.quantity, 0),
-    }))
-
-    return NextResponse.json(itemsWithTotals)
+    return NextResponse.json({ items: itemsWithTotals, total, page, pages, limit })
   } catch (error) {
     console.error('Error fetching warehouse items:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
