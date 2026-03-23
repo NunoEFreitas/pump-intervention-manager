@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { generateRepairReference } from '@/lib/reference'
 
 // POST - Create movement with serial numbers
 export async function POST(request: NextRequest) {
@@ -70,6 +71,19 @@ export async function POST(request: NextRequest) {
     }
     // For USE: any available serial number can be consumed — no location restriction
 
+    // Pre-generate repair references for REPAIR_IN so they appear in the movement note
+    const repairRefs: string[] = []
+    if (movementType === 'REPAIR_IN') {
+      for (let i = 0; i < serialNumberIds.length; i++) {
+        repairRefs.push(await generateRepairReference())
+      }
+    }
+
+    const repairRefTag = repairRefs.length > 0 ? `[${repairRefs.join(', ')}]` : null
+    const movementNotes = repairRefTag
+      ? (notes ? `${repairRefTag} ${notes}` : repairRefTag)
+      : (notes || null)
+
     // Create the movement record
     const movement = await prisma.itemMovement.create({
       data: {
@@ -78,7 +92,7 @@ export async function POST(request: NextRequest) {
         quantity: serialNumberIds.length,
         fromUserId: fromUserId || null,
         toUserId,
-        notes,
+        notes: movementNotes,
         createdById: payload.userId,
       },
     })
@@ -177,6 +191,16 @@ export async function POST(request: NextRequest) {
           repairStock: { increment: serialNumberIds.length },
         } as any,
       })
+      // One PartRepairJob per serial number
+      const now = new Date()
+      for (let i = 0; i < serialNumberIds.length; i++) {
+        const snId = serialNumberIds[i]
+        const jobId = crypto.randomUUID()
+        await prisma.$executeRaw`
+          INSERT INTO "PartRepairJob" (id, reference, "itemId", "serialNumberId", quantity, status, problem, "sentAt", "sentById", "createdAt", "updatedAt")
+          VALUES (${jobId}, ${repairRefs[i]}, ${itemId}, ${snId}, 1, 'PENDING', ${notes || null}, ${now}::timestamptz, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz)
+        `
+      }
     } else if (movementType === 'REPAIR_OUT') {
       await prisma.serialNumberStock.updateMany({
         where: { id: { in: serialNumberIds } },

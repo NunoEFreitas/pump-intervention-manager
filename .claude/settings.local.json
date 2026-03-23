@@ -4,7 +4,14 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(npx prisma db push:*)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(node -e \":*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
+      "Bash(npx prisma:*)"
+    ],
+    "additionalDirectories": [
+      "c:\\pump-intervention-manager\\app\\[locale]\\dashboard",
+      "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\repairs\\[id]"
     ]
   }
 }

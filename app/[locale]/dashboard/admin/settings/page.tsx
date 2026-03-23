@@ -11,7 +11,7 @@ export default function AdminSettingsPage() {
   const t = useTranslations('admin')
   const tCommon = useTranslations('common')
 
-  const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '', workOrderPrefix: '' })
+  const [settings, setSettings] = useState({ clientPrefix: '', projectPrefix: '', workOrderPrefix: '', repairPrefix: '', userPrefix: '' })
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -21,7 +21,7 @@ export default function AdminSettingsPage() {
     const token = localStorage.getItem('token')
     fetch('/api/admin/settings', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
-      .then(data => setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '' }))
+      .then(data => setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '', repairPrefix: data.repairPrefix || '', userPrefix: data.userPrefix || '' }))
   }, [])
 
   const save = async () => {
@@ -33,7 +33,7 @@ export default function AdminSettingsPage() {
         body: JSON.stringify(settings),
       })
       const data = await res.json()
-      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '' })
+      setSettings({ clientPrefix: data.clientPrefix || '', projectPrefix: data.projectPrefix || '', workOrderPrefix: data.workOrderPrefix || '', repairPrefix: data.repairPrefix || '', userPrefix: data.userPrefix || '' })
       setSaved(true); setTimeout(() => setSaved(false), 2000)
     } finally { setSaving(false) }
   }
@@ -63,6 +63,16 @@ export default function AdminSettingsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">{t('workOrderPrefix')}</label>
             <input type="text" className="input text-gray-800" placeholder="e.g. WO" value={settings.workOrderPrefix} onChange={e => setSettings(s => ({ ...s, workOrderPrefix: e.target.value }))} />
             <p className="text-xs text-gray-500 mt-1">{t('workOrderPrefixHint')}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prefixo de Reparação</label>
+            <input type="text" className="input text-gray-800" placeholder="e.g. REP" value={settings.repairPrefix} onChange={e => setSettings(s => ({ ...s, repairPrefix: e.target.value }))} />
+            <p className="text-xs text-gray-500 mt-1">Usado para gerar referências de trabalhos de reparação (ex: REP-001/2025)</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Prefixo de Utilizador</label>
+            <input type="text" className="input text-gray-800" placeholder="e.g. USR" value={settings.userPrefix} onChange={e => setSettings(s => ({ ...s, userPrefix: e.target.value }))} />
+            <p className="text-xs text-gray-500 mt-1">Usado para gerar IDs de utilizadores (ex: USR-001)</p>
           </div>
           <div className="flex items-center gap-3 pt-2">
             <button onClick={save} disabled={saving} className="btn btn-primary">{saving ? tCommon('saving') : tCommon('save')}</button>

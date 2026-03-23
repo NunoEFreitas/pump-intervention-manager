@@ -35,7 +35,11 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    return NextResponse.json(user)
+    const refRow = await prisma.$queryRaw<{ reference: string | null }[]>`
+      SELECT reference FROM "User" WHERE id = ${id}
+    `
+
+    return NextResponse.json({ ...user, reference: refRow[0]?.reference ?? null })
   } catch (error) {
     console.error('Error fetching user:', error)
     return NextResponse.json(

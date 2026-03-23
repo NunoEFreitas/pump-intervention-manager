@@ -38,3 +38,22 @@ export async function generateWorkOrderReference(): Promise<string> {
     return `${prefix}-${String(counter).padStart(4, '0')}`
   })
 }
+
+export async function generateRepairReference(): Promise<string> {
+  return prisma.$transaction(async (tx: any) => {
+    const prefixRow = await tx.systemSetting.findUnique({ where: { key: 'repairPrefix' } })
+    const prefix = prefixRow?.value?.trim() || 'REP'
+    const counter = await nextCounter(tx, 'repairCounter')
+    const year = new Date().getFullYear()
+    return `${prefix}-${String(counter).padStart(3, '0')}/${year}`
+  })
+}
+
+export async function generateUserReference(): Promise<string> {
+  return prisma.$transaction(async (tx: any) => {
+    const prefixRow = await tx.systemSetting.findUnique({ where: { key: 'userPrefix' } })
+    const prefix = prefixRow?.value?.trim() || 'USR'
+    const counter = await nextCounter(tx, 'userCounter')
+    return `${prefix}-${String(counter).padStart(3, '0')}`
+  })
+}

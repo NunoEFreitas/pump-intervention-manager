@@ -12,6 +12,7 @@ datasource db {
 
 model User {
   id                      String         @id @default(uuid())
+  reference               String?        @unique
   email                   String         @unique
   password                String
   name                    String
@@ -407,4 +408,59 @@ model PartRequest {
 
   @@index([interventionId])
   @@index([status])
+}
+
+// Tracks individual parts sent to repair (created automatically on REPAIR_IN movement)
+model PartRepairJob {
+  id               String   @id @default(uuid())
+  reference        String?  @unique    // e.g. REP-001/2025
+  itemId           String              // WarehouseItem
+  serialNumberId   String?             // For SN-tracked items — one job per SN
+  quantity         Int      @default(1) // For non-SN items
+  status           String   @default("PENDING")
+  // PENDING | IN_REPAIR | REPAIRED | DELIVERED_CLIENT | WRITTEN_OFF
+  problem          String?  @db.Text   // Problem description (from REPAIR_IN notes)
+  workNotes        String?  @db.Text   // What was done during repair
+  supplier         String?             // External supplier / who is doing repair
+  sentAt           DateTime @default(now())
+  completedAt      DateTime?
+  deliveredToClientId String?          // If sent directly to client after repair
+  sentById         String
+  completedById    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  photos           RepairJobPhoto[]
+  parts            RepairJobPart[]
+
+  @@index([itemId])
+  @@index([status])
+  @@index([serialNumberId])
+}
+
+model RepairJobPart {
+  id          String        @id @default(uuid())
+  jobId       String
+  job         PartRepairJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  itemId      String
+  quantity    Int
+  notes       String?
+  addedById   String
+  addedAt     DateTime      @default(now())
+
+  @@index([jobId])
+  @@index([itemId])
+}
+
+model RepairJobPhoto {
+  id          String        @id @default(uuid())
+  jobId       String
+  job         PartRepairJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  filename    String
+  mimeType    String
+  data        String        @db.Text
+  createdAt   DateTime      @default(now())
+  createdById String?
+
+  @@index([jobId])
 }

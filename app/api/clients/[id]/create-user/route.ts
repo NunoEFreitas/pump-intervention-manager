@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken, hashPassword } from '@/lib/auth'
+import { generateUserReference } from '@/lib/reference'
 
 export async function POST(
   request: NextRequest,
@@ -50,15 +51,16 @@ export async function POST(
     }
 
     const hashedPassword = await hashPassword(password)
+    const reference = await generateUserReference()
     const id = crypto.randomUUID()
     const now = new Date()
 
     await prisma.$executeRaw`
-      INSERT INTO "User" (id, email, password, name, role, blocked, "clientId", "createdAt", "updatedAt")
-      VALUES (${id}, ${email}, ${hashedPassword}, ${name}, 'CLIENT', false, ${clientId}, ${now}::timestamptz, ${now}::timestamptz)
+      INSERT INTO "User" (id, reference, email, password, name, role, blocked, "clientId", "createdAt", "updatedAt")
+      VALUES (${id}, ${reference}, ${email}, ${hashedPassword}, ${name}, 'CLIENT', false, ${clientId}, ${now}::timestamptz, ${now}::timestamptz)
     `
 
-    return NextResponse.json({ id, email, name, role: 'CLIENT', clientId }, { status: 201 })
+    return NextResponse.json({ id, reference, email, name, role: 'CLIENT', clientId }, { status: 201 })
   } catch (error) {
     console.error('Error creating client user:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

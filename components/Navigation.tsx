@@ -46,6 +46,7 @@ export default function Navigation() {
     navItems.splice(1, 0, { name: t('clients'), path: `/${locale}/dashboard/clients` })
     navItems.push({ name: t('warehouse'), path: `/${locale}/dashboard/warehouse` })
     navItems.push({ name: t('technicians'), path: `/${locale}/dashboard/warehouse/technicians` })
+    navItems.push({ name: t('repairs'), path: `/${locale}/dashboard/repairs` })
   }
 
   if (user?.role === 'ADMIN') {

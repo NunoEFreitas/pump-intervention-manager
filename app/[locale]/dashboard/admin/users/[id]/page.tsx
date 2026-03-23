@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl'
 
 interface User {
   id: string
+  reference: string | null
   name: string
   email: string
   role: string
@@ -153,7 +154,9 @@ export default function EditUserPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium text-gray-700">{tAdmin('userId')}:</span>
-            <p className="text-gray-600">{user.id}</p>
+            {user.reference
+              ? <p className="mt-0.5"><span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{user.reference}</span></p>
+              : <p className="text-gray-400 text-xs italic">Sem referência</p>}
           </div>
           <div>
             <span className="font-medium text-gray-700">{tAdmin('assignedInterventions')}:</span>

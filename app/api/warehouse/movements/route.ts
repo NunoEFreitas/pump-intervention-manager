@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { generateRepairReference } from '@/lib/reference'
 
 // POST create stock movement (add, remove, transfer, use)
 export async function POST(request: NextRequest) {
@@ -199,6 +200,19 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // Pre-generate repair references so they can be included in movement notes
+    const repairRefs: string[] = []
+    if (data.movementType === 'REPAIR_IN') {
+      for (let i = 0; i < quantity; i++) {
+        repairRefs.push(await generateRepairReference())
+      }
+    }
+
+    const repairRefTag = repairRefs.length > 0 ? `[${repairRefs.join(', ')}]` : null
+    const movementNotes = repairRefTag
+      ? (data.notes ? `${repairRefTag} ${data.notes}` : repairRefTag)
+      : (data.notes || null)
+
     // Create movement record
     const movement = await prisma.itemMovement.create({
       data: {
@@ -207,7 +221,7 @@ export async function POST(request: NextRequest) {
         quantity,
         fromUserId: data.fromUserId || null,
         toUserId: data.toUserId || null,
-        notes: data.notes || null,
+        notes: movementNotes,
         createdById: payload.userId,
       },
       include: {
@@ -223,6 +237,18 @@ export async function POST(request: NextRequest) {
         },
       },
     })
+
+    // Auto-create PartRepairJob entries for non-SN REPAIR_IN (refs already generated above)
+    if (data.movementType === 'REPAIR_IN') {
+      const now = new Date()
+      for (let i = 0; i < quantity; i++) {
+        const jobId = crypto.randomUUID()
+        await prisma.$executeRaw`
+          INSERT INTO "PartRepairJob" (id, reference, "itemId", quantity, status, problem, "sentAt", "sentById", "createdAt", "updatedAt")
+          VALUES (${jobId}, ${repairRefs[i]}, ${data.itemId}, 1, 'PENDING', ${data.notes || null}, ${now}::timestamptz, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz)
+        `
+      }
+    }
 
     return NextResponse.json(movement, { status: 201 })
   } catch (error) {

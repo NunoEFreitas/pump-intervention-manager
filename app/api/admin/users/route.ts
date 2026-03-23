@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashPassword } from '@/lib/auth'
 import { requireAdmin } from '@/lib/middleware'
+import { generateUserReference } from '@/lib/reference'
 
 // GET all users (admin only)
 export async function GET(request: NextRequest) {
@@ -26,14 +27,14 @@ export async function GET(request: NextRequest) {
     })
 
     const ids = users.map((u) => u.id)
-    const blockedRows = ids.length > 0
-      ? await prisma.$queryRaw<{ id: string; blocked: boolean }[]>`
-          SELECT id, blocked FROM "User" WHERE id::text = ANY(${ids}::text[])
+    const extraRows = ids.length > 0
+      ? await prisma.$queryRaw<{ id: string; blocked: boolean; reference: string | null }[]>`
+          SELECT id, blocked, reference FROM "User" WHERE id::text = ANY(${ids}::text[])
         `
       : []
-    const blockedMap = Object.fromEntries(blockedRows.map((r) => [r.id, r.blocked]))
+    const extraMap = Object.fromEntries(extraRows.map((r) => [r.id, r]))
 
-    return NextResponse.json(users.map((u) => ({ ...u, blocked: blockedMap[u.id] ?? false })))
+    return NextResponse.json(users.map((u) => ({ ...u, blocked: extraMap[u.id]?.blocked ?? false, reference: extraMap[u.id]?.reference ?? null })))
   } catch (error) {
     console.error('Error fetching users:', error)
     return NextResponse.json(
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
 
     // Hash password and create user
     const hashedPassword = await hashPassword(data.password)
+    const reference = await generateUserReference()
 
     const user = await prisma.user.create({
       data: {
@@ -93,7 +95,10 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    return NextResponse.json(user, { status: 201 })
+    // Set reference via raw SQL (Prisma client may be stale)
+    await prisma.$executeRaw`UPDATE "User" SET reference = ${reference} WHERE id = ${user.id}`
+
+    return NextResponse.json({ ...user, reference }, { status: 201 })
   } catch (error) {
     console.error('Error creating user:', error)
     return NextResponse.json(
