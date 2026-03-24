@@ -14,12 +14,13 @@ export async function GET(
 
     const [job] = await prisma.$queryRaw<any[]>`
       SELECT
-        j.id, j.reference, j."itemId", j."serialNumberId", j.quantity, j.status,
-        j.problem, j."workNotes",
+        j.id, j.reference, j.type, j."itemId", j."serialNumberId", j."clientPartId",
+        j.quantity, j.status, j.problem, j."workNotes",
+        j."quoteAmount", j."quoteNotes", j."quoteStatus", j."quotedAt",
         j."sentAt", j."completedAt", j."deliveredToClientId",
         j."sentById", j."completedById", j."createdAt", j."updatedAt",
         wi."itemName", wi."partNumber", wi."tracksSerialNumbers",
-        wi."mainWarehouse", wi."repairStock",
+        wi."mainWarehouse", wi."repairStock", wi."destructionStock",
         sn."serialNumber" AS "snNumber",
         sb.name AS "sentByName",
         cb.name AS "completedByName",
@@ -54,9 +55,8 @@ export async function PUT(
     const data = await request.json()
     const now = new Date()
 
-    // Fetch current job state
     const [job] = await prisma.$queryRaw<any[]>`
-      SELECT j.*, wi."tracksSerialNumbers", wi."repairStock", wi."mainWarehouse"
+      SELECT j.*, wi."tracksSerialNumbers", wi."repairStock", wi."mainWarehouse", wi."destructionStock"
       FROM "PartRepairJob" j
       JOIN "WarehouseItem" wi ON wi.id = j."itemId"
       WHERE j.id = ${id}
@@ -65,14 +65,18 @@ export async function PUT(
 
     // ── START REPAIR ────────────────────────────────────────────────────────
     if (data.action === 'start') {
+      if (job.status !== 'PENDING') return NextResponse.json({ error: 'Reparação não está em estado Criada' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET status = 'IN_REPAIR', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
       `
       return NextResponse.json({ ok: true })
     }
 
-    // ── RETURN TO STOCK ─────────────────────────────────────────────────────
+    // ── RETURN TO STOCK (STOCK type only, from IN_REPAIR) ───────────────────
     if (data.action === 'return_to_stock') {
+      if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+
       if (job.tracksSerialNumbers && job.serialNumberId) {
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
@@ -88,12 +92,12 @@ export async function PUT(
         WHERE id = ${job.itemId}
       `
       const movId = crypto.randomUUID()
-      const repairOutNote = job.reference
+      const note = job.reference
         ? (data.workNotes ? `[${job.reference}] ${data.workNotes}` : `[${job.reference}]`)
         : (data.workNotes || null)
       await prisma.$executeRaw`
         INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, notes, "createdById", "createdAt")
-        VALUES (${movId}, ${job.itemId}, 'REPAIR_OUT', ${job.quantity}, ${repairOutNote}, ${payload.userId}, ${now}::timestamptz)
+        VALUES (${movId}, ${job.itemId}, 'REPAIR_OUT', ${job.quantity}, ${note}, ${payload.userId}, ${now}::timestamptz)
       `
       if (job.serialNumberId) {
         await prisma.$executeRaw`
@@ -111,32 +115,42 @@ export async function PUT(
       return NextResponse.json({ ok: true })
     }
 
-    // ── SEND TO CLIENT ───────────────────────────────────────────────────────
-    if (data.action === 'deliver_to_client') {
-      if (!data.clientId) return NextResponse.json({ error: 'clientId required' }, { status: 400 })
+    // ── SEND TO DESTRUCTION (STOCK type only, from IN_REPAIR) ───────────────
+    if (data.action === 'send_to_destruction') {
+      if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
 
       if (job.tracksSerialNumbers && job.serialNumberId) {
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
-          SET location = 'USED', status = 'IN_USE', "updatedAt" = ${now}::timestamptz
+          SET location = 'DESTRUCTION', status = 'DAMAGED', "updatedAt" = ${now}::timestamptz
           WHERE id = ${job.serialNumberId}
         `
       }
       await prisma.$executeRaw`
         UPDATE "WarehouseItem"
         SET "repairStock" = "repairStock" - ${job.quantity},
+            "destructionStock" = "destructionStock" + ${job.quantity},
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${job.itemId}
       `
       const movId = crypto.randomUUID()
+      const note = job.reference
+        ? (data.workNotes ? `[${job.reference}] ${data.workNotes}` : `[${job.reference}] Enviado para destruição`)
+        : (data.workNotes || 'Enviado para destruição')
       await prisma.$executeRaw`
         INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, notes, "createdById", "createdAt")
-        VALUES (${movId}, ${job.itemId}, 'REMOVE_STOCK', ${job.quantity}, ${'Enviado para cliente após reparação'}, ${payload.userId}, ${now}::timestamptz)
+        VALUES (${movId}, ${job.itemId}, 'DESTRUCTION', ${job.quantity}, ${note}, ${payload.userId}, ${now}::timestamptz)
       `
+      if (job.serialNumberId) {
+        await prisma.$executeRaw`
+          INSERT INTO "MovementSerialNumber" (id, "movementId", "serialNumberId")
+          VALUES (${crypto.randomUUID()}, ${movId}, ${job.serialNumberId})
+        `
+      }
       await prisma.$executeRaw`
         UPDATE "PartRepairJob"
-        SET status = 'DELIVERED_CLIENT', "workNotes" = ${data.workNotes || job.workNotes || null},
-            "deliveredToClientId" = ${data.clientId},
+        SET status = 'WRITTEN_OFF', "workNotes" = ${data.workNotes || job.workNotes || null},
             "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
@@ -144,23 +158,86 @@ export async function PUT(
       return NextResponse.json({ ok: true })
     }
 
-    // ── WRITE OFF ────────────────────────────────────────────────────────────
-    if (data.action === 'write_off') {
-      if (job.tracksSerialNumbers && job.serialNumberId) {
-        await prisma.$executeRaw`
-          UPDATE "SerialNumberStock"
-          SET status = 'DAMAGED', location = 'USED', "updatedAt" = ${now}::timestamptz
-          WHERE id = ${job.serialNumberId}
-        `
-      }
-      await prisma.$executeRaw`
-        UPDATE "WarehouseItem"
-        SET "repairStock" = "repairStock" - ${job.quantity}, "updatedAt" = ${now}::timestamptz
-        WHERE id = ${job.itemId}
-      `
+    // ── CREATE QUOTE (CLIENT type only, from IN_REPAIR) ─────────────────────
+    if (data.action === 'create_quote') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      const amount = parseFloat(data.quoteAmount)
+      if (isNaN(amount) || amount < 0) return NextResponse.json({ error: 'Valor de orçamento inválido' }, { status: 400 })
+      if (!data.quoteNotes?.trim()) return NextResponse.json({ error: 'Descrição do orçamento obrigatória' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob"
-        SET status = 'WRITTEN_OFF', "workNotes" = ${data.workNotes || job.workNotes || null},
+        SET status = 'QUOTE',
+            "quoteAmount" = ${amount}::decimal,
+            "quoteNotes" = ${data.quoteNotes.trim()},
+            "quoteStatus" = 'PENDING_CLIENT',
+            "quotedAt" = ${now}::timestamptz,
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── ACCEPT QUOTE (CLIENT type only, from QUOTE) ──────────────────────────
+    if (data.action === 'accept_quote') {
+      if (job.status !== 'QUOTE') return NextResponse.json({ error: 'Reparação não está em estado Orçamento' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'IN_REPAIR', "quoteStatus" = 'ACCEPTED', "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── REJECT QUOTE (CLIENT type only, from QUOTE) ──────────────────────────
+    if (data.action === 'reject_quote') {
+      if (job.status !== 'QUOTE') return NextResponse.json({ error: 'Reparação não está em estado Orçamento' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'NOT_REPAIRED', "quoteStatus" = 'REJECTED',
+            "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── COMPLETE REPAIRED (CLIENT type only, from IN_REPAIR) ────────────────
+    if (data.action === 'complete_repaired') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'RETURNED_TO_CLIENT',
+            "workNotes" = ${data.workNotes || job.workNotes || null},
+            "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── COMPLETE NOT REPAIRED (CLIENT type only, from IN_REPAIR) ────────────
+    if (data.action === 'complete_not_repaired') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'NOT_REPAIRED',
+            "workNotes" = ${data.workNotes || job.workNotes || null},
+            "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── LEGACY: return_to_client alias → redirect to complete_repaired ────────
+    if (data.action === 'return_to_client') {
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'RETURNED_TO_CLIENT',
+            "workNotes" = ${data.workNotes || job.workNotes || null},
             "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}

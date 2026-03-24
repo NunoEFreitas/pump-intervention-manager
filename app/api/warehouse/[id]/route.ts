@@ -16,81 +16,84 @@ export async function GET(
 
     const { id } = await params
 
-    const item = await prisma.warehouseItem.findUnique({
-      where: { id },
-      include: {
-        technicianStocks: {
-          include: {
-            technician: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
-            },
-          },
-        },
-        movements: {
-          include: {
-            fromUser: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            toUser: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            createdBy: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-            serialNumbers: {
-              include: {
-                serialNumber: {
-                  select: {
-                    id: true,
-                    serialNumber: true,
-                  },
-                },
-              },
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        },
-      },
-    })
+    const [itemRows, techRows, movementRows, extraRows] = await Promise.all([
+      prisma.$queryRaw<any[]>`
+        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock",
+               "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
+               "createdAt", "updatedAt"
+        FROM "WarehouseItem" WHERE id = ${id}
+      `,
+      prisma.$queryRaw<any[]>`
+        SELECT ts."technicianId", ts.quantity,
+               u.id AS "uid", u.name AS "uname", u.email AS "uemail"
+        FROM "TechnicianStock" ts
+        JOIN "User" u ON u.id = ts."technicianId"
+        WHERE ts."itemId" = ${id}
+      `,
+      prisma.$queryRaw<any[]>`
+        SELECT m.id, m."movementType", m.quantity, m.notes, m."createdAt",
+               m."fromUserId", fu.name AS "fromUserName",
+               m."toUserId", tu.name AS "toUserName",
+               m."createdById", cu.name AS "createdByName"
+        FROM "ItemMovement" m
+        LEFT JOIN "User" fu ON fu.id = m."fromUserId"
+        LEFT JOIN "User" tu ON tu.id = m."toUserId"
+        LEFT JOIN "User" cu ON cu.id = m."createdById"
+        WHERE m."itemId" = ${id}
+        ORDER BY m."createdAt" DESC
+      `,
+      prisma.$queryRaw<any[]>`
+        SELECT wi."equipmentTypeId", wi."brandId",
+               et.name AS "typeName", eb.name AS "brandName"
+        FROM "WarehouseItem" wi
+        LEFT JOIN "EquipmentType" et ON et.id = wi."equipmentTypeId"
+        LEFT JOIN "EquipmentBrand" eb ON eb.id = wi."brandId"
+        WHERE wi.id = ${id}
+      `,
+    ])
 
-    if (!item) {
+    if (!itemRows.length) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 })
     }
 
-    const [extra] = await prisma.$queryRaw<Array<{
-      autoSn: boolean
-      snExample: string | null
-      equipmentTypeId: string | null
-      brandId: string | null
-    }>>`
-      SELECT "autoSn", "snExample", "equipmentTypeId", "brandId" FROM "WarehouseItem" WHERE id = ${id}
+    const item = itemRows[0]
+    const extra = extraRows[0] ?? {}
+
+    // Fetch serial numbers per movement (join via ItemMovement to avoid ANY uuid cast issues)
+    const snByMovement: Map<string, any[]> = new Map()
+    const snRows = await prisma.$queryRaw<any[]>`
+      SELECT msn."movementId", sn.id AS "snId", sn."serialNumber"
+      FROM "MovementSerialNumber" msn
+      JOIN "SerialNumberStock" sn ON sn.id = msn."serialNumberId"
+      JOIN "ItemMovement" m ON m.id = msn."movementId"
+      WHERE m."itemId" = ${id}
     `
-
-    let typeName: string | null = null
-    let brandName: string | null = null
-    if (extra?.equipmentTypeId) {
-      const t = await prisma.equipmentType.findUnique({ where: { id: extra.equipmentTypeId }, select: { name: true } })
-      typeName = t?.name ?? null
-    }
-    if (extra?.brandId) {
-      const b = await prisma.equipmentBrand.findUnique({ where: { id: extra.brandId }, select: { name: true } })
-      brandName = b?.name ?? null
+    for (const row of snRows) {
+      if (!snByMovement.has(row.movementId)) snByMovement.set(row.movementId, [])
+      snByMovement.get(row.movementId)!.push({ serialNumber: { id: row.snId, serialNumber: row.serialNumber } })
     }
 
-    return NextResponse.json({ ...item, ...(extra ?? {}), typeName, brandName })
+    const movements = movementRows.map(m => ({
+      ...m,
+      fromUser: m.fromUserId ? { id: m.fromUserId, name: m.fromUserName } : null,
+      toUser: m.toUserId ? { id: m.toUserId, name: m.toUserName } : null,
+      createdBy: m.createdById ? { id: m.createdById, name: m.createdByName } : null,
+      serialNumbers: snByMovement.get(m.id) ?? [],
+    }))
+
+    const technicianStocks = techRows.map(ts => ({
+      technicianId: ts.technicianId,
+      quantity: ts.quantity,
+      technician: { id: ts.uid, name: ts.uname, email: ts.uemail },
+    }))
+
+    return NextResponse.json({
+      ...item,
+      technicianStocks,
+      movements,
+      typeName: extra.typeName ?? null,
+      brandName: extra.brandName ?? null,
+    })
   } catch (error) {
     console.error('Error fetching warehouse item:', error)
     return NextResponse.json(

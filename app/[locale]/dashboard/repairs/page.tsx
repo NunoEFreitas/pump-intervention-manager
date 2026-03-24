@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 
 interface RepairJob {
   id: string
   reference: string | null
+  type: 'STOCK' | 'CLIENT'
   itemId: string
   serialNumberId: string | null
   quantity: number
@@ -25,37 +26,64 @@ interface RepairJob {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING: 'Pendente',
-  IN_REPAIR: 'Em Reparação',
-  REPAIRED: 'Reparado',
-  DELIVERED_CLIENT: 'Entregue a Cliente',
-  WRITTEN_OFF: 'Abatido',
+  PENDING: 'Criada',
+  IN_REPAIR: 'Em Progresso',
+  QUOTE: 'Orçamento',
+  REPAIRED: 'Reparada',
+  NOT_REPAIRED: 'Não Reparada',
+  WRITTEN_OFF: 'Destruição',
+  RETURNED_TO_CLIENT: 'Devolvida ao Cliente',
 }
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   IN_REPAIR: 'bg-blue-100 text-blue-800 border-blue-300',
+  QUOTE: 'bg-orange-100 text-orange-800 border-orange-300',
   REPAIRED: 'bg-green-100 text-green-800 border-green-300',
-  DELIVERED_CLIENT: 'bg-purple-100 text-purple-800 border-purple-300',
+  NOT_REPAIRED: 'bg-gray-100 text-gray-700 border-gray-300',
   WRITTEN_OFF: 'bg-red-100 text-red-800 border-red-300',
+  RETURNED_TO_CLIENT: 'bg-purple-100 text-purple-800 border-purple-300',
 }
 
 const STATUS_BORDER: Record<string, string> = {
   PENDING: 'border-l-yellow-400',
   IN_REPAIR: 'border-l-blue-500',
+  QUOTE: 'border-l-orange-400',
   REPAIRED: 'border-l-green-500',
-  DELIVERED_CLIENT: 'border-l-purple-500',
+  NOT_REPAIRED: 'border-l-gray-400',
   WRITTEN_OFF: 'border-l-red-400',
+  RETURNED_TO_CLIENT: 'border-l-purple-500',
 }
 
 const FILTER_OPTIONS = [
   { value: 'ACTIVE', label: 'Ativas' },
   { value: 'ALL', label: 'Todas' },
-  { value: 'PENDING', label: 'Pendentes' },
-  { value: 'IN_REPAIR', label: 'Em Reparação' },
+  { value: 'PENDING', label: 'Criadas' },
+  { value: 'IN_REPAIR', label: 'Em Progresso' },
+  { value: 'QUOTE', label: 'Orçamento' },
   { value: 'REPAIRED', label: 'Reparadas' },
-  { value: 'WRITTEN_OFF', label: 'Abatidas' },
+  { value: 'NOT_REPAIRED', label: 'Não Reparadas' },
+  { value: 'WRITTEN_OFF', label: 'Destruição' },
+  { value: 'RETURNED_TO_CLIENT', label: 'Devolvidas ao Cliente' },
 ]
+
+interface WarehouseItemOption {
+  id: string
+  itemName: string
+  partNumber: string
+  tracksSerialNumbers: boolean
+  mainWarehouse: number
+}
+
+interface Client {
+  id: string
+  name: string
+}
+
+interface SnOption {
+  id: string
+  serialNumber: string
+}
 
 export default function RepairsPage() {
   const router = useRouter()
@@ -67,6 +95,23 @@ export default function RepairsPage() {
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('ACTIVE')
   const [search, setSearch] = useState('')
+
+  // ── Create Repair Modal ──────────────────────────────────────────────────
+  const [showCreate, setShowCreate] = useState(false)
+  const [crType, setCrType] = useState<'STOCK' | 'CLIENT'>('STOCK')
+  const [crClientId, setCrClientId] = useState('')
+  const [crClients, setCrClients] = useState<Client[]>([])
+  const [crItemSearch, setCrItemSearch] = useState('')
+  const [crItemOptions, setCrItemOptions] = useState<WarehouseItemOption[]>([])
+  const [crItemLoading, setCrItemLoading] = useState(false)
+  const [crSelectedItem, setCrSelectedItem] = useState<WarehouseItemOption | null>(null)
+  const [crSnOptions, setCrSnOptions] = useState<SnOption[]>([])
+  const [crSnLoading, setCrSnLoading] = useState(false)
+  const [crSnId, setCrSnId] = useState('')
+  const [crProblem, setCrProblem] = useState('')
+  const [crSubmitting, setCrSubmitting] = useState(false)
+  const [crError, setCrError] = useState('')
+  const itemSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchJobs = async (filter: string) => {
     setLoading(true)
@@ -89,6 +134,62 @@ export default function RepairsPage() {
     fetchJobs(statusFilter)
   }, [statusFilter])
 
+  const openCreateModal = async () => {
+    setShowCreate(true)
+    setCrType('STOCK'); setCrClientId(''); setCrItemSearch(''); setCrItemOptions([])
+    setCrSelectedItem(null); setCrSnOptions([]); setCrSnId(''); setCrProblem(''); setCrError('')
+    const token = localStorage.getItem('token')
+    const data = await fetch('/api/clients?limit=200', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+    setCrClients(Array.isArray(data.clients) ? data.clients : [])
+  }
+
+  const searchItems = async (q: string) => {
+    setCrItemLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const data = await fetch(`/api/warehouse?search=${encodeURIComponent(q)}&limit=20`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      setCrItemOptions(Array.isArray(data.items) ? data.items : [])
+    } catch { setCrItemOptions([]) } finally { setCrItemLoading(false) }
+  }
+
+  const handleItemSearchChange = (value: string) => {
+    setCrItemSearch(value)
+    setCrSelectedItem(null); setCrSnOptions([]); setCrSnId('')
+    if (itemSearchDebounce.current) clearTimeout(itemSearchDebounce.current)
+    if (value.trim().length > 0) itemSearchDebounce.current = setTimeout(() => searchItems(value), 300)
+    else setCrItemOptions([])
+  }
+
+  const selectItem = async (item: WarehouseItemOption) => {
+    setCrSelectedItem(item); setCrItemSearch(item.itemName); setCrItemOptions([])
+    setCrSnId(''); setCrSnOptions([])
+    if (item.tracksSerialNumbers && crType === 'STOCK') {
+      setCrSnLoading(true)
+      try {
+        const token = localStorage.getItem('token')
+        const data = await fetch(`/api/warehouse/items/${item.id}/serial-numbers?status=AVAILABLE&location=MAIN_WAREHOUSE`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+        setCrSnOptions(Array.isArray(data) ? data.filter((s: any) => !s.isClientPart) : [])
+      } catch { setCrSnOptions([]) } finally { setCrSnLoading(false) }
+    }
+  }
+
+  const handleCreateSubmit = async () => {
+    if (!crSelectedItem || !crProblem.trim()) { setCrError('Preencha todos os campos obrigatórios'); return }
+    if (crType === 'STOCK' && crSelectedItem.tracksSerialNumbers && !crSnId) { setCrError('Selecione o número de série'); return }
+    setCrSubmitting(true); setCrError('')
+    try {
+      const token = localStorage.getItem('token')
+      const body: Record<string, any> = { type: crType, itemId: crSelectedItem.id, problem: crProblem }
+      if (crType === 'CLIENT' && crClientId) body.clientId = crClientId
+      if (crType === 'STOCK' && crSelectedItem.tracksSerialNumbers) body.serialNumberId = crSnId
+      const res = await fetch('/api/repairs', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+      const data = await res.json()
+      if (!res.ok) { setCrError(data.error || 'Erro ao criar reparação'); return }
+      setShowCreate(false)
+      router.push(`/${locale}/dashboard/repairs/${data.repairJobId}`)
+    } finally { setCrSubmitting(false) }
+  }
+
   const filtered = jobs.filter(j => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -107,6 +208,9 @@ export default function RepairsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Reparações</h1>
           <p className="text-sm text-gray-500 mt-1">Peças enviadas para reparação</p>
         </div>
+        <button onClick={openCreateModal} className="btn btn-primary shrink-0">
+          + Criar Reparação
+        </button>
       </div>
 
       {/* Filters */}
@@ -162,8 +266,11 @@ export default function RepairsPage() {
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {job.type === 'CLIENT' && (
+                      <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">CLIENTE</span>
+                    )}
                     {job.reference && (
-                      <span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{job.reference}</span>
+                      <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${job.type === 'CLIENT' ? 'text-orange-700 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>{job.reference}</span>
                     )}
                     <span className="font-semibold text-gray-900 truncate">{job.itemName}</span>
                     <span className="text-xs text-gray-500">{job.partNumber}</span>
@@ -209,6 +316,129 @@ export default function RepairsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {/* ── Create Repair Modal ─────────────────────────────────────────────── */}
+      {showCreate && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <h2 className="text-lg font-bold text-gray-900">Criar Reparação</h2>
+
+              {/* Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="crType" value="STOCK" checked={crType === 'STOCK'} onChange={() => { setCrType('STOCK'); setCrSnId(''); setCrSnOptions([]); if (crSelectedItem?.tracksSerialNumbers) selectItem(crSelectedItem) }} className="w-4 h-4 text-blue-600" />
+                    <span className="text-sm font-medium">Stock</span>
+                    <span className="text-xs text-gray-400">(REP-xxx)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="crType" value="CLIENT" checked={crType === 'CLIENT'} onChange={() => { setCrType('CLIENT'); setCrSnId(''); setCrSnOptions([]) }} className="w-4 h-4 text-orange-500" />
+                    <span className="text-sm font-medium">Cliente</span>
+                    <span className="text-xs text-gray-400">(REC-xxx)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Client — only for CLIENT type */}
+              {crType === 'CLIENT' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                  <select className="input w-full text-gray-800" value={crClientId} onChange={e => setCrClientId(e.target.value)}>
+                    <option value="">— Sem cliente associado —</option>
+                    {crClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              )}
+
+              {/* Item search */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Artigo <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  className="input w-full text-gray-800"
+                  placeholder="Pesquisar artigo..."
+                  value={crItemSearch}
+                  onChange={e => handleItemSearchChange(e.target.value)}
+                  autoComplete="off"
+                />
+                {crItemLoading && <p className="text-xs text-gray-400 mt-1">A procurar...</p>}
+                {crItemOptions.length > 0 && !crSelectedItem && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {crItemOptions.map(item => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectItem(item)}
+                        className="w-full text-left px-3 py-2.5 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                      >
+                        <div className="text-sm font-medium text-gray-900">{item.itemName}</div>
+                        <div className="text-xs text-gray-500 flex gap-2">
+                          <span className="font-mono">{item.partNumber}</span>
+                          {item.tracksSerialNumbers && <span className="text-purple-600">SN Tracked</span>}
+                          {crType === 'STOCK' && <span className="text-blue-600">Stock: {item.mainWarehouse}</span>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {crSelectedItem && (
+                  <div className="mt-1 flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <span className="text-sm text-blue-900 font-medium flex-1">{crSelectedItem.itemName}</span>
+                    <button type="button" onClick={() => { setCrSelectedItem(null); setCrItemSearch(''); setCrSnOptions([]); setCrSnId('') }} className="text-xs text-blue-500 hover:text-blue-700">✕</button>
+                  </div>
+                )}
+              </div>
+
+              {/* SN selection — STOCK + SN-tracked */}
+              {crType === 'STOCK' && crSelectedItem?.tracksSerialNumbers && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Número de série <span className="text-red-500">*</span></label>
+                  {crSnLoading ? (
+                    <p className="text-sm text-gray-500">A carregar...</p>
+                  ) : crSnOptions.length === 0 ? (
+                    <p className="text-sm text-red-600 bg-red-50 rounded p-3">Sem números de série disponíveis no armazém principal.</p>
+                  ) : (
+                    <div className="border rounded-lg max-h-36 overflow-y-auto divide-y divide-gray-100">
+                      {crSnOptions.map(sn => (
+                        <label key={sn.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                          <input type="radio" name="crSn" value={sn.id} checked={crSnId === sn.id} onChange={() => setCrSnId(sn.id)} className="w-4 h-4 text-blue-600" />
+                          <span className="text-sm font-mono">{sn.serialNumber}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Problem */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Descrição de avaria <span className="text-red-500">*</span></label>
+                <textarea
+                  className="input w-full text-gray-800 resize-none"
+                  rows={3}
+                  placeholder="Descreva o problema..."
+                  value={crProblem}
+                  onChange={e => setCrProblem(e.target.value)}
+                />
+              </div>
+
+              {crError && <p className="text-sm text-red-600">{crError}</p>}
+            </div>
+
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              <button onClick={() => setShowCreate(false)} className="btn btn-secondary" disabled={crSubmitting}>Cancelar</button>
+              <button
+                onClick={handleCreateSubmit}
+                className="btn btn-primary"
+                disabled={crSubmitting || !crSelectedItem || !crProblem.trim() || (crType === 'STOCK' && crSelectedItem?.tracksSerialNumbers && !crSnId)}
+              >
+                {crSubmitting ? 'A criar...' : 'Criar Reparação'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

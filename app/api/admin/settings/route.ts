@@ -17,7 +17,7 @@ export async function PUT(request: NextRequest) {
   if (authCheck instanceof NextResponse) return authCheck
 
   const body = await request.json()
-  const allowed = ['clientPrefix', 'projectPrefix', 'workOrderPrefix', 'repairPrefix', 'userPrefix']
+  const allowed = ['clientPrefix', 'projectPrefix', 'workOrderPrefix', 'repairPrefix', 'userPrefix', 'clientRepairPrefix']
 
   for (const key of allowed) {
     if (key in body) {

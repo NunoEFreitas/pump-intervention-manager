@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     const searchLike = `%${search.toLowerCase()}%`
 
-    const [countRows, items, extraFields] = await Promise.all([
+    const [countRows, items, extraFields, clientPartsCounts] = await Promise.all([
       prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*)::bigint AS count FROM "WarehouseItem"
         WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         value: number
         mainWarehouse: number
         repairStock: number
+        destructionStock: number
         tracksSerialNumbers: boolean
         autoSn: boolean
         snExample: string | null
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
         createdAt: Date
         updatedAt: Date
       }>>`
-        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock",
+        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock",
                "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
                "createdAt", "updatedAt"
         FROM "WarehouseItem"
@@ -63,6 +64,19 @@ export async function GET(request: NextRequest) {
           LIMIT ${limit} OFFSET ${offset}
         )
       `,
+      prisma.$queryRaw<Array<{ itemId: string; count: bigint }>>`
+        SELECT "itemId", COUNT(*)::bigint AS count
+        FROM "SerialNumberStock"
+        WHERE "isClientPart" = true
+          AND ("clientPartStatus" IS NULL OR "clientPartStatus" NOT IN ('RESOLVED'))
+          AND "itemId" IN (
+            SELECT id FROM "WarehouseItem"
+            WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit} OFFSET ${offset}
+          )
+        GROUP BY "itemId"
+      `,
     ])
 
     const total = Number(countRows[0].count)
@@ -75,13 +89,20 @@ export async function GET(request: NextRequest) {
       techMap.get(ts.itemId)!.push({ technician: { id: ts.technicianId, name: ts.technicianName }, quantity: ts.quantity })
     }
 
+    const clientPartsMap = new Map<string, number>()
+    for (const cp of clientPartsCounts) {
+      clientPartsMap.set(cp.itemId, Number(cp.count))
+    }
+
     const itemsWithTotals = items.map(item => {
       const techStocks = techMap.get(item.id) ?? []
       const totalTechnicianStock = techStocks.reduce((s, ts) => s + ts.quantity, 0)
+      const clientPartsCount = clientPartsMap.get(item.id) ?? 0
       return {
         ...item,
         technicianStocks: techStocks,
         totalTechnicianStock,
+        clientPartsCount,
         totalStock: item.mainWarehouse + totalTechnicianStock,
       }
     })

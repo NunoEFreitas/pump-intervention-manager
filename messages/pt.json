@@ -31,6 +31,7 @@
     "warehouse": "Armazém",
     "technicians": "Técnicos",
     "repairs": "Reparações",
+    "clientParts": "Peças de Cliente",
     "admin": "Administração",
     "backToAdmin": "← Voltar ao Painel de Administração",
     "back": "← Voltar",

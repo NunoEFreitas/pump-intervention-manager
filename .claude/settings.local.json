@@ -7,11 +7,17 @@
       "Bash(npx tsx:*)",
       "Bash(node -e \":*)",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(list\\(d.keys\\(\\)\\)\\)\")",
-      "Bash(npx prisma:*)"
+      "Bash(npx prisma:*)",
+      "Bash(mkdir -p \"c:/pump-intervention-manager/app/[locale]/dashboard/warehouse/client-parts\")",
+      "Bash(cp \"c:/pump-intervention-manager/app/[locale]/dashboard/client-parts/page.tsx\" \"c:/pump-intervention-manager/app/[locale]/dashboard/warehouse/client-parts/page.tsx\")",
+      "Bash(rm -rf \"c:/pump-intervention-manager/app/[locale]/dashboard/client-parts\")"
     ],
     "additionalDirectories": [
       "c:\\pump-intervention-manager\\app\\[locale]\\dashboard",
-      "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\repairs\\[id]"
+      "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\repairs\\[id]",
+      "c:\\pump-intervention-manager\\app\\api\\client-parts",
+      "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\warehouse\\client-parts",
+      "c:\\pump-intervention-manager\\app\\api\\repairs\\[id]"
     ]
   }
 }

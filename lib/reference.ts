@@ -49,6 +49,16 @@ export async function generateRepairReference(): Promise<string> {
   })
 }
 
+export async function generateClientRepairReference(): Promise<string> {
+  return prisma.$transaction(async (tx: any) => {
+    const prefixRow = await tx.systemSetting.findUnique({ where: { key: 'clientRepairPrefix' } })
+    const prefix = prefixRow?.value?.trim() || 'REC'
+    const counter = await nextCounter(tx, 'clientRepairCounter')
+    const year = new Date().getFullYear()
+    return `${prefix}-${String(counter).padStart(3, '0')}/${year}`
+  })
+}
+
 export async function generateUserReference(): Promise<string> {
   return prisma.$transaction(async (tx: any) => {
     const prefixRow = await tx.systemSetting.findUnique({ where: { key: 'userPrefix' } })

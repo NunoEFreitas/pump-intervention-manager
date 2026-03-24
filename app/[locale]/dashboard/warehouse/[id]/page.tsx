@@ -111,7 +111,7 @@ export default function WarehouseItemDetailPage() {
         brandId: data.brandId || '',
         partNumber: data.partNumber,
         itemName: data.itemName || '',
-        value: data.value.toString(),
+        value: data.value != null ? data.value.toString() : '',
         tracksSerialNumbers: data.tracksSerialNumbers ?? false,
         autoSn: data.autoSn ?? false,
         snExample: data.snExample || '',
@@ -307,7 +307,7 @@ export default function WarehouseItemDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">{t('value')}</p>
-                <p className="text-lg font-semibold text-gray-900">€{item.value.toFixed(2)}</p>
+                <p className="text-lg font-semibold text-gray-900">€{item.value != null ? Number(item.value).toFixed(2) : '—'}</p>
               </div>
             </div>
 
@@ -327,12 +327,12 @@ export default function WarehouseItemDetailPage() {
                   <div className="p-4 bg-purple-50 rounded-lg">
                     <p className="text-sm text-purple-600 font-medium mb-1">{t('totalStock')}</p>
                     <p className="text-3xl font-bold text-purple-900">
-                      {item.mainWarehouse + item.technicianStocks.reduce((sum, ts) => sum + ts.quantity, 0)}
+                      {item.mainWarehouse + (item.technicianStocks ?? []).reduce((sum, ts) => sum + ts.quantity, 0)}
                     </p>
                   </div>
                 </div>
 
-                {item.technicianStocks.length > 0 && (
+                {(item.technicianStocks ?? []).length > 0 && (
                   <div className="mb-6">
                     <h3 className="font-semibold text-gray-700 mb-3">{t('technicianStock')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -492,7 +492,7 @@ export default function WarehouseItemDetailPage() {
 
           <div className="card mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{t('stockOperations')}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <button
                 onClick={() => openStockOperation('ADD_STOCK')}
                 className="btn btn-primary"
@@ -527,7 +527,7 @@ export default function WarehouseItemDetailPage() {
                 disabled={
                   item.tracksSerialNumbers
                     ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length === 0
-                    : item.technicianStocks.length === 0
+                    : (item.technicianStocks ?? []).length === 0
                 }
               >
                 {t('transferFromTech')}
@@ -542,28 +542,6 @@ export default function WarehouseItemDetailPage() {
                 }
               >
                 {t('useStock')}
-              </button>
-              <button
-                onClick={() => openStockOperation('REPAIR_IN')}
-                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
-                    : item.mainWarehouse === 0
-                }
-              >
-                {t('repairIn')}
-              </button>
-              <button
-                onClick={() => openStockOperation('REPAIR_OUT')}
-                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'REPAIR').length === 0
-                    : item.repairStock === 0
-                }
-              >
-                {t('repairOut')}
               </button>
             </div>
           </div>

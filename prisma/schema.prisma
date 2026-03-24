@@ -183,6 +183,7 @@ model WarehouseItem {
   value               Float
   mainWarehouse       Int                 @default(0)  // Count for non-serialized items
   repairStock         Int                 @default(0)  // Count of items currently in repair
+  destructionStock    Int                 @default(0)  // Count of items in destruction
   tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
   autoSn              Boolean             @default(false) // Auto-generate serial numbers on add stock
   snExample           String?             // Prefix for auto-generated SNs (e.g. "PTT" → "PTT-1", "PTT-2")
@@ -233,6 +234,7 @@ enum MovementType {
   USE                 // Used in intervention
   REPAIR_IN           // Sent to repair (removed from active stock)
   REPAIR_OUT          // Returned from repair (back to main warehouse)
+  DESTRUCTION         // Moved to destruction stock (irreparable)
 }
 
 // Track individual serial numbers for items
@@ -245,19 +247,23 @@ model SerialNumberStock {
   technicianId    String?
   technician      User?                   @relation("TechnicianSerialNumbers", fields: [technicianId], references: [id])
   status          SerialStatus            @default(AVAILABLE)
-  isClientPart    Boolean                 @default(false)  // Part taken from client site for repair
-  interventionId  String?
-  intervention    Intervention?           @relation("ClientPartSerialNumbers", fields: [interventionId], references: [id])
-  pickedUpById    String?
-  pickedUpBy      User?                   @relation("ClientPartPickedUpBy", fields: [pickedUpById], references: [id])
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
-  movements       MovementSerialNumber[]
+  isClientPart      Boolean                 @default(false)  // Part taken from client site for repair
+  clientPartStatus  ClientPartStatus?                        // Only when isClientPart=true
+  clientRepairJobId String?                                  // Link to PartRepairJob when CLIENT repair opened
+  interventionId    String?
+  intervention      Intervention?           @relation("ClientPartSerialNumbers", fields: [interventionId], references: [id])
+  pickedUpById      String?
+  pickedUpBy        User?                   @relation("ClientPartPickedUpBy", fields: [pickedUpById], references: [id])
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  movements         MovementSerialNumber[]
 
   @@unique([itemId, serialNumber]) // Serial number must be unique per item
   @@index([itemId])
   @@index([technicianId])
   @@index([location])
+  @@index([isClientPart])
+  @@index([clientPartStatus])
 }
 
 enum StockLocation {
@@ -265,6 +271,7 @@ enum StockLocation {
   TECHNICIAN
   USED
   REPAIR
+  DESTRUCTION
 }
 
 enum SerialStatus {
@@ -272,6 +279,13 @@ enum SerialStatus {
   IN_USE
   DAMAGED
   LOST
+}
+
+enum ClientPartStatus {
+  PENDING   // Awaiting decision (swap or repair)
+  SWAP      // Swap chosen — replacement issued to technician
+  REPAIR    // Client repair job opened
+  RESOLVED  // Returned to client
 }
 
 // Join table for movements and serial numbers
@@ -420,32 +434,45 @@ model PartRequest {
   @@index([status])
 }
 
+enum RepairJobType {
+  STOCK   // Repairing our own stock item (REP prefix)
+  CLIENT  // Repairing a client's part (REC prefix)
+}
+
 // Tracks individual parts sent to repair (created automatically on REPAIR_IN movement)
 model PartRepairJob {
-  id               String   @id @default(uuid())
-  reference        String?  @unique    // e.g. REP-001/2025
-  itemId           String              // WarehouseItem
-  serialNumberId   String?             // For SN-tracked items — one job per SN
-  quantity         Int      @default(1) // For non-SN items
-  status           String   @default("PENDING")
-  // PENDING | IN_REPAIR | REPAIRED | DELIVERED_CLIENT | WRITTEN_OFF
-  problem          String?  @db.Text   // Problem description (from REPAIR_IN notes)
-  workNotes        String?  @db.Text   // What was done during repair
-  supplier         String?             // External supplier / who is doing repair
-  sentAt           DateTime @default(now())
+  id               String        @id @default(uuid())
+  reference        String?       @unique    // e.g. REP-001/2025 or REC-001/2025
+  type             RepairJobType @default(STOCK)
+  itemId           String                   // WarehouseItem
+  serialNumberId   String?                  // For SN-tracked items — one job per SN
+  clientPartId     String?                  // SerialNumberStock.id when type=CLIENT
+  quantity         Int           @default(1) // For non-SN items
+  status           String        @default("PENDING")
+  // STOCK:  PENDING | IN_REPAIR | REPAIRED | WRITTEN_OFF
+  // CLIENT: PENDING | IN_REPAIR | QUOTE | RETURNED_TO_CLIENT | NOT_REPAIRED
+  problem          String?       @db.Text   // Problem description
+  workNotes        String?       @db.Text   // What was done during repair
+  quoteAmount      Decimal?      @db.Decimal(10, 2)  // Budget amount
+  quoteNotes       String?       @db.Text             // Quote description
+  quoteStatus      String?       // null | PENDING_CLIENT | ACCEPTED | REJECTED
+  quotedAt         DateTime?
+  sentAt           DateTime      @default(now())
   completedAt      DateTime?
-  deliveredToClientId String?          // If sent directly to client after repair
+  deliveredToClientId String?               // CLIENT type: which client
   sentById         String
   completedById    String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   photos           RepairJobPhoto[]
   parts            RepairJobPart[]
 
   @@index([itemId])
   @@index([status])
+  @@index([type])
   @@index([serialNumberId])
+  @@index([clientPartId])
 }
 
 model RepairJobPart {
