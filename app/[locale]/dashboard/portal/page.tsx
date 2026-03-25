@@ -49,6 +49,50 @@ interface PortalIntervention {
   location: { id: string; name: string; city: string | null } | null
 }
 
+interface PortalRepair {
+  id: string
+  reference: string | null
+  status: string
+  problem: string | null
+  clientItemSn: string | null
+  sentAt: string
+  completedAt: string | null
+  quoteAmount: number | null
+  quoteNotes: string | null
+  quoteStatus: string | null
+  quotedAt: string | null
+  itemName: string
+  partNumber: string
+}
+
+const REPAIR_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Criada',
+  IN_REPAIR: 'Em Reparação',
+  QUOTE: 'Orçamento',
+  OVM: 'Sujeito a OVM',
+  REPAIRED: 'Devolvido ao Stock',
+  NOT_REPAIRED: 'Não Reparado',
+  WRITTEN_OFF: 'Abate',
+  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
+}
+
+const REPAIR_STATUS_COLOR: Record<string, string> = {
+  PENDING: 'bg-yellow-100 text-yellow-800',
+  IN_REPAIR: 'bg-blue-100 text-blue-800',
+  QUOTE: 'bg-orange-100 text-orange-800',
+  OVM: 'bg-purple-100 text-purple-800',
+  REPAIRED: 'bg-green-100 text-green-800',
+  NOT_REPAIRED: 'bg-gray-100 text-gray-700',
+  WRITTEN_OFF: 'bg-red-100 text-red-800',
+  RETURNED_TO_CLIENT: 'bg-green-100 text-green-800',
+}
+
+const QUOTE_STATUS_LABEL: Record<string, string> = {
+  PENDING_CLIENT: 'Aguarda aprovação',
+  ACCEPTED: 'Aceite',
+  REJECTED: 'Rejeitado',
+}
+
 const STATUS_COLOR: Record<string, string> = {
   OPEN: 'bg-yellow-100 text-yellow-800',
   ASSIGNED: 'bg-blue-100 text-blue-800',
@@ -93,6 +137,7 @@ export default function PortalPage() {
 
   const [client, setClient] = useState<ClientData | null>(null)
   const [interventions, setInterventions] = useState<PortalIntervention[]>([])
+  const [repairs, setRepairs] = useState<PortalRepair[]>([])
   const [loading, setLoading] = useState(true)
   const [userEmail, setUserEmail] = useState('')
 
@@ -130,9 +175,10 @@ export default function PortalPage() {
     try {
       const token = localStorage.getItem('token')
       const headers = { Authorization: `Bearer ${token}` }
-      const [meRes, intRes] = await Promise.all([
+      const [meRes, intRes, repRes] = await Promise.all([
         fetch('/api/portal/me', { headers }),
         fetch('/api/portal/interventions', { headers }),
+        fetch('/api/portal/repairs', { headers }),
       ])
       if (!meRes.ok) {
         if (meRes.status === 403) {
@@ -142,8 +188,10 @@ export default function PortalPage() {
       }
       const meData = await meRes.json()
       const intData = await intRes.json()
+      const repData = await repRes.json()
       setClient(meData)
       setInterventions(Array.isArray(intData) ? intData : [])
+      setRepairs(Array.isArray(repData) ? repData : [])
     } catch (err) {
       console.error('Error loading portal data:', err)
     } finally {
@@ -488,6 +536,74 @@ export default function PortalPage() {
                     )}
                     <span>{new Date(iv.createdAt).toLocaleDateString('pt-PT')}</span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Section 4 — Repairs */}
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">
+            Reparações ({repairs.length})
+          </h2>
+
+          {repairs.length === 0 ? (
+            <p className="text-sm text-gray-500 py-2">Sem reparações registadas.</p>
+          ) : (
+            <div className="space-y-3">
+              {repairs.map((rep) => (
+                <div key={rep.id} className="border rounded-lg p-4">
+                  {/* Header row */}
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
+                    {rep.reference && (
+                      <span className="text-xs font-mono font-semibold text-gray-700">{rep.reference}</span>
+                    )}
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${REPAIR_STATUS_COLOR[rep.status] || 'bg-gray-100 text-gray-700'}`}>
+                      {REPAIR_STATUS_LABEL[rep.status] || rep.status}
+                    </span>
+                    <span className="text-xs text-gray-500 ml-auto">
+                      {new Date(rep.sentAt).toLocaleDateString('pt-PT')}
+                    </span>
+                  </div>
+
+                  {/* Item */}
+                  <p className="text-sm font-medium text-gray-900">{rep.itemName}</p>
+                  <p className="text-xs text-gray-500 font-mono">{rep.partNumber}</p>
+
+                  {/* Client SN + problem */}
+                  {rep.clientItemSn && (
+                    <p className="text-xs text-gray-600 mt-1">Nº série: <span className="font-mono">{rep.clientItemSn}</span></p>
+                  )}
+                  {rep.problem && (
+                    <p className="text-sm text-gray-700 mt-1">{rep.problem}</p>
+                  )}
+
+                  {/* Quote block — shown when quoteStatus is set or status is QUOTE */}
+                  {(rep.status === 'QUOTE' || rep.quoteStatus) && (
+                    <div className="mt-3 border-t pt-3">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Orçamento</span>
+                        {rep.quoteStatus && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                            rep.quoteStatus === 'ACCEPTED' ? 'bg-green-100 text-green-800' :
+                            rep.quoteStatus === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {QUOTE_STATUS_LABEL[rep.quoteStatus] || rep.quoteStatus}
+                          </span>
+                        )}
+                        {rep.quotedAt && (
+                          <span className="text-xs text-gray-500">{new Date(rep.quotedAt).toLocaleDateString('pt-PT')}</span>
+                        )}
+                      </div>
+                      {rep.quoteAmount != null && (
+                        <p className="text-sm font-semibold text-gray-900">{Number(rep.quoteAmount).toFixed(2)} €</p>
+                      )}
+                      {rep.quoteNotes && (
+                        <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{rep.quoteNotes}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
