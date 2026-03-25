@@ -14,6 +14,7 @@ export async function POST(
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id: serialNumberId } = await params
+    const body = await request.json().catch(() => ({}))
     const now = new Date()
 
     const [clientPart] = await prisma.$queryRaw<any[]>`
@@ -31,25 +32,28 @@ export async function POST(
     if (!clientPart.repairStatus || !TERMINAL_REPAIR_STATUSES.includes(clientPart.repairStatus)) {
       return NextResponse.json({ error: 'Reparação ainda não foi finalizada' }, { status: 400 })
     }
-    if (!clientPart.technicianId) {
+    // Use provided targetTechnicianId or fall back to the original technician
+    const targetTechnicianId = body.targetTechnicianId || clientPart.technicianId
+    if (!targetTechnicianId) {
       return NextResponse.json({ error: 'Técnico não encontrado' }, { status: 400 })
     }
 
-    // Move SN back to technician as a regular (non-client) part
+    // Move SN to the target technician as a regular (non-client) part
     await prisma.$executeRaw`
       UPDATE "SerialNumberStock"
       SET location = 'TECHNICIAN',
           status = 'AVAILABLE',
           "isClientPart" = false,
           "clientPartStatus" = 'RESOLVED',
+          "technicianId" = ${targetTechnicianId},
           "updatedAt" = ${now}::timestamptz
       WHERE id = ${serialNumberId}
     `
 
-    // Increment technician stock
+    // Increment target technician stock
     await prisma.$executeRaw`
       INSERT INTO "TechnicianStock" (id, "itemId", "technicianId", quantity, "createdAt", "updatedAt")
-      VALUES (${crypto.randomUUID()}, ${clientPart.itemId}, ${clientPart.technicianId}, 1, ${now}::timestamptz, ${now}::timestamptz)
+      VALUES (${crypto.randomUUID()}, ${clientPart.itemId}, ${targetTechnicianId}, 1, ${now}::timestamptz, ${now}::timestamptz)
       ON CONFLICT ("itemId", "technicianId")
       DO UPDATE SET quantity = "TechnicianStock".quantity + 1, "updatedAt" = ${now}::timestamptz
     `
@@ -59,7 +63,7 @@ export async function POST(
       INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, "toUserId", notes, "createdById", "createdAt")
       VALUES (
         ${crypto.randomUUID()}, ${clientPart.itemId}, 'TRANSFER_TO_TECH', 1,
-        ${clientPart.technicianId},
+        ${targetTechnicianId},
         ${'Devolução de peça de cliente ao técnico após reparação'},
         ${payload.userId}, ${now}::timestamptz
       )

@@ -61,6 +61,7 @@ interface ClientPart {
   clientRepairJobId: string | null
   interventionId: string | null
   pickedUpByName: string | null
+  technicianId: string | null
   technicianName: string | null
   interventionReference: string | null
   clientName: string | null
@@ -146,6 +147,11 @@ export default function WarehousePage() {
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
   const [cpLoading, setCpLoading] = useState(false)
   const [cpModal, setCpModal] = useState<ModalType>(null)
+  // Return-to-tech modal
+  const [returnModal, setReturnModal] = useState<ClientPart | null>(null)
+  const [returnTechId, setReturnTechId] = useState('')
+  const [returnSubmitting, setReturnSubmitting] = useState(false)
+  const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
   const [cpSelected, setCpSelected] = useState<ClientPart | null>(null)
   const [cpNotes, setCpNotes] = useState('')
   const [cpProblem, setCpProblem] = useState('')
@@ -162,7 +168,16 @@ export default function WarehousePage() {
 
   useEffect(() => {
     if (tab === 'requests') fetchPartRequests()
-    if (tab === 'client-parts') fetchClientParts()
+    if (tab === 'client-parts') {
+      fetchClientParts()
+      if (technicians.length === 0) {
+        const token = localStorage.getItem('token')
+        fetch('/api/technicians', { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(data => { if (Array.isArray(data)) setTechnicians(data) })
+          .catch(() => {})
+      }
+    }
   }, [tab])
 
   // ── Stock fns ──────────────────────────────────────────────────────────────
@@ -308,18 +323,27 @@ export default function WarehousePage() {
     } finally { setCpSubmitting(false) }
   }
 
-  const handleReturnToTech = async (part: ClientPart) => {
-    if (!confirm(`Devolver "${part.itemName}" ao técnico ${part.technicianName || ''}?`)) return
+  const handleReturnToTech = (part: ClientPart) => {
+    setReturnModal(part)
+    setReturnTechId(part.technicianId || '')
+  }
+
+  const submitReturnToTech = async () => {
+    if (!returnModal || !returnTechId) return
+    setReturnSubmitting(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/client-parts/${part.id}/return-to-tech`, {
+      const res = await fetch(`/api/client-parts/${returnModal.id}/return-to-tech`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetTechnicianId: returnTechId }),
       })
       const data = await res.json()
       if (!res.ok) { alert(data.error || 'Erro ao devolver peça'); return }
+      setReturnModal(null)
       fetchClientParts()
     } catch { alert('Erro inesperado') }
+    finally { setReturnSubmitting(false) }
   }
 
   const cpPendingCount = clientParts.filter(p => !p.clientPartStatus || p.clientPartStatus === 'PENDING').length
@@ -599,6 +623,48 @@ export default function WarehousePage() {
             <div className="flex gap-3">
               <button onClick={executeTransfer} disabled={transferring || (transferModal.tracksSerialNumbers ? selectedSns.length === 0 : transferModal.mainWarehouse < 1)} className="btn btn-primary flex-1 disabled:opacity-50">{transferring ? 'A transferir...' : 'Confirmar Transferência'}</button>
               <button onClick={() => setTransferModal(null)} disabled={transferring} className="btn btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Return to tech modal ────────────────────────────────────────────── */}
+      {returnModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-6 space-y-4">
+              <h2 className="text-lg font-bold text-gray-900">Devolver ao Técnico</h2>
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">{returnModal.itemName}</span>
+                {returnModal.serialNumber && <span className="ml-1 font-mono text-xs text-gray-400">({returnModal.serialNumber})</span>}
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Técnico que recebe a peça</label>
+                <select
+                  className="input text-gray-800"
+                  value={returnTechId}
+                  onChange={e => setReturnTechId(e.target.value)}
+                >
+                  <option value="">— Selecionar técnico —</option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}{t.id === returnModal.technicianId ? ' (original)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={submitReturnToTech}
+                  disabled={returnSubmitting || !returnTechId}
+                  className="btn btn-primary flex-1 disabled:opacity-50"
+                >
+                  {returnSubmitting ? 'A devolver...' : 'Confirmar'}
+                </button>
+                <button onClick={() => setReturnModal(null)} disabled={returnSubmitting} className="btn btn-secondary">
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </div>

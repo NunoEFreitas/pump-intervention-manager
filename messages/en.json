@@ -371,7 +371,7 @@
     "newItem": "Add New Item",
     "editItem": "Edit Item",
     "itemName": "Item Name",
-    "partNumber": "Part Number",
+    "partNumber": "Item Code",
     "serialNumber": "Serial Number",
     "value": "Value",
     "mainWarehouse": "Main Warehouse Stock",

@@ -160,6 +160,7 @@ export async function POST(request: NextRequest) {
     const tracksSerialNumbers = data.tracksSerialNumbers === true || data.tracksSerialNumbers === 'true'
     const autoSn = tracksSerialNumbers && (data.autoSn === true || data.autoSn === 'true')
     const snExample = autoSn ? (data.snExample || null) : null
+    const ean13 = data.ean13?.trim() || null
 
     const initialStock = tracksSerialNumbers ? 0 : (parseInt(data.mainWarehouse) || 0)
 
@@ -176,7 +177,8 @@ export async function POST(request: NextRequest) {
     await prisma.$executeRaw`
       UPDATE "WarehouseItem"
       SET "autoSn" = ${autoSn}, "snExample" = ${snExample},
-          "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId}
+          "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId},
+          "ean13" = ${ean13}
       WHERE id = ${item.id}
     `
 

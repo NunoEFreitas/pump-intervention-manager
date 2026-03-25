@@ -31,69 +31,65 @@ export async function GET(
       return NextResponse.json({ error: 'Technician not found' }, { status: 404 })
     }
 
-    // Get all stock items for this technician
-    const stocks = await prisma.technicianStock.findMany({
-      where: {
-        technicianId: id,
-      },
-      include: {
-        item: {
-          select: {
-            id: true,
-            itemName: true,
-            partNumber: true,
-            value: true,
-            mainWarehouse: true,
-            tracksSerialNumbers: true,
-          },
-        },
-      },
-      orderBy: {
-        item: {
-          itemName: 'asc',
-        },
-      },
-    })
+    // Get all stock items for this technician via raw SQL (Prisma client may be stale)
+    const stocks = await prisma.$queryRaw<Array<{
+      quantity: number
+      itemId: string
+      itemName: string
+      partNumber: string
+      value: number
+      mainWarehouse: number
+      tracksSerialNumbers: boolean
+      ean13: string | null
+    }>>`
+      SELECT ts.quantity,
+             wi.id AS "itemId",
+             wi."itemName",
+             wi."partNumber",
+             wi.value,
+             wi."mainWarehouse",
+             wi."tracksSerialNumbers",
+             wi."ean13"
+      FROM "TechnicianStock" ts
+      JOIN "WarehouseItem" wi ON wi.id = ts."itemId"
+      WHERE ts."technicianId" = ${id}
+      ORDER BY wi."itemName" ASC
+    `
 
     // Fetch serial numbers for serialized items
     const stockDetails = await Promise.all(
       stocks.map(async (stock) => {
         let serialNumbers = undefined
 
-        if (stock.item.tracksSerialNumbers) {
-          const sns = await prisma.serialNumberStock.findMany({
-            where: {
-              itemId: stock.item.id,
-              technicianId: id,
-              location: 'TECHNICIAN',
-            },
-            select: {
-              id: true,
-              serialNumber: true,
-            },
-            orderBy: {
-              serialNumber: 'asc',
-            },
-          })
+        if (stock.tracksSerialNumbers) {
+          const sns = await prisma.$queryRaw<Array<{ id: string; serialNumber: string }>>`
+            SELECT id, "serialNumber"
+            FROM "SerialNumberStock"
+            WHERE "itemId" = ${stock.itemId}
+              AND "technicianId" = ${id}
+              AND location = 'TECHNICIAN'
+            ORDER BY "serialNumber" ASC
+          `
           serialNumbers = sns
         }
 
         return {
-          itemId: stock.item.id,
-          itemName: stock.item.itemName,
-          partNumber: stock.item.partNumber,
-          value: stock.item.value,
+          itemId: stock.itemId,
+          itemName: stock.itemName,
+          partNumber: stock.partNumber,
+          value: stock.value,
           quantity: stock.quantity,
-          totalValue: stock.quantity * stock.item.value,
-          mainWarehouseStock: stock.item.mainWarehouse,
-          tracksSerialNumbers: stock.item.tracksSerialNumbers,
+          totalValue: stock.quantity * stock.value,
+          mainWarehouseStock: stock.mainWarehouse,
+          tracksSerialNumbers: stock.tracksSerialNumbers,
+          ean13: stock.ean13,
           serialNumbers,
         }
       })
     )
 
     const totalItems = stocks.reduce((sum, stock) => sum + stock.quantity, 0)
-    const totalValue = stocks.reduce((sum, stock) => sum + (stock.quantity * stock.item.value), 0)
+    const totalValue = stocks.reduce((sum, stock) => sum + (stock.quantity * stock.value), 0)
 
     return NextResponse.json({
       ...technician,

@@ -38,6 +38,7 @@ interface Item {
   id: string
   itemName: string
   partNumber: string
+  ean13: string | null
   equipmentTypeId: string | null
   brandId: string | null
   typeName: string | null
@@ -76,6 +77,7 @@ export default function WarehouseItemDetailPage() {
     equipmentTypeId: '',
     brandId: '',
     partNumber: '',
+    ean13: '',
     itemName: '',
     value: '',
     tracksSerialNumbers: false,
@@ -110,6 +112,7 @@ export default function WarehouseItemDetailPage() {
         equipmentTypeId: data.equipmentTypeId || '',
         brandId: data.brandId || '',
         partNumber: data.partNumber,
+        ean13: data.ean13 || '',
         itemName: data.itemName || '',
         value: data.value != null ? data.value.toString() : '',
         tracksSerialNumbers: data.tracksSerialNumbers ?? false,
@@ -305,6 +308,12 @@ export default function WarehouseItemDetailPage() {
                 <p className="text-sm text-gray-600">{t('partNumber')}</p>
                 <p className="text-lg font-semibold text-gray-900">{item.partNumber}</p>
               </div>
+              {item.ean13 && (
+                <div>
+                  <p className="text-sm text-gray-600">EAN-13</p>
+                  <p className="text-lg font-semibold font-mono text-gray-900">{item.ean13}</p>
+                </div>
+              )}
               <div>
                 <p className="text-sm text-gray-600">{t('value')}</p>
                 <p className="text-lg font-semibold text-gray-900">€{item.value != null ? Number(item.value).toFixed(2) : '—'}</p>
@@ -651,6 +660,18 @@ export default function WarehouseItemDetailPage() {
               value={editData.partNumber}
               onChange={(e) => updateEditSourceField({ partNumber: e.target.value })}
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
+            <input
+              type="text"
+              className="input text-gray-800 font-mono"
+              value={editData.ean13}
+              onChange={(e) => setEditData({ ...editData, ean13: e.target.value })}
+              placeholder="0000000000000"
+              maxLength={13}
             />
           </div>
 

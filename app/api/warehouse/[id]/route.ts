@@ -18,7 +18,7 @@ export async function GET(
 
     const [itemRows, techRows, movementRows, extraRows] = await Promise.all([
       prisma.$queryRaw<any[]>`
-        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock",
+        SELECT id, "itemName", "partNumber", "ean13", value, "mainWarehouse", "repairStock", "destructionStock",
                "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
                "createdAt", "updatedAt"
         FROM "WarehouseItem" WHERE id = ${id}
@@ -148,6 +148,8 @@ export async function PUT(
     const newAutoSn = newTracksSerialNumbers && (data.autoSn === true || data.autoSn === 'true')
     const newSnExample = newAutoSn ? (data.snExample || null) : null
 
+    const ean13 = data.ean13?.trim() || null
+
     const item = await prisma.warehouseItem.update({
       where: { id },
       data: {
@@ -161,7 +163,8 @@ export async function PUT(
       UPDATE "WarehouseItem"
       SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample},
           "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId},
-          "tracksSerialNumbers" = ${newTracksSerialNumbers}
+          "tracksSerialNumbers" = ${newTracksSerialNumbers},
+          "ean13" = ${ean13}
       WHERE id = ${id}
     `
 

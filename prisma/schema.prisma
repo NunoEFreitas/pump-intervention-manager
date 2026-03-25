@@ -132,6 +132,7 @@ model Intervention {
   scheduledDate    DateTime?
   scheduledTime    String?
   breakdown        String              @default("") @db.Text // Description of the breakdown/issue
+  comments         String?             @db.Text             // Internal free-text comments
   bill             Boolean             @default(false)
   contract         Boolean             @default(false)
   warranty         Boolean             @default(false)
@@ -176,6 +177,7 @@ model WarehouseItem {
   id                  String              @id @default(uuid())
   itemName            String
   partNumber          String
+  ean13               String?             // EAN-13 barcode
   equipmentTypeId     String?
   equipmentType       EquipmentType?      @relation(fields: [equipmentTypeId], references: [id])
   brandId             String?

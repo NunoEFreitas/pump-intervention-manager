@@ -14,6 +14,7 @@ interface Intervention {
   scheduledTime: string | null
   createdAt: string
   breakdown: string | null
+  comments: string | null
   client: {
     id: string
     name: string

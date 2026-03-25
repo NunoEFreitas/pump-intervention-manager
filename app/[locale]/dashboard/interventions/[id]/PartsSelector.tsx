@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTranslations } from 'next-intl'
 
 interface StockItem {
@@ -10,6 +10,7 @@ interface StockItem {
   value: number
   quantity: number
   tracksSerialNumbers: boolean
+  ean13?: string | null
   serialNumbers?: Array<{
     id: string
     serialNumber: string
@@ -45,10 +46,23 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
   const [pendingSnSelected, setPendingSnSelected] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
+  // Barcode scanner state
+  const [scanning, setScanning] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [scanFeedback, setScanFeedback] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const readerRef = useRef<any>(null)
 
   useEffect(() => {
     fetchTechnicianStock()
   }, [technicianId])
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      stopScanner()
+    }
+  }, [])
 
   const fetchTechnicianStock = async () => {
     try {
@@ -63,6 +77,84 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
     } finally {
       setLoading(false)
     }
+  }
+
+  const stopScanner = () => {
+    if (readerRef.current) {
+      try { readerRef.current.reset() } catch {}
+      readerRef.current = null
+    }
+  }
+
+  const startScanner = async () => {
+    setScanError(null)
+    setScanFeedback(null)
+    setScanning(true)
+
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/browser')
+      const reader = new BrowserMultiFormatReader()
+      readerRef.current = reader
+
+      // Small delay to ensure video element is mounted
+      await new Promise(r => setTimeout(r, 100))
+
+      if (!videoRef.current) {
+        setScanError('Camera element not ready')
+        setScanning(false)
+        return
+      }
+
+      await reader.decodeFromConstraints(
+        { video: { facingMode: 'environment' } },
+        videoRef.current,
+        (result, err) => {
+          if (result) {
+            const code = result.getText()
+            handleScannedCode(code)
+          }
+        }
+      )
+    } catch (err: any) {
+      console.error('Scanner error:', err)
+      setScanError('Câmara não disponível ou permissão negada')
+      setScanning(false)
+    }
+  }
+
+  const handleScannedCode = (code: string) => {
+    const found = stock.find(item => item.ean13 === code)
+    if (!found) {
+      setScanFeedback(`Artigo não encontrado: ${code}`)
+      return
+    }
+
+    // Stop scanner and close overlay
+    stopScanner()
+    setScanning(false)
+
+    // If serialized, open SN picker; otherwise add to cart
+    if (found.tracksSerialNumbers) {
+      setSnPickerItemId(found.itemId)
+      setPendingSnQty(1)
+      setPendingSnSelected([])
+    } else {
+      const qty = getQty(found.itemId)
+      const max = found.quantity
+      setCart(prev => {
+        const existing = prev.find(e => e.item.itemId === found.itemId)
+        if (existing) {
+          return prev.map(e =>
+            e.item.itemId === found.itemId
+              ? { ...e, quantity: Math.min(e.quantity + qty, max) }
+              : e
+          )
+        }
+        return [...prev, { item: found, quantity: Math.min(qty, max), serialNumberIds: [] }]
+      })
+    }
+    setScanFeedback(`✓ ${found.itemName}`)
+    setTimeout(() => setScanFeedback(null), 3000)
   }
 
   const getQty = (itemId: string) => quantities[itemId] ?? 1
@@ -174,10 +266,63 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white rounded-t-2xl sm:rounded-lg w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="p-4 sm:p-6 border-b">
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('addPartsUsed')}</h2>
-          <p className="text-sm text-gray-600 mt-1">{t('selectPartsFromStock')}</p>
+        <div className="p-4 sm:p-6 border-b flex items-start justify-between">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900">{t('addPartsUsed')}</h2>
+            <p className="text-sm text-gray-600 mt-1">{t('selectPartsFromStock')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (scanning) { stopScanner(); setScanning(false) } else { startScanner() }
+            }}
+            className={`ml-3 shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              scanning
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            title="Scan EAN-13 barcode"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h2.25m0 0V2.25m0 2.25v2.25M3.75 19.5h2.25m0 0v2.25m0-2.25v-2.25M19.5 4.5h-2.25m0 0V2.25m0 2.25v2.25M19.5 19.5h-2.25m0 0v2.25m0-2.25v-2.25M7.5 9h9M7.5 12h9M7.5 15h9" />
+            </svg>
+            {scanning ? 'Parar' : 'Scan'}
+          </button>
         </div>
+
+        {/* Camera overlay */}
+        {scanning && (
+          <div className="relative bg-black flex-shrink-0" style={{ height: 220 }}>
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              autoPlay
+              muted
+              playsInline
+            />
+            {/* Aim guide */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="border-2 border-white rounded opacity-70 w-2/3 h-16" />
+            </div>
+            <p className="absolute bottom-2 left-0 right-0 text-center text-white text-xs opacity-80">
+              Aponte para o código de barras EAN-13
+            </p>
+            {scanError && (
+              <div className="absolute top-2 left-2 right-2 bg-red-600 text-white text-xs rounded px-2 py-1 text-center">
+                {scanError}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Scan feedback */}
+        {scanFeedback && (
+          <div className={`px-4 py-2 text-sm font-medium text-center ${
+            scanFeedback.startsWith('✓') ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
+          }`}>
+            {scanFeedback}
+          </div>
+        )}
 
         {loading ? (
           <div className="p-8 text-center text-gray-600">{t('loadingStock')}</div>

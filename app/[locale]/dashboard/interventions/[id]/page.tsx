@@ -92,6 +92,7 @@ interface Intervention {
   reference: string | null
   status: string
   breakdown: string
+  comments: string | null
   bill: boolean
   contract: boolean
   warranty: boolean
@@ -227,6 +228,7 @@ export default function InterventionDetailPage() {
   const [editData, setEditData] = useState({
     status: '',
     breakdown: '',
+    comments: '',
     scheduledDate: '',
     scheduledTime: '',
     bill: false,
@@ -329,6 +331,7 @@ export default function InterventionDetailPage() {
       setEditData({
         status: data.status,
         breakdown: data.breakdown || '',
+        comments: data.comments || '',
         scheduledDate: schedDate,
         scheduledTime: data.scheduledTime || '',
         bill: data.bill ?? false,
@@ -1299,6 +1302,14 @@ export default function InterventionDetailPage() {
               <h3 className="font-semibold text-gray-700 mb-2">{t('breakdownDescription')}</h3>
               <p className="text-gray-900 whitespace-pre-wrap">{intervention.breakdown}</p>
             </div>
+
+            {/* Comments */}
+            {intervention.comments && (
+              <div className="border-t pt-4">
+                <h3 className="font-semibold text-gray-700 mb-2">Comentários</h3>
+                <p className="text-gray-900 whitespace-pre-wrap">{intervention.comments}</p>
+              </div>
+            )}
 
             {/* Flags */}
             <div className="border-t pt-4 flex flex-wrap gap-4">
@@ -2509,6 +2520,19 @@ export default function InterventionDetailPage() {
               value={editData.breakdown}
               onChange={(e) => setEditData({ ...editData, breakdown: e.target.value })}
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Comentários
+            </label>
+            <textarea
+              rows={3}
+              className="input text-gray-800"
+              placeholder="Notas ou comentários internos..."
+              value={editData.comments}
+              onChange={(e) => setEditData({ ...editData, comments: e.target.value })}
             />
           </div>
 

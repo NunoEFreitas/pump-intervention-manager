@@ -6,6 +6,7 @@ export interface OpenIntervention {
   scheduledTime: string | null
   createdAt: string
   breakdown: string | null
+  comments: string | null
   client: { name: string; city: string | null }
   location: { name: string; city: string | null } | null
   assignedTo: { name: string } | null
@@ -70,6 +71,7 @@ export function printOpenInterventionsPDF(
         <td>${iv.scheduledDate ? `${fmtDate(iv.scheduledDate)}${iv.scheduledTime ? ' ' + iv.scheduledTime : ''}` : '<span style="color:#9ca3af">Não agendada</span>'}</td>
         <td>${iv.assignedTo ? esc(iv.assignedTo.name) : '<span style="color:#9ca3af">—</span>'}</td>
         <td style="max-width:240px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#374151">${esc(iv.breakdown)}</td>
+        <td style="max-width:200px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#374151">${esc(iv.comments)}</td>
       </tr>
     `
   }).join('')
@@ -114,6 +116,7 @@ export function printOpenInterventionsPDF(
         <th>Agendado</th>
         <th>Técnico</th>
         <th>Descrição</th>
+        <th>Comentários</th>
       </tr>
     </thead>
     <tbody>

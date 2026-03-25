@@ -219,6 +219,14 @@ export async function PUT(
       `
     }
 
+    if (data.comments !== undefined) {
+      await prisma.$executeRaw`
+        UPDATE "Intervention"
+        SET "comments" = ${data.comments || null}
+        WHERE id = ${id}
+      `
+    }
+
     return NextResponse.json({
       ...updatedIntervention,
       bill: data.bill ?? false,

@@ -24,6 +24,7 @@ export default function NewWarehouseItemPage() {
     equipmentTypeId: '',
     brandId: '',
     partNumber: '',
+    ean13: '',
     itemName: '',
     value: '',
     mainWarehouse: '0',
@@ -146,6 +147,18 @@ export default function NewWarehouseItemPage() {
             onChange={(e) => updateSourceField({ partNumber: e.target.value })}
             placeholder="e.g., PS-2024-001"
             required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
+          <input
+            type="text"
+            className="input text-gray-800"
+            value={formData.ean13}
+            onChange={(e) => setFormData({ ...formData, ean13: e.target.value })}
+            placeholder="0000000000000"
+            maxLength={13}
           />
         </div>
 
