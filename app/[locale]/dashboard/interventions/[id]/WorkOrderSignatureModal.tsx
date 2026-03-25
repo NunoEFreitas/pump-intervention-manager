@@ -11,10 +11,7 @@ interface WorkOrderSignatureModalProps {
     locationEquipmentId: string | null
     interventionType: string | null
     transportGuide: string | null
-    startDate: string | null
-    startTime: string | null
-    endDate: string | null
-    endTime: string | null
+    sessions: { startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; duration: number | null }[]
     fromAddress: string | null
     internal: boolean
     vehicles: { plateNumber: string; brand: string | null; model: string | null }[]
@@ -166,7 +163,7 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
 
   const techName = intervention.assignedTo?.name || workOrder.createdBy.name
   const vehicleText = workOrder.vehicles.map(v => [v.plateNumber, v.brand, v.model].filter(Boolean).join(' ')).join(', ')
-  const duration = calcDuration(workOrder.startTime, workOrder.endTime)
+  const firstSession = workOrder.sessions?.[0] ?? null
   const locationEquipment = intervention.location?.equipment.find(e => e.id === workOrder.locationEquipmentId)
   const locationAddr = [intervention.location?.address, intervention.location?.city].filter(Boolean).join(', ')
   const clientAddr = [intervention.client.phone].filter(Boolean).join(', ')
@@ -196,7 +193,7 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
               </tr>
               <tr>
                 <td className="border border-gray-400 px-2 py-1 font-bold">DATA</td>
-                <td className="border border-gray-400 px-2 py-1">{workOrder.startDate || ''}</td>
+                <td className="border border-gray-400 px-2 py-1">{firstSession?.startDate || ''}</td>
                 <td className="border border-gray-400 px-2 py-1 font-bold">GUIA DE TRANSPORTE</td>
                 <td className="border border-gray-400 px-2 py-1">{workOrder.transportGuide || ''}</td>
               </tr>
@@ -239,18 +236,38 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
               <thead>
                 <tr>
                   <th className="border border-gray-400 px-2 py-1 font-bold text-left">Colaborador</th>
+                  <th className="border border-gray-400 px-2 py-1 font-bold">Data</th>
                   <th className="border border-gray-400 px-2 py-1 font-bold">Início</th>
                   <th className="border border-gray-400 px-2 py-1 font-bold">Fim</th>
                   <th className="border border-gray-400 px-2 py-1 font-bold">Duração</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-2 py-1">{techName}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-center">{workOrder.startTime || ''}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-center">{workOrder.endTime || ''}</td>
-                  <td className="border border-gray-400 px-2 py-1 text-center">{duration}</td>
-                </tr>
+                {workOrder.sessions && workOrder.sessions.length > 0
+                  ? workOrder.sessions.map((s, i) => {
+                      const dur = s.duration != null
+                        ? `${s.duration.toFixed(2)}h`
+                        : calcDuration(s.startTime, s.endTime)
+                      return (
+                        <tr key={i}>
+                          <td className="border border-gray-400 px-2 py-1">{i === 0 ? techName : ''}</td>
+                          <td className="border border-gray-400 px-2 py-1 text-center">{s.startDate || ''}</td>
+                          <td className="border border-gray-400 px-2 py-1 text-center">{s.startTime || ''}</td>
+                          <td className="border border-gray-400 px-2 py-1 text-center">{s.endTime || ''}</td>
+                          <td className="border border-gray-400 px-2 py-1 text-center">{dur}</td>
+                        </tr>
+                      )
+                    })
+                  : (
+                    <tr>
+                      <td className="border border-gray-400 px-2 py-1">{techName}</td>
+                      <td className="border border-gray-400 px-2 py-1" />
+                      <td className="border border-gray-400 px-2 py-1" />
+                      <td className="border border-gray-400 px-2 py-1" />
+                      <td className="border border-gray-400 px-2 py-1" />
+                    </tr>
+                  )
+                }
               </tbody>
             </table>
           </div>

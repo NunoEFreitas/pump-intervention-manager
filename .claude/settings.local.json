@@ -17,7 +17,8 @@
       "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\repairs\\[id]",
       "c:\\pump-intervention-manager\\app\\api\\client-parts",
       "c:\\pump-intervention-manager\\app\\[locale]\\dashboard\\warehouse\\client-parts",
-      "c:\\pump-intervention-manager\\app\\api\\repairs\\[id]"
+      "c:\\pump-intervention-manager\\app\\api\\repairs\\[id]",
+      "c:\\pump-intervention-manager\\app\\api\\interventions\\[id]\\work-orders\\[workOrderId]\\sessions"
     ]
   }
 }

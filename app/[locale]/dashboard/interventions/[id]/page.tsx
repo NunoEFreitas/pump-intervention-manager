@@ -42,6 +42,15 @@ interface WorkOrderPart {
   }>
 }
 
+interface WorkOrderSession {
+  id: string
+  startDate: string | null
+  startTime: string | null
+  endDate: string | null
+  endTime: string | null
+  duration: number | null
+}
+
 interface WorkOrder {
   id: string
   reference: string | null
@@ -51,12 +60,9 @@ interface WorkOrder {
   locationEquipmentId: string | null
   interventionType: string | null
   transportGuide: string | null
-  startDate: string | null
-  startTime: string | null
-  endDate: string | null
-  endTime: string | null
   fromAddress: string | null
   internal: boolean
+  sessions: WorkOrderSession[]
   vehicles: { workOrderId: string; vehicleId: string; plateNumber: string; brand: string | null; model: string | null }[]
   helpers: { workOrderId: string; userId: string; name: string }[]
   createdAt: string
@@ -151,6 +157,15 @@ function PhotoThumb({ interventionId, photo, onClick }: { interventionId: string
   )
 }
 
+function calcSessionDuration(form: { startDate: string; startTime: string; endDate: string; endTime: string }): string | null {
+  if (!form.startDate || !form.startTime || !form.endDate || !form.endTime) return null
+  const start = new Date(`${form.startDate}T${form.startTime}`)
+  const end = new Date(`${form.endDate}T${form.endTime}`)
+  const diffMs = end.getTime() - start.getTime()
+  if (diffMs <= 0) return null
+  return (diffMs / 3600000).toFixed(2)
+}
+
 export default function InterventionDetailPage() {
   const router = useRouter()
   const params = useParams()
@@ -165,7 +180,7 @@ export default function InterventionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
   const [showWorkOrderForm, setShowWorkOrderForm] = useState(false)
-  const [workOrderForm, setWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
+  const [workOrderForm, setWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
   const [workOrderLoading, setWorkOrderLoading] = useState(false)
   const [showPartsForWorkOrderId, setShowPartsForWorkOrderId] = useState<string | null>(null)
   const [showWarehousePartsForWOId, setShowWarehousePartsForWOId] = useState<string | null>(null)
@@ -176,7 +191,10 @@ export default function InterventionDetailPage() {
   const [warehouseSnLoading, setWarehouseSnLoading] = useState(false)
   const [warehousePartLoading, setWarehousePartLoading] = useState(false)
   const [editingWorkOrderId, setEditingWorkOrderId] = useState<string | null>(null)
-  const [editWorkOrderForm, setEditWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
+  const [editWorkOrderForm, setEditWorkOrderForm] = useState({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', internal: false, vehicleIds: [] as string[], helperIds: [] as string[] })
+  const [sessionModal, setSessionModal] = useState<{ workOrderId: string } | null>(null)
+  const [sessionForm, setSessionForm] = useState({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
+  const [sessionSubmitting, setSessionSubmitting] = useState(false)
   const [editWorkOrderLoading, setEditWorkOrderLoading] = useState(false)
   const [userRole, setUserRole] = useState<string>('')
   const [technicians, setTechnicians] = useState<Technician[]>([])
@@ -189,6 +207,7 @@ export default function InterventionDetailPage() {
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
   const [showClientPartForm, setShowClientPartForm] = useState(false)
   const [clientPartItemId, setClientPartItemId] = useState('')
+  const [clientPartSn, setClientPartSn] = useState('')
   const [clientPartLoading, setClientPartLoading] = useState(false)
   const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean }[]>([])
   const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
@@ -579,7 +598,7 @@ export default function InterventionDetailPage() {
   }
 
   const addClientPart = async () => {
-    if (!clientPartItemId) return
+    if (!clientPartItemId || !clientPartSn.trim()) return
     setClientPartLoading(true)
     try {
       const token = localStorage.getItem('token')
@@ -589,11 +608,12 @@ export default function InterventionDetailPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ warehouseItemId: clientPartItemId }),
+        body: JSON.stringify({ warehouseItemId: clientPartItemId, serialNumber: clientPartSn.trim() }),
       })
       if (response.ok) {
         setShowClientPartForm(false)
         setClientPartItemId('')
+        setClientPartSn('')
         fetchClientParts()
       } else {
         const data = await response.json()
@@ -625,10 +645,6 @@ export default function InterventionDetailPage() {
           equipmentId: workOrderForm.equipmentId || null,
           interventionType: workOrderForm.interventionType || null,
           transportGuide: workOrderForm.transportGuide || null,
-          startDate: workOrderForm.startDate || null,
-          startTime: workOrderForm.startTime || null,
-          endDate: workOrderForm.endDate || null,
-          endTime: workOrderForm.endTime || null,
           internal: workOrderForm.internal,
           vehicleIds: workOrderForm.vehicleIds,
           helperIds: workOrderForm.helperIds,
@@ -636,7 +652,7 @@ export default function InterventionDetailPage() {
       })
       if (response.ok) {
         setShowWorkOrderForm(false)
-        setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [], helperIds: [] })
+        setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', internal: false, vehicleIds: [], helperIds: [] })
         fetchWorkOrders()
         fetchIntervention()
       }
@@ -657,10 +673,6 @@ export default function InterventionDetailPage() {
       equipmentId: wo.locationEquipmentId || '',
       interventionType: wo.interventionType || '',
       transportGuide: wo.transportGuide || '',
-      startDate: wo.startDate || '',
-      startTime: wo.startTime || '',
-      endDate: wo.endDate || '',
-      endTime: wo.endTime || '',
       internal: wo.internal ?? false,
       vehicleIds: wo.vehicles?.map(v => v.vehicleId) ?? [],
       helperIds: wo.helpers?.map(h => h.userId) ?? [],
@@ -683,10 +695,6 @@ export default function InterventionDetailPage() {
           equipmentId: editWorkOrderForm.equipmentId || null,
           interventionType: editWorkOrderForm.interventionType || null,
           transportGuide: editWorkOrderForm.transportGuide || null,
-          startDate: editWorkOrderForm.startDate || null,
-          startTime: editWorkOrderForm.startTime || null,
-          endDate: editWorkOrderForm.endDate || null,
-          endTime: editWorkOrderForm.endTime || null,
           internal: editWorkOrderForm.internal,
           vehicleIds: editWorkOrderForm.vehicleIds,
           helperIds: editWorkOrderForm.helperIds,
@@ -701,6 +709,44 @@ export default function InterventionDetailPage() {
     } finally {
       setEditWorkOrderLoading(false)
     }
+  }
+
+  const addSession = async () => {
+    if (!sessionModal) return
+    setSessionSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/work-orders/${sessionModal.workOrderId}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          startDate: sessionForm.startDate || null,
+          startTime: sessionForm.startTime || null,
+          endDate: sessionForm.endDate || null,
+          endTime: sessionForm.endTime || null,
+          duration: sessionForm.duration ? parseFloat(sessionForm.duration) : null,
+        }),
+      })
+      if (res.ok) {
+        const session = await res.json()
+        setWorkOrders(prev => prev.map(wo =>
+          wo.id === sessionModal.workOrderId
+            ? { ...wo, sessions: [...(wo.sessions ?? []), session], timeSpent: (wo.sessions ?? []).reduce((s, x) => s + (x.duration ?? 0), 0) + (session.duration ?? 0) || null }
+            : wo
+        ))
+        setSessionModal(null)
+        setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
+        fetchWorkOrders()
+      }
+    } finally { setSessionSubmitting(false) }
+  }
+
+  const deleteSession = async (workOrderId: string, sessionId: string) => {
+    const token = localStorage.getItem('token')
+    await fetch(`/api/interventions/${params.id}/work-orders/${workOrderId}/sessions/${sessionId}`, {
+      method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+    })
+    fetchWorkOrders()
   }
 
   const addToWarehouseCart = async () => {
@@ -1350,16 +1396,28 @@ export default function InterventionDetailPage() {
                     )}
                   </div>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Número de série do artigo
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex: SN-12345"
+                    value={clientPartSn}
+                    onChange={e => setClientPartSn(e.target.value)}
+                    className="input text-gray-800 w-full"
+                  />
+                </div>
                 <div className="flex gap-2">
                   <button
                     onClick={addClientPart}
-                    disabled={clientPartLoading || !clientPartItemId}
+                    disabled={clientPartLoading || !clientPartItemId || !clientPartSn.trim()}
                     className="btn btn-primary text-sm"
                   >
                     {clientPartLoading ? tCommon('saving') : tCommon('save')}
                   </button>
                   <button
-                    onClick={() => { setShowClientPartForm(false); setClientPartItemId('') }}
+                    onClick={() => { setShowClientPartForm(false); setClientPartItemId(''); setClientPartSn('') }}
                     className="btn btn-secondary text-sm"
                   >
                     {tCommon('cancel')}
@@ -1449,24 +1507,6 @@ export default function InterventionDetailPage() {
                 </div>
                 {!workOrderForm.internal && (
                   <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
-                        <input type="date" className="input text-gray-800" value={workOrderForm.startDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startDate: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
-                        <input type="time" className="input text-gray-800" value={workOrderForm.startTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, startTime: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
-                        <input type="date" className="input text-gray-800" value={workOrderForm.endDate} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endDate: e.target.value })} />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
-                        <input type="time" className="input text-gray-800" value={workOrderForm.endTime} onChange={(e) => setWorkOrderForm({ ...workOrderForm, endTime: e.target.value })} />
-                      </div>
-                    </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsKm')}</label>
@@ -1585,7 +1625,7 @@ export default function InterventionDetailPage() {
                     {workOrderLoading ? tCommon('saving') : tCommon('save')}
                   </button>
                   <button
-                    onClick={() => { setShowWorkOrderForm(false); setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', startDate: '', startTime: '', endDate: '', endTime: '', internal: false, vehicleIds: [], helperIds: [] }) }}
+                    onClick={() => { setShowWorkOrderForm(false); setWorkOrderForm({ description: '', timeSpent: '', km: '', fromAddress: '', equipmentId: '', interventionType: '', transportGuide: '', internal: false, vehicleIds: [], helperIds: [] }) }}
                     className="btn btn-secondary text-sm"
                   >
                     {tCommon('cancel')}
@@ -1623,24 +1663,6 @@ export default function InterventionDetailPage() {
                         </div>
                         {!editWorkOrderForm.internal && (
                           <>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('startDate')}</label>
-                                <input type="date" className="input text-gray-800" value={editWorkOrderForm.startDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startDate: e.target.value })} />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('startTime')}</label>
-                                <input type="time" className="input text-gray-800" value={editWorkOrderForm.startTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, startTime: e.target.value })} />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('endDate')}</label>
-                                <input type="date" className="input text-gray-800" value={editWorkOrderForm.endDate} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endDate: e.target.value })} />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">{t('endTime')}</label>
-                                <input type="time" className="input text-gray-800" value={editWorkOrderForm.endTime} onChange={(e) => setEditWorkOrderForm({ ...editWorkOrderForm, endTime: e.target.value })} />
-                              </div>
-                            </div>
                             <div className="grid grid-cols-2 gap-3">
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('fieldsKm')}</label>
@@ -1759,10 +1781,27 @@ export default function InterventionDetailPage() {
                                 ))}
                               </div>
                             )}
-                            {!wo.internal && (wo.startDate || wo.endDate) && (
-                              <div className="flex gap-3">
-                                {wo.startDate && <span>▶ {wo.startDate}{wo.startTime ? ` ${wo.startTime}` : ''}</span>}
-                                {wo.endDate && <span>■ {wo.endDate}{wo.endTime ? ` ${wo.endTime}` : ''}</span>}
+                            {/* Sessions */}
+                            {!wo.internal && (
+                              <div className="mt-2">
+                                {(wo.sessions ?? []).length > 0 && (
+                                  <div className="space-y-1 mb-1">
+                                    {(wo.sessions ?? []).map(s => (
+                                      <div key={s.id} className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 rounded px-2 py-1">
+                                        <span>▶ {s.startDate ?? '—'}{s.startTime ? ` ${s.startTime}` : ''}</span>
+                                        <span className="text-gray-300">→</span>
+                                        <span>■ {s.endDate ?? '—'}{s.endTime ? ` ${s.endTime}` : ''}</span>
+                                        {s.duration != null && <span className="ml-auto font-medium text-blue-700">{s.duration}h</span>}
+                                        {canEdit && (
+                                          <button onClick={() => deleteSession(wo.id, s.id)} className="text-red-400 hover:text-red-600 ml-1">×</button>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {canEdit && (
+                                  <button onClick={() => { setSessionModal({ workOrderId: wo.id }); setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' }) }} className="text-xs text-blue-600 hover:text-blue-800 font-medium">+ Adicionar Sessão</button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -2526,6 +2565,59 @@ export default function InterventionDetailPage() {
             } catch { /* non-blocking */ }
           }}
         />
+      )}
+
+      {/* ── Session modal ─────────────────────────────────────────────────── */}
+      {sessionModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Adicionar Sessão de Trabalho</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data início</label>
+                <input type="date" className="input text-gray-800 w-full" value={sessionForm.startDate} onChange={e => {
+                  const updated = { ...sessionForm, startDate: e.target.value }
+                  const calc = calcSessionDuration(updated)
+                  setSessionForm({ ...updated, duration: calc ?? sessionForm.duration })
+                }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Hora início</label>
+                <input type="time" className="input text-gray-800 w-full" value={sessionForm.startTime} onChange={e => {
+                  const updated = { ...sessionForm, startTime: e.target.value }
+                  const calc = calcSessionDuration(updated)
+                  setSessionForm({ ...updated, duration: calc ?? sessionForm.duration })
+                }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Data fim</label>
+                <input type="date" className="input text-gray-800 w-full" value={sessionForm.endDate} onChange={e => {
+                  const updated = { ...sessionForm, endDate: e.target.value }
+                  const calc = calcSessionDuration(updated)
+                  setSessionForm({ ...updated, duration: calc ?? sessionForm.duration })
+                }} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Hora fim</label>
+                <input type="time" className="input text-gray-800 w-full" value={sessionForm.endTime} onChange={e => {
+                  const updated = { ...sessionForm, endTime: e.target.value }
+                  const calc = calcSessionDuration(updated)
+                  setSessionForm({ ...updated, duration: calc ?? sessionForm.duration })
+                }} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duração (horas) <span className="text-red-500">*</span></label>
+              <input type="number" step="0.01" min="0" className="input text-gray-800 w-full" placeholder="Auto-calculado ou manual" value={sessionForm.duration} onChange={e => setSessionForm({ ...sessionForm, duration: e.target.value })} />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={addSession} disabled={sessionSubmitting || !sessionForm.duration} className="btn btn-primary flex-1 disabled:opacity-50">
+                {sessionSubmitting ? 'A guardar...' : 'Adicionar'}
+              </button>
+              <button onClick={() => setSessionModal(null)} disabled={sessionSubmitting} className="btn btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>

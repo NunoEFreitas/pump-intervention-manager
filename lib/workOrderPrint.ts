@@ -15,12 +15,9 @@ interface PrintWorkOrder {
   locationEquipmentId: string | null
   interventionType: string | null
   transportGuide: string | null
-  startDate: string | null
-  startTime: string | null
-  endDate: string | null
-  endTime: string | null
   fromAddress: string | null
   internal: boolean
+  sessions: { startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; duration: number | null }[]
   vehicles: { plateNumber: string; brand: string | null; model: string | null }[]
   helpers: { name: string }[]
   createdBy: { name: string }
@@ -86,7 +83,7 @@ export function printWorkOrderPDF(
   const clientAddr = [intervention.client.address, intervention.client.city, intervention.client.postalCode].filter(Boolean).join(', ')
   const destAddr = locationAddr || (intervention.location ? esc(intervention.location.name) : clientAddr)
   const locationEquipment = intervention.location?.equipment.find((e) => e.id === workOrder.locationEquipmentId)
-  const duration = calcDuration(workOrder.startTime, workOrder.endTime)
+  const firstSession = workOrder.sessions?.[0] ?? null
   const techName = intervention.assignedTo?.name || workOrder.createdBy.name
 
   const footerLines = [
@@ -196,7 +193,7 @@ export function printWorkOrderPDF(
     </tr>
     <tr>
       <td class="lbl">DATA</td>
-      <td>${esc(workOrder.startDate || '')}</td>
+      <td>${esc(firstSession?.startDate || '')}</td>
       <td class="lbl">GUIA DE TRANSPORTE</td>
       <td>${esc(workOrder.transportGuide || '')}</td>
     </tr>
@@ -222,19 +219,27 @@ export function printWorkOrderPDF(
 
   <!-- Labor -->
   <table>
-    ${sectionHeader('MÃO-DE-OBRA', 4)}
+    ${sectionHeader('MÃO-DE-OBRA', 5)}
     <tr>
       <th>Colaborador</th>
-      <th style="width:17%">Trabalho Início</th>
-      <th style="width:17%">Trabalho Fim</th>
-      <th style="width:17%">Diferença</th>
+      <th style="width:14%">Data Início</th>
+      <th style="width:14%">Hora Início</th>
+      <th style="width:14%">Hora Fim</th>
+      <th style="width:14%">Duração</th>
     </tr>
-    <tr>
-      <td>${esc(techName)}</td>
-      <td style="text-align:center">${esc(workOrder.startTime || '')}</td>
-      <td style="text-align:center">${esc(workOrder.endTime || '')}</td>
-      <td style="text-align:center">${esc(duration)}</td>
-    </tr>
+    ${workOrder.sessions && workOrder.sessions.length > 0
+      ? workOrder.sessions.map((s, i) => {
+          const dur = s.duration != null ? `${s.duration.toFixed(2)}h` : calcDuration(s.startTime, s.endTime)
+          return `<tr>
+            <td>${i === 0 ? esc(techName) : ''}</td>
+            <td style="text-align:center">${esc(s.startDate || '')}</td>
+            <td style="text-align:center">${esc(s.startTime || '')}</td>
+            <td style="text-align:center">${esc(s.endTime || '')}</td>
+            <td style="text-align:center">${esc(dur)}</td>
+          </tr>`
+        }).join('')
+      : `<tr><td>${esc(techName)}</td><td></td><td></td><td></td><td></td></tr>`
+    }
   </table>
 
   <!-- Travel -->

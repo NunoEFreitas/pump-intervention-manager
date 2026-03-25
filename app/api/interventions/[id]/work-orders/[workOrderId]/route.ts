@@ -11,19 +11,17 @@ export async function PUT(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { workOrderId } = await params
-  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, startDate, startTime, endDate, endTime, fromAddress, internal, vehicleIds, helperIds } = await request.json()
+  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
 
   if (!description?.trim()) {
     return NextResponse.json({ error: 'Description is required' }, { status: 400 })
   }
 
-  await (prisma as any).workOrder.update({
-    where: { id: workOrderId },
-    data: {
-      description: description.trim(),
-      timeSpent: timeSpent !== undefined ? (timeSpent !== null && timeSpent !== '' ? parseFloat(timeSpent) : null) : undefined,
-    },
-  })
+  const now = new Date()
+  const ts = timeSpent !== undefined && timeSpent !== null && timeSpent !== '' ? parseFloat(timeSpent) : null
+  await prisma.$executeRaw`
+    UPDATE "WorkOrder" SET description = ${description.trim()}, "timeSpent" = ${ts}, "updatedAt" = ${now}::timestamptz WHERE id = ${workOrderId}
+  `
 
   await prisma.$executeRaw`
     UPDATE "WorkOrder"
@@ -31,10 +29,6 @@ export async function PUT(
         "locationEquipmentId" = ${equipmentId || null},
         "interventionType"    = ${interventionType || null},
         "transportGuide"      = ${transportGuide || null},
-        "startDate"           = ${startDate || null},
-        "startTime"           = ${startTime || null},
-        "endDate"             = ${endDate || null},
-        "endTime"             = ${endTime || null},
         "fromAddress"         = ${fromAddress || null},
         "internal"            = ${internal ? true : false}
     WHERE id = ${workOrderId}
@@ -68,6 +62,6 @@ export async function DELETE(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { workOrderId } = await params
-  await (prisma as any).workOrder.delete({ where: { id: workOrderId } })
+  await prisma.$executeRaw`DELETE FROM "WorkOrder" WHERE id = ${workOrderId}`
   return NextResponse.json({ success: true })
 }

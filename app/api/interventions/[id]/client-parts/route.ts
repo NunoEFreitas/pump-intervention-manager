@@ -63,10 +63,13 @@ export async function POST(
     }
 
     const { id: interventionId } = await params
-    const { warehouseItemId } = await request.json()
+    const { warehouseItemId, serialNumber } = await request.json()
 
     if (!warehouseItemId) {
       return NextResponse.json({ error: 'Warehouse item is required' }, { status: 400 })
+    }
+    if (!serialNumber?.trim()) {
+      return NextResponse.json({ error: 'Serial number is required' }, { status: 400 })
     }
 
     // Fetch intervention with client reference
@@ -75,8 +78,7 @@ export async function POST(
       select: {
         id: true,
         assignedToId: true,
-        reference: true,
-        client: { select: { id: true, reference: true } },
+        client: { select: { id: true } },
       },
     })
 
@@ -106,28 +108,12 @@ export async function POST(
       return NextResponse.json({ error: 'Warehouse item not found' }, { status: 404 })
     }
 
-    // Build SN segments — remove spaces/slashes, join with dash
-    const clean = (s: string) => s.replace(/[\s/]+/g, '-')
-    const clientRef = clean(intervention.client.reference || 'CLIENT')
-    const projRef = clean(intervention.reference || intervention.id.slice(0, 8))
-
-    const counterKey = `clientPart_${interventionId}`
+    const sn = serialNumber.trim()
     const snId = randomUUID()
     const movId = randomUUID()
 
     const result = await prisma.$transaction(async (tx) => {
-      // Atomic counter per intervention
-      const current = await tx.systemSetting.findUnique({ where: { key: counterKey } })
-      const counter = current ? parseInt(current.value) + 1 : 1
-      await tx.systemSetting.upsert({
-        where: { key: counterKey },
-        create: { key: counterKey, value: String(counter) },
-        update: { value: String(counter) },
-      })
-
-      const sn = `${clientRef}-${projRef}-${String(counter).padStart(3, '0')}`
-
-      // Create SerialNumberStock — use raw SQL because isClientPart + interventionId are new fields
+      // Create SerialNumberStock
       await tx.$executeRaw`
         INSERT INTO "SerialNumberStock" (id, "itemId", "serialNumber", location, "technicianId", status, "isClientPart", "interventionId", "pickedUpById", "createdAt", "updatedAt")
         VALUES (${snId}, ${warehouseItemId}, ${sn}, 'TECHNICIAN', ${intervention.assignedToId}, 'AVAILABLE', true, ${interventionId}, ${payload.userId}, NOW(), NOW())

@@ -13,31 +13,89 @@ export async function GET(
 
   const { id } = await params
 
-  const workOrders = await (prisma as any).workOrder.findMany({
-    where: { interventionId: id },
-    include: {
-      createdBy: { select: { id: true, name: true } },
-      parts: {
-        include: {
-          item: { select: { id: true, itemName: true, partNumber: true, value: true, tracksSerialNumbers: true } },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
-    },
-    orderBy: { createdAt: 'asc' },
-  })
+  const woRows = await prisma.$queryRaw<any[]>`
+    SELECT
+      wo.id, wo."interventionId", wo.description, wo."timeSpent", wo."createdById", wo."createdAt", wo."updatedAt",
+      u.id AS "createdById_", u.name AS "createdByName"
+    FROM "WorkOrder" wo
+    JOIN "User" u ON u.id = wo."createdById"
+    WHERE wo."interventionId" = ${id}
+    ORDER BY wo."createdAt" ASC
+  `
 
-  const woIds = workOrders.map((wo: any) => wo.id)
+  const woIds = woRows.map((wo: any) => wo.id)
+
+  // Fetch parts per work order
+  const partRows = woIds.length > 0
+    ? await prisma.$queryRaw<any[]>`
+        SELECT
+          wp.id, wp."workOrderId", wp."itemId", wp.quantity, wp."serialNumberIds", wp."usedById", wp."createdAt",
+          wi."itemName", wi."partNumber", wi.value, wi."tracksSerialNumbers"
+        FROM "WorkOrderPart" wp
+        JOIN "WarehouseItem" wi ON wi.id = wp."itemId"
+        WHERE wp."workOrderId"::text = ANY(${woIds}::text[])
+        ORDER BY wp."createdAt" ASC
+      `
+    : []
+  const partMap: Record<string, any[]> = {}
+  for (const p of partRows) {
+    if (!partMap[p.workOrderId]) partMap[p.workOrderId] = []
+    partMap[p.workOrderId].push(p)
+  }
+
+  // Enrich parts with usedByName
+  const allPartIds = partRows.map((p: any) => p.id)
+  const partUserRows = allPartIds.length > 0
+    ? await prisma.$queryRaw<{ id: string; usedByName: string | null }[]>`
+        SELECT wp.id, u.name AS "usedByName"
+        FROM "WorkOrderPart" wp
+        LEFT JOIN "User" u ON u.id = wp."usedById"
+        WHERE wp.id::text = ANY(${allPartIds}::text[])
+      `
+    : []
+  const partUserMap = Object.fromEntries(partUserRows.map((r) => [r.id, r]))
+
+  const workOrders = woRows.map((wo: any) => ({
+    id: wo.id,
+    interventionId: wo.interventionId,
+    description: wo.description,
+    timeSpent: wo.timeSpent,
+    createdById: wo.createdById,
+    createdAt: wo.createdAt,
+    updatedAt: wo.updatedAt,
+    createdBy: { id: wo.createdById_, name: wo.createdByName },
+    parts: (partMap[wo.id] ?? []).map((p: any) => ({
+      ...p,
+      usedByName: partUserMap[p.id]?.usedByName ?? null,
+      item: { id: p.itemId, itemName: p.itemName, partNumber: p.partNumber, value: p.value, tracksSerialNumbers: p.tracksSerialNumbers },
+      serialNumbers: [],
+    })),
+  }))
 
   // Fetch extra scalar fields
   const extraRows = woIds.length > 0
-    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; interventionType: string | null; transportGuide: string | null; startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; fromAddress: string | null; internal: boolean }[]>`
-        SELECT wo.id, wo.reference, wo.km, wo."locationEquipmentId", wo."interventionType", wo."transportGuide", wo."startDate", wo."startTime", wo."endDate", wo."endTime", wo."fromAddress", wo."internal"
+    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; interventionType: string | null; transportGuide: string | null; fromAddress: string | null; internal: boolean }[]>`
+        SELECT wo.id, wo.reference, wo.km, wo."locationEquipmentId", wo."interventionType", wo."transportGuide", wo."fromAddress", wo."internal"
         FROM "WorkOrder" wo
         WHERE wo.id::text = ANY(${woIds}::text[])
       `
     : []
   const extraMap = Object.fromEntries(extraRows.map((r) => [r.id, r]))
+
+  // Fetch sessions per work order
+  const sessionRows = woIds.length > 0
+    ? await prisma.$queryRaw<{ id: string; workOrderId: string; startDate: string | null; startTime: string | null; endDate: string | null; endTime: string | null; duration: number | null; createdAt: Date }[]>`
+        SELECT id, "workOrderId", "startDate", "startTime", "endDate", "endTime", duration, "createdAt"
+        FROM "WorkOrderSession"
+        WHERE "workOrderId"::text = ANY(${woIds}::text[])
+        ORDER BY "createdAt" ASC
+      `
+    : []
+  const sessionMap: Record<string, typeof sessionRows> = {}
+  for (const r of sessionRows) {
+    if (!sessionMap[r.workOrderId]) sessionMap[r.workOrderId] = []
+    sessionMap[r.workOrderId].push(r)
+  }
 
   // Fetch vehicles per work order
   const vehicleRows = woIds.length > 0
@@ -69,54 +127,37 @@ export async function GET(
     helperMap[r.workOrderId].push(r)
   }
 
-  // Fetch usedById for parts
-  const allPartIds = workOrders.flatMap((wo: any) => wo.parts.map((p: any) => p.id))
-  const partUserRows = allPartIds.length > 0
-    ? await prisma.$queryRaw<{ id: string; usedByName: string | null; createdAt: Date }[]>`
-        SELECT wp.id, u.name AS "usedByName", wp."createdAt"
-        FROM "WorkOrderPart" wp
-        LEFT JOIN "User" u ON u.id = wp."usedById"
-        WHERE wp.id::text = ANY(${allPartIds}::text[])
-      `
-    : []
-  const partUserMap = Object.fromEntries(partUserRows.map((r) => [r.id, r]))
+  // Enrich parts with serial numbers
+  const enrichedParts: Record<string, any[]> = {}
+  for (const wo of workOrders) {
+    enrichedParts[wo.id] = await Promise.all(
+      wo.parts.map(async (part: any) => {
+        if (part.tracksSerialNumbers && part.serialNumberIds?.length > 0) {
+          const serialNumbers = await prisma.$queryRaw<{ id: string; serialNumber: string }[]>`
+            SELECT id, "serialNumber" FROM "SerialNumberStock"
+            WHERE id::text = ANY(${part.serialNumberIds}::text[])
+          `
+          return { ...part, serialNumbers }
+        }
+        return { ...part, serialNumbers: [] }
+      })
+    )
+  }
 
-  const enriched = await Promise.all(
-    workOrders.map(async (wo: any) => ({
-      ...wo,
-      reference: extraMap[wo.id]?.reference ?? null,
-      km: extraMap[wo.id]?.km ?? null,
-      locationEquipmentId: extraMap[wo.id]?.locationEquipmentId ?? null,
-      interventionType: extraMap[wo.id]?.interventionType ?? null,
-      transportGuide: extraMap[wo.id]?.transportGuide ?? null,
-      startDate: extraMap[wo.id]?.startDate ?? null,
-      startTime: extraMap[wo.id]?.startTime ?? null,
-      endDate: extraMap[wo.id]?.endDate ?? null,
-      endTime: extraMap[wo.id]?.endTime ?? null,
-      fromAddress: extraMap[wo.id]?.fromAddress ?? null,
-      internal: extraMap[wo.id]?.internal ?? false,
-      vehicles: vehicleMap[wo.id] ?? [],
-      helpers: helperMap[wo.id] ?? [],
-      parts: await Promise.all(
-        wo.parts.map(async (part: any) => {
-          const partMeta = partUserMap[part.id]
-          const enrichedPart = {
-            ...part,
-            usedByName: partMeta?.usedByName ?? null,
-            createdAt: partMeta?.createdAt ?? part.createdAt,
-          }
-          if (part.item.tracksSerialNumbers && part.serialNumberIds.length > 0) {
-            const serialNumbers = await prisma.serialNumberStock.findMany({
-              where: { id: { in: part.serialNumberIds } },
-              select: { id: true, serialNumber: true },
-            })
-            return { ...enrichedPart, serialNumbers }
-          }
-          return { ...enrichedPart, serialNumbers: [] }
-        })
-      ),
-    }))
-  )
+  const enriched = workOrders.map((wo: any) => ({
+    ...wo,
+    reference: extraMap[wo.id]?.reference ?? null,
+    km: extraMap[wo.id]?.km ?? null,
+    locationEquipmentId: extraMap[wo.id]?.locationEquipmentId ?? null,
+    interventionType: extraMap[wo.id]?.interventionType ?? null,
+    transportGuide: extraMap[wo.id]?.transportGuide ?? null,
+    fromAddress: extraMap[wo.id]?.fromAddress ?? null,
+    internal: extraMap[wo.id]?.internal ?? false,
+    sessions: sessionMap[wo.id] ?? [],
+    vehicles: vehicleMap[wo.id] ?? [],
+    helpers: helperMap[wo.id] ?? [],
+    parts: enrichedParts[wo.id] ?? [],
+  }))
 
   return NextResponse.json(enriched)
 }
@@ -130,7 +171,7 @@ export async function POST(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: interventionId } = await params
-  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, startDate, startTime, endDate, endTime, fromAddress, internal, vehicleIds, helperIds } = await request.json()
+  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
 
   if (!description?.trim()) {
     return NextResponse.json({ error: 'Description is required' }, { status: 400 })
@@ -145,15 +186,13 @@ export async function POST(
     WHERE id = ${interventionId} AND status = 'ASSIGNED'
   `
 
-  const workOrder = await (prisma as any).workOrder.create({
-    data: {
-      interventionId,
-      description: description.trim(),
-      timeSpent: timeSpent ? parseFloat(timeSpent) : null,
-      createdById: payload.userId,
-    },
-    include: { createdBy: { select: { id: true, name: true } } },
-  })
+  const workOrderId = crypto.randomUUID()
+  const now = new Date()
+  await prisma.$executeRaw`
+    INSERT INTO "WorkOrder" (id, "interventionId", description, "timeSpent", "createdById", "createdAt", "updatedAt")
+    VALUES (${workOrderId}, ${interventionId}, ${description.trim()}, ${timeSpent ? parseFloat(timeSpent) : null}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz)
+  `
+  const workOrder = { id: workOrderId, interventionId, description: description.trim(), timeSpent: timeSpent ? parseFloat(timeSpent) : null, createdById: payload.userId, createdAt: now, updatedAt: now }
 
   await prisma.$executeRaw`
     UPDATE "WorkOrder"
@@ -162,10 +201,6 @@ export async function POST(
         "locationEquipmentId" = ${equipmentId || null},
         "interventionType"    = ${interventionType || null},
         "transportGuide"      = ${transportGuide || null},
-        "startDate"           = ${startDate || null},
-        "startTime"           = ${startTime || null},
-        "endDate"             = ${endDate || null},
-        "endTime"             = ${endTime || null},
         "fromAddress"         = ${fromAddress || null},
         "internal"            = ${internal ? true : false}
     WHERE id = ${workOrder.id}
@@ -199,6 +234,8 @@ export async function POST(
       `
     : []
 
+  const [createdBy] = await prisma.$queryRaw<{ id: string; name: string }[]>`SELECT id, name FROM "User" WHERE id = ${payload.userId}`
+
   return NextResponse.json({
     ...workOrder,
     reference,
@@ -206,12 +243,10 @@ export async function POST(
     locationEquipmentId: equipmentId || null,
     interventionType: interventionType || null,
     transportGuide: transportGuide || null,
-    startDate: startDate || null,
-    startTime: startTime || null,
-    endDate: endDate || null,
-    endTime: endTime || null,
     fromAddress: fromAddress || null,
+    sessions: [],
     internal: internal ? true : false,
+    createdBy: createdBy ?? { id: payload.userId, name: '' },
     vehicles,
     helpers,
     parts: [],

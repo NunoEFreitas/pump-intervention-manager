@@ -15,7 +15,10 @@ export async function GET(
     const [job] = await prisma.$queryRaw<any[]>`
       SELECT
         j.id, j.reference, j.type, j."itemId", j."serialNumberId", j."clientPartId",
-        j.quantity, j.status, j.problem, j."workNotes",
+        j."interventionId",
+        j.quantity, j.status, j.problem, j."clientItemSn", j."workNotes",
+        j."conditionDescription", j."hasAccessories", j."accessoriesDescription",
+        j."repairedByTechId",
         j."quoteAmount", j."quoteNotes", j."quoteStatus", j."quotedAt",
         j."sentAt", j."completedAt", j."deliveredToClientId",
         j."sentById", j."completedById", j."createdAt", j."updatedAt",
@@ -24,13 +27,21 @@ export async function GET(
         sn."serialNumber" AS "snNumber",
         sb.name AS "sentByName",
         cb.name AS "completedByName",
-        cl.name AS "clientName"
+        COALESCE(cl.name, icl.name) AS "clientName",
+        COALESCE(cl.phone, icl.phone) AS "clientPhone",
+        COALESCE(cl.email, icl.email) AS "clientEmail",
+        COALESCE(cl."vatNumber", icl."vatNumber") AS "clientVat",
+        rt.name AS "repairedByTechName",
+        inv.reference AS "interventionReference"
       FROM "PartRepairJob" j
       JOIN "WarehouseItem" wi ON wi.id = j."itemId"
       LEFT JOIN "SerialNumberStock" sn ON sn.id = j."serialNumberId"
       LEFT JOIN "User" sb ON sb.id = j."sentById"
       LEFT JOIN "User" cb ON cb.id = j."completedById"
       LEFT JOIN "Client" cl ON cl.id = j."deliveredToClientId"
+      LEFT JOIN "User" rt ON rt.id = j."repairedByTechId"
+      LEFT JOIN "Intervention" inv ON inv.id = j."interventionId"
+      LEFT JOIN "Client" icl ON icl.id = inv."clientId"
       WHERE j.id = ${id}
     `
 
@@ -232,6 +243,40 @@ export async function PUT(
       return NextResponse.json({ ok: true })
     }
 
+    // ── SEND TO OVM (CLIENT type only, from IN_REPAIR) ───────────────────────
+    if (data.action === 'send_to_ovm') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET status = 'OVM', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── RETURN FROM OVM — CONFORME (→ IN_REPAIR) ─────────────────────────────
+    if (data.action === 'return_from_ovm') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'OVM') return NextResponse.json({ error: 'Reparação não está em estado OVM' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET status = 'IN_REPAIR', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── OVM NOT APPROVED (→ NOT_REPAIRED) ────────────────────────────────────
+    if (data.action === 'ovm_not_approved') {
+      if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
+      if (job.status !== 'OVM') return NextResponse.json({ error: 'Reparação não está em estado OVM' }, { status: 400 })
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob"
+        SET status = 'NOT_REPAIRED',
+            "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${id}
+      `
+      return NextResponse.json({ ok: true })
+    }
+
     // ── LEGACY: return_to_client alias → redirect to complete_repaired ────────
     if (data.action === 'return_to_client') {
       await prisma.$executeRaw`
@@ -245,7 +290,7 @@ export async function PUT(
       return NextResponse.json({ ok: true })
     }
 
-    // ── SAVE NOTES ────────────────────────────────────────────────────────────
+    // ── SAVE FIELDS ───────────────────────────────────────────────────────────
     if ('workNotes' in data) {
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET "workNotes" = ${data.workNotes || null}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
@@ -254,6 +299,33 @@ export async function PUT(
     if ('problem' in data) {
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET problem = ${data.problem || null}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+    }
+    if ('clientItemSn' in data) {
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET "clientItemSn" = ${data.clientItemSn || null}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+    }
+    if ('conditionDescription' in data) {
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET "conditionDescription" = ${data.conditionDescription || null}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+    }
+    if ('hasAccessories' in data) {
+      const val: boolean = !!data.hasAccessories
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET "hasAccessories" = ${val}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+    }
+    if ('accessoriesDescription' in data) {
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET "accessoriesDescription" = ${data.accessoriesDescription || null}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+    }
+    if ('repairedByTechId' in data) {
+      const techId: string | null = data.repairedByTechId || null
+      await prisma.$executeRaw`
+        UPDATE "PartRepairJob" SET "repairedByTechId" = ${techId}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}
       `
     }
 

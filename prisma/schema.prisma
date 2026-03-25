@@ -310,10 +310,6 @@ model WorkOrder {
   locationEquipmentId   String?
   interventionType      String?
   transportGuide        String?
-  startDate             String?
-  startTime             String?
-  endDate               String?
-  endTime               String?
   fromAddress           String?
   internal              Boolean         @default(false)
   createdById           String
@@ -321,8 +317,24 @@ model WorkOrder {
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   parts          WorkOrderPart[]
+  sessions       WorkOrderSession[]
 
   @@index([interventionId])
+}
+
+model WorkOrderSession {
+  id          String    @id @default(uuid())
+  workOrderId String
+  workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  startDate   String?
+  startTime   String?
+  endDate     String?
+  endTime     String?
+  duration    Float?    // hours for this session
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([workOrderId])
 }
 
 model WorkOrderVehicle {
@@ -447,12 +459,18 @@ model PartRepairJob {
   itemId           String                   // WarehouseItem
   serialNumberId   String?                  // For SN-tracked items — one job per SN
   clientPartId     String?                  // SerialNumberStock.id when type=CLIENT
+  interventionId   String?                  // CLIENT: intervention where the part was collected
   quantity         Int           @default(1) // For non-SN items
   status           String        @default("PENDING")
   // STOCK:  PENDING | IN_REPAIR | REPAIRED | WRITTEN_OFF
   // CLIENT: PENDING | IN_REPAIR | QUOTE | RETURNED_TO_CLIENT | NOT_REPAIRED
+  clientItemSn     String?                  // CLIENT: serial number of the client's item (free text)
   problem          String?       @db.Text   // Problem description
+  conditionDescription String?   @db.Text   // Item condition on arrival
+  hasAccessories   Boolean       @default(false)  // Whether accessories were included
+  accessoriesDescription String? @db.Text   // Accessories description
   workNotes        String?       @db.Text   // What was done during repair
+  repairedByTechId String?                  // Technician who performed the repair
   quoteAmount      Decimal?      @db.Decimal(10, 2)  // Budget amount
   quoteNotes       String?       @db.Text             // Quote description
   quoteStatus      String?       // null | PENDING_CLIENT | ACCEPTED | REJECTED

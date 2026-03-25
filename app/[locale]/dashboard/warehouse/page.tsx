@@ -488,85 +488,76 @@ export default function WarehousePage() {
           ) : clientParts.length === 0 ? (
             <div className="card text-center py-16 text-gray-500">Nenhuma peça pendente de decisão.</div>
           ) : (
-            <div className="card overflow-hidden p-0">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Artigo</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Nº Série</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Cliente</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Intervenção</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600">Técnico</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {clientParts.map(part => (
-                    <tr key={part.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{part.itemName}</div>
-                        <div className="text-xs text-gray-500 font-mono">{part.partNumber}</div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-xs bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{part.serialNumber}</span>
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{part.clientName || '—'}</td>
-                      <td className="px-4 py-3">
-                        {part.interventionReference ? (
-                          <button onClick={() => router.push(`/${locale}/dashboard/interventions/${part.interventionId}`)} className="font-mono text-xs text-blue-600 hover:underline">
-                            {part.interventionReference}
+            <div className="space-y-3">
+              {clientParts.map(part => (
+                <div key={part.id} className="card p-4">
+                  {/* Top row: item info + status badge */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 text-sm leading-tight">{part.itemName}</p>
+                      <p className="text-xs text-gray-500 font-mono mt-0.5">{part.partNumber}</p>
+                    </div>
+                    {part.clientPartStatus === 'REPAIR' && part.repairStatus && (
+                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Meta row */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mb-3">
+                    <span className="font-mono bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{part.serialNumber}</span>
+                    {part.clientName && <span><span className="text-gray-400">Cliente:</span> {part.clientName}</span>}
+                    {part.interventionReference && (
+                      <button
+                        onClick={() => router.push(`/${locale}/dashboard/interventions/${part.interventionId}`)}
+                        className="font-mono text-blue-600 hover:underline"
+                      >
+                        {part.interventionReference}
+                      </button>
+                    )}
+                    {(part.technicianName || part.pickedUpByName) && (
+                      <span><span className="text-gray-400">Técnico:</span> {part.technicianName || part.pickedUpByName}</span>
+                    )}
+                    {part.repairReference && (
+                      <span className="font-mono bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">{part.repairReference}</span>
+                    )}
+                  </div>
+
+                  {/* Actions row */}
+                  <div className="flex flex-wrap gap-2">
+                    {(!part.clientPartStatus || part.clientPartStatus === 'PENDING') && (
+                      <>
+                        <button
+                          onClick={() => openCpModal('swap', part)}
+                          disabled={part.mainWarehouse < 1}
+                          title={part.mainWarehouse < 1 ? 'Sem stock disponível para substituição' : undefined}
+                          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Trocar{part.mainWarehouse < 1 ? ' (sem stock)' : ''}
+                        </button>
+                        <button onClick={() => openCpModal('repair', part)} className="px-3 py-1.5 text-xs font-medium rounded bg-orange-500 text-white hover:bg-orange-600 transition-colors">
+                          Reparar
+                        </button>
+                      </>
+                    )}
+                    {part.clientPartStatus === 'REPAIR' && (
+                      <>
+                        {part.clientRepairJobId && (
+                          <button onClick={() => router.push(`/${locale}/dashboard/repairs/${part.clientRepairJobId}`)} className="px-3 py-1.5 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                            Ver reparação
                           </button>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-gray-700">{part.technicianName || part.pickedUpByName || '—'}</td>
-                      <td className="px-4 py-3">
-                        {(!part.clientPartStatus || part.clientPartStatus === 'PENDING') && (
-                          <div className="flex gap-2 justify-end items-center">
-                            <div className="flex flex-col items-end">
-                              <button
-                                onClick={() => openCpModal('swap', part)}
-                                disabled={part.mainWarehouse < 1}
-                                title={part.mainWarehouse < 1 ? 'Sem stock disponível para substituição' : undefined}
-                                className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                              >
-                                Trocar
-                              </button>
-                              {part.mainWarehouse < 1 && (
-                                <span className="text-[10px] text-red-500 mt-0.5">Sem stock</span>
-                              )}
-                            </div>
-                            <button onClick={() => openCpModal('repair', part)} className="px-3 py-1.5 text-xs font-medium rounded bg-orange-500 text-white hover:bg-orange-600 transition-colors">Reparar</button>
-                          </div>
                         )}
-                        {part.clientPartStatus === 'REPAIR' && (
-                          <div className="flex flex-col items-end gap-1.5">
-                            <div className="flex items-center gap-2">
-                              {part.repairReference && (
-                                <span className="text-xs font-mono bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">{part.repairReference}</span>
-                              )}
-                              {part.repairStatus && (
-                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
-                                  {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {part.clientRepairJobId && (
-                                <button onClick={() => router.push(`/${locale}/dashboard/repairs/${part.clientRepairJobId}`)} className="px-3 py-1.5 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">Ver</button>
-                              )}
-                              {part.repairStatus && TERMINAL_REPAIR_STATUSES.includes(part.repairStatus) && (
-                                <button onClick={() => handleReturnToTech(part)} className="px-3 py-1.5 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 transition-colors">
-                                  Devolver ao Técnico
-                                </button>
-                              )}
-                            </div>
-                          </div>
+                        {part.repairStatus && TERMINAL_REPAIR_STATUSES.includes(part.repairStatus) && (
+                          <button onClick={() => handleReturnToTech(part)} className="px-3 py-1.5 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 transition-colors">
+                            Devolver ao Técnico
+                          </button>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>

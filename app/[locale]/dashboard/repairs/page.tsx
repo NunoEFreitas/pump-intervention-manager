@@ -29,30 +29,33 @@ const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Criada',
   IN_REPAIR: 'Em Progresso',
   QUOTE: 'Orçamento',
-  REPAIRED: 'Reparada',
-  NOT_REPAIRED: 'Não Reparada',
-  WRITTEN_OFF: 'Destruição',
-  RETURNED_TO_CLIENT: 'Devolvida ao Cliente',
+  OVM: 'Sujeito a OVM',
+  REPAIRED: 'Devolvido ao Stock',
+  NOT_REPAIRED: 'Não Reparado',
+  WRITTEN_OFF: 'Abate',
+  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
 }
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   IN_REPAIR: 'bg-blue-100 text-blue-800 border-blue-300',
   QUOTE: 'bg-orange-100 text-orange-800 border-orange-300',
+  OVM: 'bg-purple-100 text-purple-800 border-purple-300',
   REPAIRED: 'bg-green-100 text-green-800 border-green-300',
   NOT_REPAIRED: 'bg-gray-100 text-gray-700 border-gray-300',
   WRITTEN_OFF: 'bg-red-100 text-red-800 border-red-300',
-  RETURNED_TO_CLIENT: 'bg-purple-100 text-purple-800 border-purple-300',
+  RETURNED_TO_CLIENT: 'bg-green-100 text-green-800 border-green-300',
 }
 
 const STATUS_BORDER: Record<string, string> = {
   PENDING: 'border-l-yellow-400',
   IN_REPAIR: 'border-l-blue-500',
   QUOTE: 'border-l-orange-400',
+  OVM: 'border-l-purple-500',
   REPAIRED: 'border-l-green-500',
   NOT_REPAIRED: 'border-l-gray-400',
   WRITTEN_OFF: 'border-l-red-400',
-  RETURNED_TO_CLIENT: 'border-l-purple-500',
+  RETURNED_TO_CLIENT: 'border-l-green-500',
 }
 
 const FILTER_OPTIONS = [
@@ -61,10 +64,11 @@ const FILTER_OPTIONS = [
   { value: 'PENDING', label: 'Criadas' },
   { value: 'IN_REPAIR', label: 'Em Progresso' },
   { value: 'QUOTE', label: 'Orçamento' },
-  { value: 'REPAIRED', label: 'Reparadas' },
-  { value: 'NOT_REPAIRED', label: 'Não Reparadas' },
-  { value: 'WRITTEN_OFF', label: 'Destruição' },
-  { value: 'RETURNED_TO_CLIENT', label: 'Devolvidas ao Cliente' },
+  { value: 'OVM', label: 'Sujeito a OVM' },
+  { value: 'REPAIRED', label: 'Devolvido ao Stock' },
+  { value: 'NOT_REPAIRED', label: 'Não Reparado' },
+  { value: 'WRITTEN_OFF', label: 'Abate' },
+  { value: 'RETURNED_TO_CLIENT', label: 'Entregue ao Cliente' },
 ]
 
 interface WarehouseItemOption {
@@ -108,7 +112,11 @@ export default function RepairsPage() {
   const [crSnOptions, setCrSnOptions] = useState<SnOption[]>([])
   const [crSnLoading, setCrSnLoading] = useState(false)
   const [crSnId, setCrSnId] = useState('')
+  const [crClientSn, setCrClientSn] = useState('')
   const [crProblem, setCrProblem] = useState('')
+  const [crCondition, setCrCondition] = useState('')
+  const [crHasAccessories, setCrHasAccessories] = useState(false)
+  const [crAccessories, setCrAccessories] = useState('')
   const [crSubmitting, setCrSubmitting] = useState(false)
   const [crError, setCrError] = useState('')
   const itemSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -137,7 +145,8 @@ export default function RepairsPage() {
   const openCreateModal = async () => {
     setShowCreate(true)
     setCrType('STOCK'); setCrClientId(''); setCrItemSearch(''); setCrItemOptions([])
-    setCrSelectedItem(null); setCrSnOptions([]); setCrSnId(''); setCrProblem(''); setCrError('')
+    setCrSelectedItem(null); setCrSnOptions([]); setCrSnId(''); setCrClientSn('')
+    setCrProblem(''); setCrCondition(''); setCrHasAccessories(false); setCrAccessories(''); setCrError('')
     const token = localStorage.getItem('token')
     const data = await fetch('/api/clients?limit=200', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
     setCrClients(Array.isArray(data.clients) ? data.clients : [])
@@ -181,7 +190,11 @@ export default function RepairsPage() {
       const token = localStorage.getItem('token')
       const body: Record<string, any> = { type: crType, itemId: crSelectedItem.id, problem: crProblem }
       if (crType === 'CLIENT' && crClientId) body.clientId = crClientId
+      if (crType === 'CLIENT' && crClientSn.trim()) body.clientItemSn = crClientSn.trim()
       if (crType === 'STOCK' && crSelectedItem.tracksSerialNumbers) body.serialNumberId = crSnId
+      if (crCondition.trim()) body.conditionDescription = crCondition.trim()
+      body.hasAccessories = crHasAccessories
+      if (crHasAccessories && crAccessories.trim()) body.accessoriesDescription = crAccessories.trim()
       const res = await fetch('/api/repairs', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { setCrError(data.error || 'Erro ao criar reparação'); return }
@@ -214,7 +227,14 @@ export default function RepairsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+      <div className="flex flex-col gap-3 mb-6">
+        <input
+          type="text"
+          placeholder="Pesquisar peça, fornecedor, problema..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="input text-gray-800 w-full"
+        />
         <div className="flex gap-2 flex-wrap">
           {FILTER_OPTIONS.map(opt => (
             <button
@@ -230,13 +250,6 @@ export default function RepairsPage() {
             </button>
           ))}
         </div>
-        <input
-          type="text"
-          placeholder="Pesquisar peça, fornecedor, problema..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="input text-gray-800 sm:w-72"
-        />
       </div>
 
       {loading && (
@@ -344,13 +357,25 @@ export default function RepairsPage() {
 
               {/* Client — only for CLIENT type */}
               {crType === 'CLIENT' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-                  <select className="input w-full text-gray-800" value={crClientId} onChange={e => setCrClientId(e.target.value)}>
-                    <option value="">— Sem cliente associado —</option>
-                    {crClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                    <select className="input w-full text-gray-800" value={crClientId} onChange={e => setCrClientId(e.target.value)}>
+                      <option value="">— Sem cliente associado —</option>
+                      {crClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Número de série do artigo</label>
+                    <input
+                      type="text"
+                      className="input w-full text-gray-800 font-mono"
+                      placeholder="Ex: SN-12345"
+                      value={crClientSn}
+                      onChange={e => setCrClientSn(e.target.value)}
+                    />
+                  </div>
+                </>
               )}
 
               {/* Item search */}
@@ -423,6 +448,35 @@ export default function RepairsPage() {
                   value={crProblem}
                   onChange={e => setCrProblem(e.target.value)}
                 />
+              </div>
+
+              {/* Condition */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estado do artigo</label>
+                <textarea
+                  className="input w-full text-gray-800 resize-none"
+                  rows={2}
+                  placeholder="Descreva o estado do artigo na entrada..."
+                  value={crCondition}
+                  onChange={e => setCrCondition(e.target.value)}
+                />
+              </div>
+
+              {/* Accessories */}
+              <div>
+                <label className="flex items-center gap-2 cursor-pointer mb-2">
+                  <input type="checkbox" checked={crHasAccessories} onChange={e => setCrHasAccessories(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
+                  <span className="text-sm font-medium text-gray-700">Acessórios incluídos</span>
+                </label>
+                {crHasAccessories && (
+                  <textarea
+                    className="input w-full text-gray-800 resize-none"
+                    rows={2}
+                    placeholder="Descreva os acessórios..."
+                    value={crAccessories}
+                    onChange={e => setCrAccessories(e.target.value)}
+                  />
+                )}
               </div>
 
               {crError && <p className="text-sm text-red-600">{crError}</p>}

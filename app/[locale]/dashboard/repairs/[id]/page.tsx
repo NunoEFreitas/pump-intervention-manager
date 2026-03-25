@@ -10,10 +10,18 @@ interface RepairJob {
   itemId: string
   serialNumberId: string | null
   clientPartId: string | null
+  interventionId: string | null
+  interventionReference: string | null
   quantity: number
   status: string
   problem: string | null
+  clientItemSn: string | null
+  conditionDescription: string | null
+  hasAccessories: boolean
+  accessoriesDescription: string | null
   workNotes: string | null
+  repairedByTechId: string | null
+  repairedByTechName: string | null
   quoteAmount: number | null
   quoteNotes: string | null
   quoteStatus: string | null
@@ -28,7 +36,12 @@ interface RepairJob {
   sentByName: string | null
   completedByName: string | null
   clientName: string | null
+  clientPhone: string | null
+  clientEmail: string | null
+  clientVat: string | null
 }
+
+interface Technician { id: string; name: string }
 
 interface Photo { id: string; filename: string; mimeType: string; createdAt: string }
 interface RepairPart { id: string; itemId: string; quantity: number; notes: string | null; addedAt: string; itemName: string; partNumber: string; addedByName: string }
@@ -39,20 +52,22 @@ const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Criada',
   IN_REPAIR: 'Em Progresso',
   QUOTE: 'Orçamento',
-  REPAIRED: 'Reparada',
-  NOT_REPAIRED: 'Não Reparada',
-  WRITTEN_OFF: 'Destruição',
-  RETURNED_TO_CLIENT: 'Devolvida ao Cliente',
+  OVM: 'Sujeito a OVM',
+  REPAIRED: 'Devolvido ao Stock',
+  NOT_REPAIRED: 'Não Reparado',
+  WRITTEN_OFF: 'Abate',
+  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
 }
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-700',
   IN_REPAIR: 'bg-blue-100 text-blue-800',
   QUOTE: 'bg-yellow-100 text-yellow-800',
+  OVM: 'bg-purple-100 text-purple-800',
   REPAIRED: 'bg-green-100 text-green-800',
   NOT_REPAIRED: 'bg-red-100 text-red-800',
   WRITTEN_OFF: 'bg-red-100 text-red-800',
-  RETURNED_TO_CLIENT: 'bg-purple-100 text-purple-800',
+  RETURNED_TO_CLIENT: 'bg-green-100 text-green-800',
 }
 
 const QUOTE_STATUS_LABELS: Record<string, string> = {
@@ -73,8 +88,14 @@ export default function RepairDetailPage() {
 
   const [workNotes, setWorkNotes] = useState('')
   const [problem, setProblem] = useState('')
+  const [conditionDesc, setConditionDesc] = useState('')
+  const [hasAccessories, setHasAccessories] = useState(false)
+  const [accessoriesDesc, setAccessoriesDesc] = useState('')
   const [saving, setSaving] = useState(false)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const [technicians, setTechnicians] = useState<Technician[]>([])
+  const [techLoading, setTechLoading] = useState(false)
 
   const [photos, setPhotos] = useState<Photo[]>([])
   const [photoMap, setPhotoMap] = useState<Record<string, string>>({})
@@ -118,11 +139,23 @@ export default function RepairDetailPage() {
       setJob(data)
       setWorkNotes(data.workNotes ?? '')
       setProblem(data.problem ?? '')
+      setConditionDesc(data.conditionDescription ?? '')
+      setHasAccessories(data.hasAccessories ?? false)
+      setAccessoriesDesc(data.accessoriesDescription ?? '')
     } catch { setError('Erro ao carregar reparação') }
     finally { setLoading(false) }
   }, [jobId])
 
   useEffect(() => { fetchJob() }, [fetchJob])
+
+  useEffect(() => {
+    setTechLoading(true)
+    fetch('/api/technicians', { headers: { Authorization: `Bearer ${token()}` } })
+      .then(r => r.json())
+      .then(d => setTechnicians(Array.isArray(d) ? d : []))
+      .catch(() => {})
+      .finally(() => setTechLoading(false))
+  }, [])
 
   const fetchPhotos = useCallback(async () => {
     try {
@@ -222,6 +255,9 @@ export default function RepairDetailPage() {
   const handleStart = () => doAction({ action: 'start' })
   const handleAcceptQuote = () => doAction({ action: 'accept_quote' })
   const handleRejectQuote = async () => { await doAction({ action: 'reject_quote' }) }
+  const handleSendToOvm = () => doAction({ action: 'send_to_ovm' })
+  const handleReturnFromOvm = () => doAction({ action: 'return_from_ovm' })
+  const handleOvmFailed = () => doAction({ action: 'ovm_not_approved' })
 
   const handleCompleteStock = async (destination: 'stock' | 'destruction') => {
     const action = destination === 'stock' ? 'return_to_stock' : 'send_to_destruction'
@@ -274,7 +310,7 @@ export default function RepairDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
   if (error || !job) return <div className="px-4 sm:px-0"><div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">{error || 'Não encontrado'}</div></div>
 
-  const isActive = ['PENDING', 'IN_REPAIR', 'QUOTE'].includes(job.status)
+  const isActive = ['PENDING', 'IN_REPAIR', 'QUOTE', 'OVM'].includes(job.status)
   const isTerminal = !isActive
 
   // STOCK timeline
@@ -284,9 +320,14 @@ export default function RepairDetailPage() {
 
   // CLIENT timeline
   const clientTimeline = (() => {
-    if (job.status === 'NOT_REPAIRED') return ['PENDING', 'IN_REPAIR', 'NOT_REPAIRED']
-    if (job.quoteAmount !== null) return ['PENDING', 'IN_REPAIR', 'QUOTE', 'RETURNED_TO_CLIENT']
-    return ['PENDING', 'IN_REPAIR', 'RETURNED_TO_CLIENT']
+    const base = ['PENDING', 'IN_REPAIR']
+    if (job.quoteAmount !== null) base.push('QUOTE')
+    if (['OVM', 'NOT_REPAIRED', 'RETURNED_TO_CLIENT'].includes(job.status) || job.status === 'OVM') {
+      if (!base.includes('OVM')) base.push('OVM')
+    }
+    if (job.status === 'NOT_REPAIRED') { base.push('NOT_REPAIRED'); return base }
+    base.push('RETURNED_TO_CLIENT')
+    return base
   })()
 
   const timeline = job.type === 'CLIENT' ? clientTimeline : stockTimeline
@@ -318,6 +359,19 @@ export default function RepairDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="lg:col-span-2 space-y-5">
+          {/* Client info card — CLIENT type only */}
+          {job.type === 'CLIENT' && job.clientName && (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
+              <h2 className="text-sm font-semibold text-orange-700 mb-3 uppercase tracking-wide">Dados do Cliente</h2>
+              <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div className="col-span-2"><dt className="text-orange-600 text-xs">Nome</dt><dd className="font-semibold text-gray-900">{job.clientName}</dd></div>
+                {job.clientVat && <div><dt className="text-orange-600 text-xs">NIF</dt><dd className="font-medium text-gray-900">{job.clientVat}</dd></div>}
+                {job.clientPhone && <div><dt className="text-orange-600 text-xs">Telefone</dt><dd className="font-medium text-gray-900">{job.clientPhone}</dd></div>}
+                {job.clientEmail && <div className="col-span-2"><dt className="text-orange-600 text-xs">Email</dt><dd className="font-medium text-gray-900">{job.clientEmail}</dd></div>}
+              </dl>
+            </div>
+          )}
+
           {/* Info card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Informação</h2>
@@ -326,8 +380,58 @@ export default function RepairDetailPage() {
               {job.sentByName && <div><dt className="text-gray-500">Criada por</dt><dd className="font-medium text-gray-900">{job.sentByName}</dd></div>}
               {job.completedAt && <div><dt className="text-gray-500">Concluída em</dt><dd className="font-medium text-gray-900">{new Date(job.completedAt).toLocaleDateString('pt-PT')}</dd></div>}
               {job.completedByName && <div><dt className="text-gray-500">Concluída por</dt><dd className="font-medium text-gray-900">{job.completedByName}</dd></div>}
-              {job.clientName && <div className="col-span-2"><dt className="text-gray-500">Cliente</dt><dd className="font-medium text-gray-900">{job.clientName}</dd></div>}
+              {job.snNumber && <div className="col-span-2"><dt className="text-gray-500">Número de série</dt><dd className="font-semibold font-mono text-gray-900">{job.snNumber}</dd></div>}
+              {job.type === 'CLIENT' && job.interventionId && (
+                <div className="col-span-2">
+                  <dt className="text-gray-500">Intervenção</dt>
+                  <dd className="font-medium">
+                    <button
+                      onClick={() => router.push(`/${locale}/dashboard/interventions/${job.interventionId}`)}
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-mono"
+                    >
+                      {job.interventionReference ?? job.interventionId}
+                    </button>
+                  </dd>
+                </div>
+              )}
+              {job.type === 'CLIENT' && (
+                <div className="col-span-2">
+                  <dt className="text-gray-500">Nº série do artigo do cliente</dt>
+                  <dd className="font-semibold font-mono text-gray-900">
+                    <input
+                      type="text"
+                      disabled={isTerminal}
+                      defaultValue={job.clientItemSn ?? ''}
+                      onBlur={e => { if (e.target.value !== (job.clientItemSn ?? '')) fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientItemSn: e.target.value }) }) }}
+                      className="input text-gray-900 font-mono w-full mt-0.5 disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:shadow-none"
+                      placeholder="—"
+                    />
+                  </dd>
+                </div>
+              )}
             </dl>
+
+            {/* Technician who performed the repair */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Técnico responsável pela reparação</label>
+              {techLoading ? (
+                <p className="text-sm text-gray-400">A carregar...</p>
+              ) : (
+                <select
+                  disabled={isTerminal}
+                  value={job.repairedByTechId ?? ''}
+                  onChange={async e => {
+                    const val = e.target.value
+                    setJob(prev => prev ? { ...prev, repairedByTechId: val || null, repairedByTechName: technicians.find(t => t.id === val)?.name ?? null } : prev)
+                    await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ repairedByTechId: val || null }) })
+                  }}
+                  className="input w-full text-gray-800 disabled:bg-gray-50 disabled:text-gray-500"
+                >
+                  <option value="">— Não atribuído —</option>
+                  {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              )}
+            </div>
           </div>
 
           {/* Problem */}
@@ -336,6 +440,29 @@ export default function RepairDetailPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Problema</label>
               <textarea rows={3} disabled={isTerminal} value={problem} onChange={e => { setProblem(e.target.value); scheduleSave('problem', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Descrição do problema..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Estado do artigo</label>
+              <textarea rows={2} disabled={isTerminal} value={conditionDesc} onChange={e => { setConditionDesc(e.target.value); scheduleSave('conditionDescription', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Estado do artigo na entrada..." />
+            </div>
+            <div>
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input
+                  type="checkbox"
+                  disabled={isTerminal}
+                  checked={hasAccessories}
+                  onChange={async e => {
+                    const val = e.target.checked
+                    setHasAccessories(val)
+                    await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ hasAccessories: val }) })
+                  }}
+                  className="w-4 h-4 text-blue-600 rounded"
+                />
+                <span className="text-sm font-medium text-gray-700">Acessórios incluídos</span>
+              </label>
+              {hasAccessories && (
+                <textarea rows={2} disabled={isTerminal} value={accessoriesDesc} onChange={e => { setAccessoriesDesc(e.target.value); scheduleSave('accessoriesDescription', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Descreva os acessórios..." />
+              )}
             </div>
           </div>
 
@@ -458,6 +585,9 @@ export default function RepairDetailPage() {
                       Criar Orçamento
                     </button>
                   )}
+                  <button onClick={handleSendToOvm} disabled={actionLoading} className="w-full btn bg-purple-600 hover:bg-purple-700 text-white text-sm">
+                    Enviar para OVM
+                  </button>
                   <button onClick={() => { setCompleteNotes(''); setShowCompleteModal(true) }} disabled={actionLoading} className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm">
                     Concluir Reparação
                   </button>
@@ -477,6 +607,19 @@ export default function RepairDetailPage() {
                   <button onClick={handleOpenPdf} className="w-full btn btn-secondary text-sm flex items-center justify-center gap-1.5">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                     Gerar PDF do Orçamento
+                  </button>
+                </>
+              )}
+
+              {/* OVM state — CLIENT */}
+              {job.status === 'OVM' && (
+                <>
+                  <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded p-2">A aguardar inspeção da entidade reguladora (OVM).</p>
+                  <button onClick={handleReturnFromOvm} disabled={actionLoading} className="w-full btn bg-blue-600 hover:bg-blue-700 text-white text-sm">
+                    Conforme — Continuar Reparação
+                  </button>
+                  <button onClick={handleOvmFailed} disabled={actionLoading} className="w-full btn bg-red-500 hover:bg-red-600 text-white text-sm">
+                    Não Conforme
                   </button>
                 </>
               )}

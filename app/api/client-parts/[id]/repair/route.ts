@@ -40,7 +40,7 @@ export async function POST(
     // Create CLIENT repair job
     const repairJobId = crypto.randomUUID()
     await prisma.$executeRaw`
-      INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "serialNumberId", "clientPartId", quantity, status, problem, "sentById", "sentAt", "createdAt", "updatedAt")
+      INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "serialNumberId", "clientPartId", "interventionId", quantity, status, problem, "sentById", "sentAt", "createdAt", "updatedAt")
       VALUES (
         ${repairJobId},
         ${repairRef},
@@ -48,6 +48,7 @@ export async function POST(
         ${clientPart.itemId},
         ${serialNumberId},
         ${serialNumberId},
+        ${clientPart.interventionId || null},
         1,
         'PENDING',
         ${problem || null},
