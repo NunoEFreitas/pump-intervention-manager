@@ -52,6 +52,7 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
   const [scanFeedback, setScanFeedback] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const readerRef = useRef<any>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   useEffect(() => {
     fetchTechnicianStock()
@@ -84,6 +85,10 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
       try { readerRef.current.reset() } catch {}
       readerRef.current = null
     }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop())
+      streamRef.current = null
+    }
   }
 
   const startScanner = async () => {
@@ -91,33 +96,40 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
     setScanFeedback(null)
     setScanning(true)
 
+    // Request camera permission ourselves so we can handle the error cleanly
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    } catch {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      } catch {
+        setScanError('Permissão de câmara negada ou câmara não disponível')
+        setScanning(false)
+        return
+      }
+    }
+    streamRef.current = stream
+
     try {
       const { BrowserMultiFormatReader } = await import('@zxing/browser')
       const reader = new BrowserMultiFormatReader()
       readerRef.current = reader
 
-      // Small delay to ensure video element is mounted
       await new Promise(r => setTimeout(r, 100))
 
       if (!videoRef.current) {
-        setScanError('Camera element not ready')
+        stopScanner()
         setScanning(false)
         return
       }
 
-      await reader.decodeFromConstraints(
-        { video: { facingMode: 'environment' } },
-        videoRef.current,
-        (result, err) => {
-          if (result) {
-            const code = result.getText()
-            handleScannedCode(code)
-          }
-        }
-      )
-    } catch (err: any) {
-      console.error('Scanner error:', err)
-      setScanError('Câmara não disponível ou permissão negada')
+      await reader.decodeFromStream(stream, videoRef.current, (result) => {
+        if (result) handleScannedCode(result.getText())
+      })
+    } catch {
+      stopScanner()
+      setScanError('Erro ao iniciar o scanner')
       setScanning(false)
     }
   }

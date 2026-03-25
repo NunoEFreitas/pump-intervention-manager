@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
       }>>`
         SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock",
                "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
-               "createdAt", "updatedAt"
+               "ean13", "createdAt", "updatedAt"
         FROM "WarehouseItem"
         WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
         ORDER BY "createdAt" DESC

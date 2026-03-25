@@ -210,13 +210,19 @@ export default function InterventionDetailPage() {
   const [clientPartItemId, setClientPartItemId] = useState('')
   const [clientPartSn, setClientPartSn] = useState('')
   const [clientPartLoading, setClientPartLoading] = useState(false)
-  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean }[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null }[]>([])
   const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const itemSelectorRef = useRef<HTMLDivElement>(null)
   const [whItemSelectorOpen, setWhItemSelectorOpen] = useState(false)
   const [whItemSearch, setWhItemSearch] = useState('')
   const whItemSelectorRef = useRef<HTMLDivElement>(null)
+  const whScanVideoRef = useRef<HTMLVideoElement>(null)
+  const whScanReaderRef = useRef<any>(null)
+  const whScanStreamRef = useRef<MediaStream | null>(null)
+  const [whScanning, setWhScanning] = useState(false)
+  const [whScanError, setWhScanError] = useState<string | null>(null)
+  const [whScanFeedback, setWhScanFeedback] = useState<string | null>(null)
   const [woVehicleOpen, setWoVehicleOpen] = useState(false)
   const [woHelperOpen, setWoHelperOpen] = useState(false)
   const [editWoVehicleOpen, setEditWoVehicleOpen] = useState(false)
@@ -291,6 +297,8 @@ export default function InterventionDetailPage() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  useEffect(() => { return () => { stopWhScanner() } }, [])
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -594,7 +602,7 @@ export default function InterventionDetailPage() {
       })
       const data = await response.json()
       const list = Array.isArray(data) ? data : (data.items ?? [])
-      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers })))
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     }
@@ -845,6 +853,96 @@ export default function InterventionDetailPage() {
       fetchWorkOrders()
     } else {
       alert(errors.join('\n'))
+    }
+  }
+
+  const stopWhScanner = () => {
+    if (whScanReaderRef.current) {
+      try { whScanReaderRef.current.reset() } catch {}
+      whScanReaderRef.current = null
+    }
+    if (whScanStreamRef.current) {
+      whScanStreamRef.current.getTracks().forEach(t => t.stop())
+      whScanStreamRef.current = null
+    }
+  }
+
+  const startWhScanner = async () => {
+    setWhScanError(null)
+    setWhScanFeedback(null)
+    setWhScanning(true)
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+    } catch {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      } catch {
+        setWhScanError('Permissão de câmara negada ou câmara não disponível')
+        setWhScanning(false)
+        return
+      }
+    }
+    whScanStreamRef.current = stream
+
+    try {
+      const { BrowserMultiFormatReader } = await import('@zxing/browser')
+      const reader = new BrowserMultiFormatReader()
+      whScanReaderRef.current = reader
+      await new Promise(r => setTimeout(r, 100))
+      if (!whScanVideoRef.current) { stopWhScanner(); setWhScanning(false); return }
+      await reader.decodeFromStream(stream, whScanVideoRef.current, (result) => {
+        if (result) handleWhScannedCode(result.getText())
+      })
+    } catch {
+      stopWhScanner()
+      setWhScanError('Erro ao iniciar o scanner')
+      setWhScanning(false)
+    }
+  }
+
+  const handleWhScannedCode = async (code: string) => {
+    const found = warehouseItems.find(i => i.ean13 === code)
+    if (!found) {
+      setWhScanFeedback(`Artigo não encontrado: ${code}`)
+      return
+    }
+    stopWhScanner()
+    setWhScanning(false)
+    if (found.tracksSerialNumbers) {
+      setWarehouseSnLoading(true)
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch(`/api/warehouse/items/${found.id}/serial-numbers?location=MAIN_WAREHOUSE&status=AVAILABLE`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        const data = await res.json()
+        setWarehouseSnPicker({
+          itemId: found.id,
+          itemName: found.itemName,
+          partNumber: found.partNumber,
+          sns: Array.isArray(data) ? data.map((s: any) => ({ id: s.id, serialNumber: s.serialNumber })) : [],
+          selected: [],
+          qty: 1,
+        })
+      } catch {
+        setWhScanFeedback('Falha ao carregar números de série')
+      } finally {
+        setWarehouseSnLoading(false)
+      }
+    } else {
+      setWarehouseCart(prev => [...prev, {
+        tempId: crypto.randomUUID(),
+        itemId: found.id,
+        itemName: found.itemName,
+        partNumber: found.partNumber,
+        tracksSerialNumbers: false,
+        qty: 1,
+        serialNumberIds: [],
+      }])
+      setWhScanFeedback(`✓ ${found.itemName}`)
+      setTimeout(() => setWhScanFeedback(null), 3000)
     }
   }
 
@@ -1863,7 +1961,7 @@ export default function InterventionDetailPage() {
                                   </button>
                                 )}
                                 {showWarehousePartsForWOId !== wo.id && (
-                                  <button onClick={() => { setShowWarehousePartsForWOId(wo.id); setWarehouseCart([]); setWarehousePickerItemId(''); setWarehousePickerQty('1'); setWarehouseSnPicker(null); setWhItemSearch(''); setWhItemSelectorOpen(false) }} className="text-green-600 hover:text-green-800 text-xs font-medium">
+                                  <button onClick={() => { stopWhScanner(); setWhScanning(false); setWhScanFeedback(null); setShowWarehousePartsForWOId(wo.id); setWarehouseCart([]); setWarehousePickerItemId(''); setWarehousePickerQty('1'); setWarehouseSnPicker(null); setWhItemSearch(''); setWhItemSelectorOpen(false) }} className="text-green-600 hover:text-green-800 text-xs font-medium">
                                     {t('addFromWarehouse')}
                                   </button>
                                 )}
@@ -1947,9 +2045,43 @@ export default function InterventionDetailPage() {
 
                           {/* Warehouse parts inline */}
                           {showWarehousePartsForWOId === wo.id && (
-                            <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3 space-y-3">
-                              <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">{t('addFromWarehouse')}</p>
+                            <div className="mt-3 bg-green-50 border border-green-200 rounded-lg overflow-hidden">
+                              <div className="p-3 flex items-center justify-between">
+                                <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">{t('addFromWarehouse')}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => { if (whScanning) { stopWhScanner(); setWhScanning(false) } else { startWhScanner() } }}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium transition-colors ${whScanning ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-white text-green-800 border border-green-300 hover:bg-green-100'}`}
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h2.25m0 0V2.25m0 2.25v2.25M3.75 19.5h2.25m0 0v2.25m0-2.25v-2.25M19.5 4.5h-2.25m0 0V2.25m0 2.25v2.25M19.5 19.5h-2.25m0 0v2.25m0-2.25v-2.25M7.5 9h9M7.5 12h9M7.5 15h9" />
+                                  </svg>
+                                  {whScanning ? 'Parar' : 'Scan'}
+                                </button>
+                              </div>
 
+                              {/* Camera overlay */}
+                              {whScanning && (
+                                <div className="relative bg-black" style={{ height: 180 }}>
+                                  <video ref={whScanVideoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+                                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div className="border-2 border-white rounded opacity-70 w-2/3 h-12" />
+                                  </div>
+                                  <p className="absolute bottom-1 left-0 right-0 text-center text-white text-xs opacity-80">EAN-13</p>
+                                  {whScanError && (
+                                    <div className="absolute top-1 left-1 right-1 bg-red-600 text-white text-xs rounded px-2 py-1 text-center">{whScanError}</div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Scan feedback */}
+                              {whScanFeedback && (
+                                <div className={`px-3 py-1.5 text-xs font-medium ${whScanFeedback.startsWith('✓') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                  {whScanFeedback}
+                                </div>
+                              )}
+
+                              <div className="p-3 space-y-3">
                               {/* SN picker for a serialized item */}
                               {warehouseSnPicker ? (
                                 <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-3">
@@ -2133,7 +2265,7 @@ export default function InterventionDetailPage() {
                                       {warehousePartLoading ? tCommon('saving') : `${t('addWarehousePart')}${warehouseCart.length > 0 ? ` (${warehouseCart.length})` : ''}`}
                                     </button>
                                     <button
-                                      onClick={() => { setShowWarehousePartsForWOId(null); setWarehouseCart([]); setWarehouseSnPicker(null) }}
+                                      onClick={() => { stopWhScanner(); setWhScanning(false); setShowWarehousePartsForWOId(null); setWarehouseCart([]); setWarehouseSnPicker(null) }}
                                       className="btn btn-secondary text-xs py-1 px-3"
                                     >
                                       {tCommon('cancel')}
@@ -2141,6 +2273,7 @@ export default function InterventionDetailPage() {
                                   </div>
                                 </>
                               )}
+                              </div>
                             </div>
                           )}
                         </div>
