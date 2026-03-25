@@ -14,6 +14,7 @@ export interface ScheduleIntervention {
   scheduledDate: string | null
   scheduledTime: string | null
   breakdown: string | null
+  comments: string | null
   client: Place
   location: Place | null
 }
@@ -43,6 +44,63 @@ function addressBlock(place: Place): string {
   return lines.join('<br>')
 }
 
+function buildRow(iv: ScheduleIntervention): string {
+  const color = STATUS_COLOR[iv.status] ?? '#374151'
+  const label = STATUS_LABEL[iv.status] ?? iv.status
+  const place = iv.location ?? iv.client
+  const placeName = iv.location ? `<strong>${esc(iv.location.name)}</strong><br>` : ''
+  return `
+    <tr>
+      <td style="font-weight:700;font-size:15px;text-align:center;white-space:nowrap;color:#1e3a5f">${esc(iv.scheduledTime) || '—'}</td>
+      <td style="word-break:break-word;white-space:normal">
+        <div style="font-weight:700;font-size:13px">${esc(iv.client.name)}</div>
+        ${iv.reference ? `<div style="font-family:monospace;font-size:10px;color:#9ca3af">${esc(iv.reference)}</div>` : ''}
+      </td>
+      <td style="font-size:12px;line-height:1.5;word-break:break-word;white-space:normal">
+        ${placeName}${addressBlock(place)}
+      </td>
+      <td>
+        <span style="display:inline-block;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}88">${label}</span>
+      </td>
+      <td style="font-size:12px;color:#374151;white-space:pre-wrap;word-break:break-word">${esc(iv.breakdown)}</td>
+      <td style="font-size:12px;color:#6b21a8;white-space:pre-wrap;word-break:break-word">${iv.comments ? esc(iv.comments) : '<span style="color:#d1d5db">—</span>'}</td>
+    </tr>`
+}
+
+const COLGROUP = `
+  <colgroup>
+    <col style="width:6%">
+    <col style="width:16%">
+    <col style="width:22%">
+    <col style="width:11%">
+    <col style="width:23%">
+    <col style="width:22%">
+  </colgroup>`
+
+const TH_STYLE = `background:#1e3a5f;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:6px 8px;text-align:left`
+
+const THEAD = `
+  <thead>
+    <tr>
+      <th style="${TH_STYLE}">Hora</th>
+      <th style="${TH_STYLE}">Cliente</th>
+      <th style="${TH_STYLE}">Local / Morada</th>
+      <th style="${TH_STYLE}">Estado</th>
+      <th style="${TH_STYLE}">Descrição</th>
+      <th style="${TH_STYLE}">Comentários</th>
+    </tr>
+  </thead>`
+
+const SHARED_STYLE = `
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; font-size:13px; color:#111; padding:24px; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  td { padding:8px 8px; border-bottom:1px solid #e5e7eb; vertical-align:top; overflow-wrap:break-word; }
+  tr:nth-child(even) td { background:#f9fafb; }
+  tr:last-child td { border-bottom:none; }
+  @media print { body { padding:0; } @page { margin:14mm 10mm; } }
+`
+
 export function printTechDaySchedule(techName: string, items: ScheduleIntervention[], dateLabel: string) {
   const sorted = [...items].sort((a, b) => {
     const ta = a.scheduledTime ?? '00:00'
@@ -50,38 +108,7 @@ export function printTechDaySchedule(techName: string, items: ScheduleInterventi
     return ta.localeCompare(tb)
   })
 
-  const rows = sorted.map(iv => {
-    const color = STATUS_COLOR[iv.status] ?? '#374151'
-    const label = STATUS_LABEL[iv.status] ?? iv.status
-    const place = iv.location ?? iv.client
-    const placeName = iv.location ? `<strong>${esc(iv.location.name)}</strong><br>` : ''
-    return `
-      <tr>
-        <td style="font-weight:700;font-size:16px;text-align:center;white-space:nowrap;color:#1e3a5f;width:52px">${esc(iv.scheduledTime) || '—'}</td>
-        <td>
-          <div style="font-weight:700;font-size:13px">${esc(iv.client.name)}</div>
-          ${iv.reference ? `<div style="font-family:monospace;font-size:11px;color:#9ca3af">${esc(iv.reference)}</div>` : ''}
-        </td>
-        <td style="font-size:12px;line-height:1.5">
-          ${placeName}${addressBlock(place)}
-        </td>
-        <td style="white-space:nowrap">
-          <span style="display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}88">${label}</span>
-        </td>
-        <td style="font-size:12px;color:#374151;max-width:200px;white-space:pre-wrap;word-break:break-word">${esc(iv.breakdown)}</td>
-      </tr>`
-  }).join('')
-
-  const SHARED_STYLE = `
-    * { box-sizing:border-box; margin:0; padding:0; }
-    body { font-family:Arial,sans-serif; font-size:13px; color:#111; padding:24px; }
-    table { width:100%; border-collapse:collapse; }
-    th { background:#1e3a5f; color:#fff; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; padding:7px 10px; text-align:left; }
-    td { padding:9px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
-    tr:nth-child(even) td { background:#f9fafb; }
-    tr:last-child td { border-bottom:none; }
-    @media print { body { padding:0; } @page { margin:14mm 10mm; } }
-  `
+  const rows = sorted.map(buildRow).join('')
 
   const html = `<!DOCTYPE html>
 <html lang="pt">
@@ -98,18 +125,11 @@ export function printTechDaySchedule(techName: string, items: ScheduleInterventi
     </div>
     <div style="font-size:14px;color:#6b7280">${sorted.length} intervenç${sorted.length === 1 ? 'ão' : 'ões'}</div>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>Hora</th><th>Cliente</th><th>Local / Morada</th><th>Estado</th><th>Descrição</th>
-      </tr>
-    </thead>
-    <tbody>${rows}</tbody>
-  </table>
+  <table>${COLGROUP}${THEAD}<tbody>${rows}</tbody></table>
 </body>
 </html>`
 
-  const win = window.open('', '_blank', 'width=950,height=750')
+  const win = window.open('', '_blank', 'width=1050,height=750')
   if (!win) { alert('Por favor permita popups para imprimir.'); return }
   win.document.write(html)
   win.document.close()
@@ -122,29 +142,9 @@ export function printAllTechsDaySchedule(
 ) {
   const pages = techs.map(({ name, items }, i) => {
     const sorted = [...items].sort((a, b) => (a.scheduledTime ?? '').localeCompare(b.scheduledTime ?? ''))
-    const rows = sorted.map(iv => {
-      const color = STATUS_COLOR[iv.status] ?? '#374151'
-      const label = STATUS_LABEL[iv.status] ?? iv.status
-      const place = iv.location ?? iv.client
-      const placeName = iv.location ? `<strong>${esc(iv.location.name)}</strong><br>` : ''
-      return `
-        <tr>
-          <td style="font-weight:700;font-size:16px;text-align:center;white-space:nowrap;color:#1e3a5f;width:52px">${esc(iv.scheduledTime) || '—'}</td>
-          <td>
-            <div style="font-weight:700;font-size:13px">${esc(iv.client.name)}</div>
-            ${iv.reference ? `<div style="font-family:monospace;font-size:11px;color:#9ca3af">${esc(iv.reference)}</div>` : ''}
-          </td>
-          <td style="font-size:12px;line-height:1.5">
-            ${placeName}${addressBlock(place)}
-          </td>
-          <td style="white-space:nowrap">
-            <span style="display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}88">${label}</span>
-          </td>
-          <td style="font-size:12px;color:#374151;max-width:200px;white-space:pre-wrap;word-break:break-word">${esc(iv.breakdown)}</td>
-        </tr>`
-    }).join('')
-
+    const rows = sorted.map(buildRow).join('')
     const pageBreak = i < techs.length - 1 ? 'page-break-after:always;' : ''
+
     return `
       <div style="${pageBreak}padding:24px 0">
         <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;border-bottom:2px solid #1e3a5f;padding-bottom:10px">
@@ -156,18 +156,7 @@ export function printAllTechsDaySchedule(
         </div>
         ${sorted.length === 0
           ? `<p style="color:#9ca3af;font-size:14px">Sem intervenções agendadas.</p>`
-          : `<table style="width:100%;border-collapse:collapse">
-              <thead>
-                <tr>
-                  <th style="background:#1e3a5f;color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left">Hora</th>
-                  <th style="background:#1e3a5f;color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left">Cliente</th>
-                  <th style="background:#1e3a5f;color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left">Local / Morada</th>
-                  <th style="background:#1e3a5f;color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left">Estado</th>
-                  <th style="background:#1e3a5f;color:#fff;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:7px 10px;text-align:left">Descrição</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>`
+          : `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${COLGROUP}${THEAD}<tbody>${rows}</tbody></table>`
         }
       </div>`
   }).join('')
@@ -180,7 +169,7 @@ export function printAllTechsDaySchedule(
   <style>
     * { box-sizing:border-box; margin:0; padding:0; }
     body { font-family:Arial,sans-serif; font-size:13px; color:#111; }
-    td { padding:9px 10px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+    td { padding:8px 8px; border-bottom:1px solid #e5e7eb; vertical-align:top; overflow-wrap:break-word; }
     tr:nth-child(even) td { background:#f9fafb; }
     tr:last-child td { border-bottom:none; }
     @media print { @page { margin:14mm 10mm; } }
@@ -189,7 +178,7 @@ export function printAllTechsDaySchedule(
 <body>${pages}</body>
 </html>`
 
-  const win = window.open('', '_blank', 'width=950,height=750')
+  const win = window.open('', '_blank', 'width=1050,height=750')
   if (!win) { alert('Por favor permita popups para imprimir.'); return }
   win.document.write(html)
   win.document.close()

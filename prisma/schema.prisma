@@ -196,6 +196,7 @@ model WarehouseItem {
   serialNumbers       SerialNumberStock[]
   interventionParts   InterventionPart[]
   workOrderParts      WorkOrderPart[]
+  inventoryEntries    InventoryEntry[]
 }
 
 model TechnicianStock {
@@ -229,14 +230,15 @@ model ItemMovement {
 }
 
 enum MovementType {
-  ADD_STOCK           // Add to main warehouse
-  REMOVE_STOCK        // Remove from main warehouse (loss, damage, etc)
-  TRANSFER_TO_TECH    // Transfer from main to technician
-  TRANSFER_FROM_TECH  // Return from technician to main
-  USE                 // Used in intervention
-  REPAIR_IN           // Sent to repair (removed from active stock)
-  REPAIR_OUT          // Returned from repair (back to main warehouse)
-  DESTRUCTION         // Moved to destruction stock (irreparable)
+  ADD_STOCK             // Add to main warehouse
+  REMOVE_STOCK          // Remove from main warehouse (loss, damage, etc)
+  TRANSFER_TO_TECH      // Transfer from main to technician
+  TRANSFER_FROM_TECH    // Return from technician to main
+  USE                   // Used in intervention
+  REPAIR_IN             // Sent to repair (removed from active stock)
+  REPAIR_OUT            // Returned from repair (back to main warehouse)
+  DESTRUCTION           // Moved to destruction stock (irreparable)
+  INVENTORY_ADJUSTMENT  // Stock correction after inventory count
 }
 
 // Track individual serial numbers for items
@@ -406,6 +408,48 @@ model OVM {
   updatedAt      DateTime @updatedAt
 
   @@index([interventionId])
+}
+
+model InventorySession {
+  id           String           @id @default(uuid())
+  type         String           // 'WAREHOUSE' | 'TECHNICIAN'
+  technicianId String?
+  status       String           @default("OPEN") // OPEN | PENDING_APPROVAL | CLOSED | CANCELLED
+  notes        String?          @db.Text
+  createdById  String
+  closedById   String?
+  createdAt    DateTime         @default(now())
+  closedAt     DateTime?
+  entries      InventoryEntry[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model InventoryEntry {
+  id                 String                 @id @default(uuid())
+  sessionId          String
+  session            InventorySession       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  itemId             String
+  item               WarehouseItem          @relation(fields: [itemId], references: [id])
+  expectedQty        Int
+  countedQty         Int?
+  correctionApproved Boolean?
+  notes              String?
+  serials            InventoryEntrySerial[]
+
+  @@unique([sessionId, itemId])
+  @@index([sessionId])
+}
+
+model InventoryEntrySerial {
+  id             String         @id @default(uuid())
+  entryId        String
+  entry          InventoryEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  serialNumberId String
+
+  @@unique([entryId, serialNumberId])
+  @@index([entryId])
 }
 
 model FuelType {

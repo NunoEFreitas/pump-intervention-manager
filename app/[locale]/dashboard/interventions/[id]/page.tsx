@@ -248,6 +248,9 @@ export default function InterventionDetailPage() {
   const [showOVMForm, setShowOVMForm] = useState(false)
   const [editingOVMId, setEditingOVMId] = useState<string | null>(null)
   const [ovmSaving, setOvmSaving] = useState(false)
+  const [commentsEditing, setCommentsEditing] = useState(false)
+  const [commentsDraft, setCommentsDraft] = useState('')
+  const [commentsSaving, setCommentsSaving] = useState(false)
 
   // Part Requests
   type PartRequest = { id: string; warehouseItemId: string; itemName: string; partNumber: string; quantity: number; notes: string | null; status: string; requesterName: string; createdAt: string }
@@ -960,6 +963,29 @@ export default function InterventionDetailPage() {
     }
   }
 
+  const saveComments = async (value: string) => {
+    if (!intervention) return
+    setCommentsSaving(true)
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/interventions/${params.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          clientId: intervention.client.id,
+          assignedToId: intervention.assignedTo?.id,
+          breakdown: intervention.breakdown,
+          status: intervention.status,
+          comments: value,
+        }),
+      })
+      setIntervention(prev => prev ? { ...prev, comments: value || null } : prev)
+      setCommentsEditing(false)
+    } finally {
+      setCommentsSaving(false)
+    }
+  }
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -1401,13 +1427,67 @@ export default function InterventionDetailPage() {
               <p className="text-gray-900 whitespace-pre-wrap">{intervention.breakdown}</p>
             </div>
 
-            {/* Comments */}
-            {intervention.comments && (
-              <div className="border-t pt-4">
-                <h3 className="font-semibold text-gray-700 mb-2">Comentários</h3>
-                <p className="text-gray-900 whitespace-pre-wrap">{intervention.comments}</p>
+            {/* Comments — inline editable */}
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-gray-700">Comentários</h3>
+                {!commentsEditing && (
+                  <button
+                    onClick={() => { setCommentsDraft(intervention.comments || ''); setCommentsEditing(true) }}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    {intervention.comments ? 'Editar' : '+ Adicionar'}
+                  </button>
+                )}
               </div>
-            )}
+              {commentsEditing ? (
+                <div className="space-y-2">
+                  <textarea
+                    autoFocus
+                    rows={3}
+                    className="input text-gray-800 w-full"
+                    value={commentsDraft}
+                    onChange={e => setCommentsDraft(e.target.value)}
+                    placeholder="Notas ou comentários internos..."
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveComments(commentsDraft)}
+                      disabled={commentsSaving}
+                      className="btn btn-primary text-sm py-1 px-3"
+                    >
+                      {commentsSaving ? 'A guardar...' : 'Guardar'}
+                    </button>
+                    <button
+                      onClick={() => setCommentsEditing(false)}
+                      disabled={commentsSaving}
+                      className="btn btn-secondary text-sm py-1 px-3"
+                    >
+                      Cancelar
+                    </button>
+                    {intervention.comments && (
+                      <button
+                        onClick={() => saveComments('')}
+                        disabled={commentsSaving}
+                        className="text-red-500 hover:text-red-700 text-sm ml-auto"
+                      >
+                        Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : intervention.comments ? (
+                <p
+                  className="text-gray-900 whitespace-pre-wrap cursor-pointer hover:bg-gray-50 rounded p-1 -ml-1 transition-colors"
+                  onClick={() => { setCommentsDraft(intervention.comments || ''); setCommentsEditing(true) }}
+                  title="Clica para editar"
+                >
+                  {intervention.comments}
+                </p>
+              ) : (
+                <p className="text-gray-400 text-sm italic">Sem comentários</p>
+              )}
+            </div>
 
             {/* Flags */}
             <div className="border-t pt-4 flex flex-wrap gap-4">

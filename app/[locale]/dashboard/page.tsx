@@ -33,6 +33,7 @@ interface Intervention {
   scheduledDate: string | null
   scheduledTime: string | null
   breakdown: string | null
+  comments: string | null
   client: ContactInfo
   location: (ContactInfo & { id: string }) | null
   assignedTo: { id: string; name: string } | null

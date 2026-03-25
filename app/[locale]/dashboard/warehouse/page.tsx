@@ -119,8 +119,26 @@ export default function WarehousePage() {
   const locale = useLocale()
   const t = useTranslations('warehouse')
   const tCommon = useTranslations('common')
+  const [tab, setTab] = useState<'stock' | 'requests' | 'client-parts' | 'inventory'>('stock')
 
-  const [tab, setTab] = useState<'stock' | 'requests' | 'client-parts'>('stock')
+  // ── Inventory ──────────────────────────────────────────────────────────────
+  const [inventorySessions, setInventorySessions] = useState<Array<{
+    id: string; type: string; technicianName: string | null; status: string
+    createdByName: string; createdAt: string; totalItems: number; countedItems: number; discrepancies: number
+  }>>([])
+  const [inventoryLoading, setInventoryLoading] = useState(false)
+
+  const fetchInventorySessions = async () => {
+    setInventoryLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/inventory', { headers: { Authorization: `Bearer ${token}` } })
+      const data = await res.json()
+      setInventorySessions(Array.isArray(data) ? data : [])
+    } finally {
+      setInventoryLoading(false)
+    }
+  }
 
   // ── Stock ──────────────────────────────────────────────────────────────────
   const [items, setItems] = useState<WarehouseItem[]>([])
@@ -164,10 +182,15 @@ export default function WarehousePage() {
   const [cpClientSnMode, setCpClientSnMode] = useState<'auto' | 'manual'>('auto')
   const [cpClientSnValue, setCpClientSnValue] = useState('')
 
-  useEffect(() => { fetchItems(1, searchTerm) }, [])
+  useEffect(() => {
+    fetchItems(1, searchTerm)
+    fetchPartRequests()
+    fetchClientParts()
+  }, [])
 
   useEffect(() => {
     if (tab === 'requests') fetchPartRequests()
+    if (tab === 'inventory') fetchInventorySessions()
     if (tab === 'client-parts') {
       fetchClientParts()
       if (technicians.length === 0) {
@@ -387,6 +410,12 @@ export default function WarehousePage() {
           {cpPendingCount > 0 && (
             <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-400 text-white rounded-full">{cpPendingCount}</span>
           )}
+        </button>
+        <button
+          onClick={() => setTab('inventory')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'inventory' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Inventário
         </button>
       </div>
 
@@ -772,6 +801,78 @@ export default function WarehousePage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Inventory tab ───────────────────────────────────────────────────── */}
+      {tab === 'inventory' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-gray-500">Contagens de stock realizadas</p>
+            <button onClick={() => router.push(`/${locale}/dashboard/warehouse/inventory/new`)} className="btn btn-primary text-sm">
+              + Nova Contagem
+            </button>
+          </div>
+          {inventoryLoading ? (
+            <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>
+          ) : inventorySessions.length === 0 ? (
+            <div className="card p-12 text-center">
+              <p className="text-gray-500">Nenhuma contagem realizada ainda.</p>
+              <button onClick={() => router.push(`/${locale}/dashboard/warehouse/inventory/new`)} className="btn btn-primary mt-4">
+                Iniciar primeira contagem
+              </button>
+            </div>
+          ) : (
+            <div className="card overflow-hidden p-0">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Data</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Tipo</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Estado</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">Artigos</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">Contados</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">Divergências</th>
+                    <th className="px-4 py-3 text-left font-semibold text-gray-600">Criado por</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {inventorySessions.map(s => {
+                    const statusLabel: Record<string, string> = { OPEN: 'Em contagem', PENDING_APPROVAL: 'Aguarda aprovação', CLOSED: 'Fechada', CANCELLED: 'Cancelada' }
+                    const statusColor: Record<string, string> = { OPEN: 'bg-blue-100 text-blue-800', PENDING_APPROVAL: 'bg-yellow-100 text-yellow-800', CLOSED: 'bg-green-100 text-green-800', CANCELLED: 'bg-gray-100 text-gray-600' }
+                    return (
+                      <tr key={s.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/${locale}/dashboard/warehouse/inventory/${s.id}`)}>
+                        <td className="px-4 py-3 text-gray-800">
+                          {new Date(s.createdAt).toLocaleDateString('pt-PT')}
+                          <div className="text-xs text-gray-400">{new Date(s.createdAt).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {s.type === 'WAREHOUSE' ? <span className="font-medium text-gray-800">Armazém</span> : (
+                            <div><span className="font-medium text-gray-800">Técnico</span><div className="text-xs text-gray-500">{s.technicianName}</div></div>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor[s.status] ?? 'bg-gray-100 text-gray-600'}`}>{statusLabel[s.status] ?? s.status}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-700">{s.totalItems}</td>
+                        <td className="px-4 py-3 text-right">
+                          <span className={s.countedItems === s.totalItems ? 'text-green-700 font-medium' : 'text-gray-700'}>{s.countedItems} / {s.totalItems}</span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {s.discrepancies > 0 ? <span className="text-red-600 font-semibold">{s.discrepancies}</span> : s.countedItems > 0 ? <span className="text-green-600">0</span> : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">{s.createdByName}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={e => { e.stopPropagation(); router.push(`/${locale}/dashboard/warehouse/inventory/${s.id}`) }} className="text-blue-600 hover:text-blue-800 text-xs font-medium">Abrir →</button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

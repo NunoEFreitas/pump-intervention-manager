@@ -60,18 +60,18 @@ export function printOpenInterventionsPDF(
 
     return `
       <tr>
-        <td style="font-weight:600">${esc(iv.client.name)}</td>
+        <td style="font-weight:600;word-break:break-word;white-space:normal">${esc(iv.client.name)}</td>
         <td style="font-family:monospace;font-size:11px;color:#6b7280">${esc(iv.reference)}</td>
         <td>
-          <span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}88">
+          <span style="display:inline-block;padding:2px 6px;border-radius:999px;font-size:10px;font-weight:600;background:${color}22;color:${color};border:1px solid ${color}88">
             ${label}
           </span>
         </td>
-        <td>${location}</td>
-        <td>${iv.scheduledDate ? `${fmtDate(iv.scheduledDate)}${iv.scheduledTime ? ' ' + iv.scheduledTime : ''}` : '<span style="color:#9ca3af">Não agendada</span>'}</td>
-        <td>${iv.assignedTo ? esc(iv.assignedTo.name) : '<span style="color:#9ca3af">—</span>'}</td>
-        <td style="max-width:240px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#374151">${esc(iv.breakdown)}</td>
-        <td style="max-width:200px;white-space:pre-wrap;word-break:break-word;font-size:12px;color:#374151">${esc(iv.comments)}</td>
+        <td style="word-break:break-word;white-space:normal">${location}</td>
+        <td style="white-space:nowrap">${iv.scheduledDate ? `${fmtDate(iv.scheduledDate)}${iv.scheduledTime ? '<br>' + iv.scheduledTime : ''}` : '<span style="color:#9ca3af">—</span>'}</td>
+        <td style="word-break:break-word;white-space:normal">${iv.assignedTo ? esc(iv.assignedTo.name) : '<span style="color:#9ca3af">—</span>'}</td>
+        <td style="white-space:pre-wrap;word-break:break-word;font-size:12px;color:#374151">${esc(iv.breakdown)}</td>
+        <td style="white-space:pre-wrap;word-break:break-word;font-size:12px;color:#6b21a8">${iv.comments ? esc(iv.comments) : '<span style="color:#d1d5db">—</span>'}</td>
       </tr>
     `
   }).join('')
@@ -86,13 +86,21 @@ export function printOpenInterventionsPDF(
     body { font-family: Arial, sans-serif; font-size: 13px; color: #111; padding: 24px; }
     h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
     .meta { font-size: 12px; color: #6b7280; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    col.c-client   { width: 14%; }
+    col.c-ref      { width: 8%; }
+    col.c-status   { width: 9%; }
+    col.c-local    { width: 14%; }
+    col.c-date     { width: 9%; }
+    col.c-tech     { width: 10%; }
+    col.c-breakdown{ width: 18%; }
+    col.c-comments { width: 18%; }
     th {
-      background: #1e3a5f; color: #fff; font-size: 11px; font-weight: 600;
+      background: #1e3a5f; color: #fff; font-size: 10px; font-weight: 600;
       text-transform: uppercase; letter-spacing: .04em;
-      padding: 7px 10px; text-align: left;
+      padding: 6px 8px; text-align: left;
     }
-    td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    td { padding: 7px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; font-size: 12px; overflow-wrap: break-word; }
     tr:nth-child(even) td { background: #f9fafb; }
     tr:last-child td { border-bottom: none; }
     .count { font-size: 12px; color: #6b7280; margin-bottom: 8px; }
@@ -107,6 +115,16 @@ export function printOpenInterventionsPDF(
   <div class="meta">Filtro: <strong>${esc(filterLabel)}</strong> &nbsp;·&nbsp; Gerado em ${now}</div>
   <div class="count">${interventions.length} intervenç${interventions.length === 1 ? 'ão' : 'ões'}</div>
   <table>
+    <colgroup>
+      <col class="c-client">
+      <col class="c-ref">
+      <col class="c-status">
+      <col class="c-local">
+      <col class="c-date">
+      <col class="c-tech">
+      <col class="c-breakdown">
+      <col class="c-comments">
+    </colgroup>
     <thead>
       <tr>
         <th>Cliente</th>

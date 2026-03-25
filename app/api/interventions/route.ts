@@ -64,7 +64,17 @@ export async function GET(request: NextRequest) {
       orderBy: [{ scheduledDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     })
 
-    return NextResponse.json(interventions)
+    // Augment with comments (stale Prisma client doesn't know about this field)
+    const ids = interventions.map(i => i.id)
+    const commentsRows = ids.length > 0
+      ? await prisma.$queryRaw<Array<{ id: string; comments: string | null }>>`
+          SELECT id::text, comments FROM "Intervention" WHERE id::text = ANY(${ids})
+        `
+      : []
+    const commentsMap = new Map(commentsRows.map(r => [r.id, r.comments]))
+    const result = interventions.map(i => ({ ...i, comments: commentsMap.get(i.id) ?? null }))
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Error fetching interventions:', error)
     return NextResponse.json(

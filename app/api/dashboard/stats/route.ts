@@ -117,6 +117,18 @@ export async function GET(request: NextRequest) {
       ...scheduledToday.filter(s => !activeNow.find(a => a.id === s.id)),
     ]
 
+    // Augment all intervention lists with comments (stale Prisma client doesn't select it)
+    const allIds = [...new Set([
+      ...todayList, ...calendarInterventions, ...unassignedOpen, ...upcoming, ...weekInterventions,
+    ].map(i => i.id))]
+    const commentsRows = allIds.length > 0
+      ? await prisma.$queryRaw<Array<{ id: string; comments: string | null }>>`
+          SELECT id::text, comments FROM "Intervention" WHERE id::text = ANY(${allIds})
+        `
+      : []
+    const commentsMap = new Map(commentsRows.map(r => [r.id, r.comments]))
+    const withComments = (list: any[]) => list.map(i => ({ ...i, comments: commentsMap.get(i.id) ?? null }))
+
     return NextResponse.json({
       counters: {
         activeNow: activeNow.length,
@@ -124,13 +136,13 @@ export async function GET(request: NextRequest) {
         completedToday,
         needsPlanning,
       },
-      todayList,
-      calendarInterventions,
-      unassignedOpen,
+      todayList: withComments(todayList),
+      calendarInterventions: withComments(calendarInterventions),
+      unassignedOpen: withComments(unassignedOpen),
       weekStart: weekStart.toISOString(),
       weekDayCounts,
       techLoad,
-      upcoming,
+      upcoming: withComments(upcoming),
     })
   } catch (error) {
     console.error('Dashboard stats error:', error)
