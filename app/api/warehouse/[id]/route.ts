@@ -155,7 +155,7 @@ export async function PUT(
       data: {
         itemName,
         partNumber: data.partNumber,
-        value: parseFloat(data.value),
+        value: data.value !== undefined && data.value !== '' ? parseFloat(data.value) : 0,
       },
     })
 

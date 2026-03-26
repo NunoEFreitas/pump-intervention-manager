@@ -371,7 +371,7 @@
     "newItem": "Adicionar Novo Item",
     "editItem": "Editar Item",
     "itemName": "Nome do Item",
-    "partNumber": "Código de Artigo",
+    "partNumber": "Modelo",
     "serialNumber": "Número de Série",
     "value": "Valor",
     "mainWarehouse": "Stock Armazém Principal",

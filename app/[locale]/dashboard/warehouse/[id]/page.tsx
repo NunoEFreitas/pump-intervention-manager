@@ -67,9 +67,20 @@ export default function WarehouseItemDetailPage() {
   const [serialNumbers, setSerialNumbers] = useState<SerialNumber[]>([])
   const [loading, setLoading] = useState(true)
   const [isEditing, setIsEditing] = useState(false)
+  const [generatingEan, setGeneratingEan] = useState(false)
   const [showStockModal, setShowStockModal] = useState(false)
   const [stockOperation, setStockOperation] = useState<string>('')
   const [snExpanded, setSnExpanded] = useState<Record<string, boolean>>({})
+  const [movements, setMovements] = useState<Movement[]>([])
+  const [movTotal, setMovTotal] = useState(0)
+  const [movPages, setMovPages] = useState(1)
+  const [movPage, setMovPage] = useState(1)
+  const [movSnFilter, setMovSnFilter] = useState<string | null>(null)
+  const [movLoading, setMovLoading] = useState(false)
+  const [showSnMigration, setShowSnMigration] = useState(false)
+  const [snMigrationInput, setSnMigrationInput] = useState('')
+  const [snMigrating, setSnMigrating] = useState(false)
+  const [pendingEditData, setPendingEditData] = useState<typeof editData | null>(null)
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [itemNameEdited, setItemNameEdited] = useState(false)
@@ -88,6 +99,7 @@ export default function WarehouseItemDetailPage() {
   useEffect(() => {
     if (params.id) {
       fetchItem()
+      fetchMovements(1, null)
     }
     const token = localStorage.getItem('token')
     const headers = { Authorization: `Bearer ${token}` }
@@ -145,25 +157,114 @@ export default function WarehouseItemDetailPage() {
     }
   }
 
-  const handleUpdate = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const fetchMovements = async (page: number, snFilter: string | null) => {
+    if (!params.id) return
+    setMovLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/warehouse/${params.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(editData),
+      const qs = new URLSearchParams({ page: String(page), limit: '25' })
+      if (snFilter) qs.set('sn', snFilter)
+      const res = await fetch(`/api/warehouse/${params.id}/movements?${qs}`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
+      const data = await res.json()
+      setMovements(data.movements)
+      setMovTotal(data.total)
+      setMovPages(data.pages)
+    } finally {
+      setMovLoading(false)
+    }
+  }
 
-      if (response.ok) {
-        setIsEditing(false)
-        fetchItem()
+  const generateEan13 = async () => {
+    setGeneratingEan(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/warehouse/generate-ean13', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setEditData(d => ({ ...d, ean13: data.ean13 }))
+    } finally {
+      setGeneratingEan(false)
+    }
+  }
+
+  const saveItem = async (data: typeof editData) => {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/warehouse/${params.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) throw new Error('Failed to update item')
+    return token
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!item) return
+
+    const wasTracking = item.tracksSerialNumbers
+    const willTrack = editData.tracksSerialNumbers
+    const hasStock = item.mainWarehouse > 0
+    const migrating = !wasTracking && willTrack && hasStock
+
+    try {
+      if (migrating && !editData.autoSn) {
+        // Manual SN: show modal to collect SNs before saving
+        setPendingEditData(editData)
+        setShowSnMigration(true)
+        return
       }
+
+      const token = await saveItem(editData)
+
+      if (migrating && editData.autoSn) {
+        // Auto SN: create SN records for existing stock — stock count stays the same
+        await fetch(`/api/warehouse/items/${params.id}/serial-numbers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ quantity: item.mainWarehouse, autoGenerate: true, location: 'MAIN_WAREHOUSE' }),
+        })
+      }
+
+      setIsEditing(false)
+      fetchItem()
+      if (willTrack) fetchSerialNumbers()
     } catch (error) {
       console.error('Error updating item:', error)
+    }
+  }
+
+  const confirmSnMigration = async () => {
+    if (!pendingEditData || !item) return
+    const serialNumbers = snMigrationInput.split('\n').map(s => s.trim()).filter(Boolean)
+    if (serialNumbers.length === 0) { alert('Insere pelo menos um número de série.'); return }
+    if (serialNumbers.length !== item.mainWarehouse) {
+      if (!confirm(`O stock actual é ${item.mainWarehouse} unidade(s) mas introduziste ${serialNumbers.length} número(s) de série. Continuar?`)) return
+    }
+    setSnMigrating(true)
+    try {
+      const token = await saveItem(pendingEditData)
+      // Create SN records for existing stock — stock count stays the same, no movement recorded
+      await fetch(`/api/warehouse/items/${params.id}/serial-numbers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ serialNumbers, location: 'MAIN_WAREHOUSE' }),
+      })
+      setShowSnMigration(false)
+      setSnMigrationInput('')
+      setPendingEditData(null)
+      setIsEditing(false)
+      fetchItem()
+      fetchSerialNumbers()
+    } catch (error) {
+      console.error('Error during SN migration:', error)
+      alert('Erro ao migrar números de série.')
+    } finally {
+      setSnMigrating(false)
     }
   }
 
@@ -320,248 +421,210 @@ export default function WarehouseItemDetailPage() {
               </div>
             </div>
 
-            {!item.tracksSerialNumbers ? (
-              <>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600 font-medium mb-1">{t('mainWarehouse')}</p>
-                    <p className="text-3xl font-bold text-blue-900">{item.mainWarehouse}</p>
+            {/* Stock summary — always shown */}
+            {(() => {
+              const mainCount = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length
+                : item.mainWarehouse
+              const techCount = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length
+                : (item.technicianStocks ?? []).reduce((s, ts) => s + ts.quantity, 0)
+              const repairCount = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'REPAIR').length
+                : item.repairStock
+              const destructionCount = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'DESTRUCTION').length
+                : (item as any).destructionStock ?? 0
+              return (
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <div className="px-4 py-2 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-600 font-medium">{t('mainWarehouse')}</p>
+                    <p className="text-2xl font-bold text-blue-900">{mainCount}</p>
                   </div>
-                  {item.repairStock > 0 && (
-                    <div className="p-4 bg-orange-50 rounded-lg">
-                      <p className="text-sm text-orange-600 font-medium mb-1">{t('inRepair')}</p>
-                      <p className="text-3xl font-bold text-orange-900">{item.repairStock}</p>
+                  <div className="px-4 py-2 bg-green-50 rounded-lg">
+                    <p className="text-xs text-green-600 font-medium">{t('technicianStock')}</p>
+                    <p className="text-2xl font-bold text-green-900">{techCount}</p>
+                  </div>
+                  {repairCount > 0 && (
+                    <div className="px-4 py-2 bg-orange-50 rounded-lg">
+                      <p className="text-xs text-orange-600 font-medium">{t('inRepair')}</p>
+                      <p className="text-2xl font-bold text-orange-900">{repairCount}</p>
                     </div>
                   )}
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <p className="text-sm text-purple-600 font-medium mb-1">{t('totalStock')}</p>
-                    <p className="text-3xl font-bold text-purple-900">
-                      {item.mainWarehouse + (item.technicianStocks ?? []).reduce((sum, ts) => sum + ts.quantity, 0)}
-                    </p>
+                  {destructionCount > 0 && (
+                    <div className="px-4 py-2 bg-red-50 rounded-lg">
+                      <p className="text-xs text-red-600 font-medium">Destruição</p>
+                      <p className="text-2xl font-bold text-red-900">{destructionCount}</p>
+                    </div>
+                  )}
+                  <div className="px-4 py-2 bg-purple-50 rounded-lg">
+                    <p className="text-xs text-purple-600 font-medium">{t('totalStock')}</p>
+                    <p className="text-2xl font-bold text-purple-900">{mainCount + techCount + repairCount}</p>
                   </div>
                 </div>
+              )
+            })()}
 
-                {(item.technicianStocks ?? []).length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="font-semibold text-gray-700 mb-3">{t('technicianStock')}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {item.technicianStocks.map((ts, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-4 bg-green-50 rounded-lg border border-green-200">
-                          <div>
-                            <p className="text-sm text-green-600 font-medium">{t('technician')}</p>
-                            <p className="text-gray-900 font-semibold">{ts.technician.name}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-green-600 font-medium">{t('quantity')}</p>
-                            <p className="text-2xl font-bold text-green-900">{ts.quantity}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
+            {/* Technician breakdown — non-SN */}
+            {!item.tracksSerialNumbers && (item.technicianStocks ?? []).length > 0 && (
               <div className="mb-6">
-                <h3 className="font-semibold text-gray-700 mb-3">{t('serialNumberTracking')}</h3>
-
-                {/* Main Warehouse Serial Numbers */}
-                {(() => {
-                  const sns = serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE')
-                  const key = 'main'
-                  const expanded = snExpanded[key]
-                  const visible = expanded ? sns : sns.slice(0, 8)
-                  return (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-blue-600 mb-2">{t('mainWarehouse')}</h4>
-                      <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                        {sns.length > 0 ? (
-                          <>
-                            <div className="flex flex-wrap gap-2">
-                              {visible.map(sn => (
-                                <span key={sn.id} className="px-3 py-1 bg-blue-100 text-blue-900 rounded text-sm font-mono">
-                                  {sn.serialNumber}
-                                </span>
-                              ))}
-                            </div>
-                            {sns.length > 8 && (
-                              <button
-                                onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
-                                className="mt-2 text-xs text-blue-600 hover:underline"
-                              >
-                                {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <p className="text-sm text-blue-600">{t('noSnInMainWarehouse')}</p>
-                        )}
-                      </div>
+                <h3 className="font-semibold text-gray-700 mb-2 text-sm">{t('technicianStock')}</h3>
+                <div className="flex flex-wrap gap-2">
+                  {item.technicianStocks.map((ts, idx) => (
+                    <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded border border-green-200 text-sm">
+                      <span className="text-gray-800 font-medium">{ts.technician.name}</span>
+                      <span className="font-bold text-green-900">{ts.quantity}</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SN section — compact collapsible groups */}
+            {item.tracksSerialNumbers && (
+              <div className="mb-6 space-y-2">
+                {[
+                  { key: 'main', label: t('mainWarehouse'), loc: 'MAIN_WAREHOUSE', color: 'blue' },
+                  ...Array.from(new Set(serialNumbers.filter(sn => sn.location === 'TECHNICIAN').map(sn => sn.technician?.id ?? ''))).map(techId => {
+                    const name = serialNumbers.find(sn => sn.technician?.id === techId)?.technician?.name ?? techId
+                    return { key: `tech-${techId}`, label: name, loc: 'TECHNICIAN', techId, color: 'green' }
+                  }),
+                  { key: 'repair', label: t('inRepair'), loc: 'REPAIR', color: 'orange' },
+                  { key: 'destruction', label: 'Destruição', loc: 'DESTRUCTION', color: 'red' },
+                  { key: 'used', label: t('used'), loc: 'USED', color: 'gray' },
+                ].map(({ key, label, loc, techId, color }: { key: string; label: string; loc: string; techId?: string; color: string }) => {
+                  const sns = serialNumbers.filter(sn =>
+                    sn.location === loc && (loc !== 'TECHNICIAN' || sn.technician?.id === techId)
                   )
-                })()}
-
-                {/* Technician Serial Numbers */}
-                {Array.from(new Set(serialNumbers.filter(sn => sn.location === 'TECHNICIAN').map(sn => sn.technician?.id))).map(techId => {
-                  const techSerials = serialNumbers.filter(sn => sn.location === 'TECHNICIAN' && sn.technician?.id === techId)
-                  if (techSerials.length === 0) return null
-                  const techName = techSerials[0].technician?.name || 'Unknown'
-                  const key = `tech-${techId}`
+                  if (sns.length === 0) return null
                   const expanded = snExpanded[key]
-                  const visible = expanded ? techSerials : techSerials.slice(0, 8)
-
+                  const visible = expanded ? sns : sns.slice(0, 10)
+                  const colorMap: Record<string, string> = {
+                    blue: 'text-blue-700 bg-blue-50 border-blue-200',
+                    green: 'text-green-700 bg-green-50 border-green-200',
+                    orange: 'text-orange-700 bg-orange-50 border-orange-200',
+                    red: 'text-red-700 bg-red-50 border-red-200',
+                    gray: 'text-gray-600 bg-gray-50 border-gray-200',
+                  }
+                  const pillMap: Record<string, string> = {
+                    blue: 'bg-blue-100 text-blue-900',
+                    green: 'bg-green-100 text-green-900',
+                    orange: 'bg-orange-100 text-orange-900',
+                    red: 'bg-red-100 text-red-900',
+                    gray: 'bg-gray-200 text-gray-700',
+                  }
                   return (
-                    <div key={techId} className="mb-4">
-                      <h4 className="text-sm font-medium text-green-600 mb-2">{t('technicianColon', { name: techName })}</h4>
-                      <div className="p-4 bg-green-50 rounded-lg border border-green-200">
-                        <div className="flex flex-wrap gap-2">
+                    <div key={key} className={`border rounded-lg p-3 ${colorMap[color]}`}>
+                      <button
+                        type="button"
+                        className="flex items-center justify-between w-full text-left"
+                        onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
+                      >
+                        <span className="text-sm font-medium">{label} <span className="font-bold">({sns.length})</span></span>
+                        <span className="text-xs opacity-60">{expanded ? '▲' : '▼'}</span>
+                      </button>
+                      {expanded && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
                           {visible.map(sn => (
-                            <span key={sn.id} className="px-3 py-1 bg-green-100 text-green-900 rounded text-sm font-mono">
+                            <button
+                              key={sn.id}
+                              type="button"
+                              onClick={() => {
+                                const next = movSnFilter === sn.serialNumber ? null : sn.serialNumber
+                                setMovSnFilter(next)
+                                setMovPage(1)
+                                fetchMovements(1, next)
+                                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+                              }}
+                              className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
+                                movSnFilter === sn.serialNumber
+                                  ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+                                  : `${pillMap[color]} hover:opacity-75`
+                              }`}
+                            >
                               {sn.serialNumber}
-                            </span>
+                            </button>
                           ))}
                         </div>
-                        {techSerials.length > 8 && (
-                          <button
-                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
-                            className="mt-2 text-xs text-green-600 hover:underline"
-                          >
-                            {expanded ? '▲ Show less' : `▼ Show ${techSerials.length - 8} more`}
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   )
                 })}
-
-                {/* In Repair Serial Numbers */}
-                {(() => {
-                  const sns = serialNumbers.filter(sn => sn.location === 'REPAIR')
-                  if (sns.length === 0) return null
-                  const key = 'repair'
-                  const expanded = snExpanded[key]
-                  const visible = expanded ? sns : sns.slice(0, 8)
-                  return (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-orange-600 mb-2">{t('inRepair')}</h4>
-                      <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                        <div className="flex flex-wrap gap-2">
-                          {visible.map(sn => (
-                            <span key={sn.id} className="px-3 py-1 bg-orange-100 text-orange-900 rounded text-sm font-mono">
-                              {sn.serialNumber}
-                            </span>
-                          ))}
-                        </div>
-                        {sns.length > 8 && (
-                          <button
-                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
-                            className="mt-2 text-xs text-orange-600 hover:underline"
-                          >
-                            {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
-
-                {/* Used Serial Numbers */}
-                {(() => {
-                  const sns = serialNumbers.filter(sn => sn.location === 'USED')
-                  if (sns.length === 0) return null
-                  const key = 'used'
-                  const expanded = snExpanded[key]
-                  const visible = expanded ? sns : sns.slice(0, 8)
-                  return (
-                    <div className="mb-4">
-                      <h4 className="text-sm font-medium text-gray-600 mb-2">{t('used')}</h4>
-                      <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="flex flex-wrap gap-2">
-                          {visible.map(sn => (
-                            <span key={sn.id} className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-sm font-mono">
-                              {sn.serialNumber}
-                            </span>
-                          ))}
-                        </div>
-                        {sns.length > 8 && (
-                          <button
-                            onClick={() => setSnExpanded(e => ({ ...e, [key]: !e[key] }))}
-                            className="mt-2 text-xs text-gray-500 hover:underline"
-                          >
-                            {expanded ? '▲ Show less' : `▼ Show ${sns.length - 8} more`}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
               </div>
             )}
           </div>
 
           <div className="card mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{t('stockOperations')}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              <button
-                onClick={() => openStockOperation('ADD_STOCK')}
-                className="btn btn-primary"
-              >
-                {t('addStock')}
-              </button>
-              <button
-                onClick={() => openStockOperation('REMOVE_STOCK')}
-                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
-                    : item.mainWarehouse === 0
-                }
-              >
-                {t('removeStock')}
-              </button>
-              <button
-                onClick={() => openStockOperation('TRANSFER_TO_TECH')}
-                className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
-                    : item.mainWarehouse === 0
-                }
-              >
-                {t('transferToTech')}
-              </button>
-              <button
-                onClick={() => openStockOperation('TRANSFER_FROM_TECH')}
-                className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length === 0
-                    : (item.technicianStocks ?? []).length === 0
-                }
-              >
-                {t('transferFromTech')}
-              </button>
-              <button
-                onClick={() => openStockOperation('USE')}
-                className="btn btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={
-                  item.tracksSerialNumbers
-                    ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
-                    : item.mainWarehouse === 0
-                }
-              >
-                {t('useStock')}
-              </button>
-            </div>
+            {(() => {
+              const noMainStock = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length === 0
+                : item.mainWarehouse === 0
+              const noTechStock = item.tracksSerialNumbers
+                ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length === 0
+                : (item.technicianStocks ?? []).length === 0
+              return (
+                <div className="flex flex-wrap gap-3">
+                  <button onClick={() => openStockOperation('ADD_STOCK')} className="btn btn-primary">
+                    {t('addStock')}
+                  </button>
+                  <button
+                    onClick={() => openStockOperation('TRANSFER_TO_TECH')}
+                    className="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={noMainStock}
+                  >
+                    {t('transferToTech')}
+                  </button>
+                  <button
+                    onClick={() => openStockOperation('TRANSFER_FROM_TECH')}
+                    className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={noTechStock}
+                  >
+                    {t('transferFromTech')}
+                  </button>
+                  <button
+                    onClick={() => openStockOperation('MOVE_TO_DESTRUCTION')}
+                    className="btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={noMainStock}
+                  >
+                    Enviar para Destruição
+                  </button>
+                  <button
+                    onClick={() => openStockOperation('REMOVE_STOCK')}
+                    className="btn btn-danger disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={noMainStock}
+                  >
+                    Remover Definitivamente
+                  </button>
+                </div>
+              )
+            })()}
           </div>
 
           <div className="card">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{t('movements')}</h2>
-            {item.movements.length === 0 ? (
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">
+                {t('movements')}
+                {movSnFilter && (
+                  <span className="ml-2 text-sm font-normal text-blue-600">
+                    — SN: <span className="font-mono font-semibold">{movSnFilter}</span>
+                    <button
+                      onClick={() => { setMovSnFilter(null); setMovPage(1); fetchMovements(1, null) }}
+                      className="ml-1 text-gray-400 hover:text-gray-600"
+                    >✕</button>
+                  </span>
+                )}
+              </h2>
+              <span className="text-sm text-gray-400">{movTotal} movimento(s)</span>
+            </div>
+
+            {movLoading ? (
+              <p className="text-gray-500 text-sm py-4 text-center">{tCommon('loading')}</p>
+            ) : movements.length === 0 ? (
               <p className="text-gray-600">{t('noMovements')}</p>
             ) : (
               <div className="space-y-3">
-                {item.movements.map((movement) => (
+                {movements.map((movement) => (
                   <div key={movement.id} className="p-4 bg-gray-50 rounded-lg">
                     <div className="flex justify-between items-start mb-2">
                       <div>
@@ -582,7 +645,7 @@ export default function WarehouseItemDetailPage() {
                         {new Date(movement.createdAt).toLocaleString()}
                       </span>
                     </div>
-                    
+
                     <div className="text-sm text-gray-600">
                       {movement.fromUser && <span>{t('movementFrom', { name: movement.fromUser.name })} </span>}
                       {movement.toUser && <span>{t('movementTo', { name: movement.toUser.name })} </span>}
@@ -594,12 +657,23 @@ export default function WarehouseItemDetailPage() {
                         <p className="text-xs text-gray-500 mb-1">{t('movementSerialNumbers')}</p>
                         <div className="flex flex-wrap gap-1">
                           {movement.serialNumbers.map((msn) => (
-                            <span
+                            <button
                               key={msn.serialNumber.id}
-                              className="px-2 py-1 bg-gray-200 text-gray-800 rounded text-xs font-mono"
+                              onClick={() => {
+                                const sn = msn.serialNumber.serialNumber
+                                const next = movSnFilter === sn ? null : sn
+                                setMovSnFilter(next)
+                                setMovPage(1)
+                                fetchMovements(1, next)
+                              }}
+                              className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
+                                movSnFilter === msn.serialNumber.serialNumber
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-gray-200 text-gray-800 hover:bg-blue-100 hover:text-blue-800'
+                              }`}
                             >
                               {msn.serialNumber.serialNumber}
-                            </span>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -610,6 +684,22 @@ export default function WarehouseItemDetailPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+
+            {movPages > 1 && (
+              <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                <button
+                  onClick={() => { const p = movPage - 1; setMovPage(p); fetchMovements(p, movSnFilter) }}
+                  disabled={movPage === 1 || movLoading}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >← Anterior</button>
+                <span className="text-sm text-gray-600">{movPage} / {movPages}</span>
+                <button
+                  onClick={() => { const p = movPage + 1; setMovPage(p); fetchMovements(p, movSnFilter) }}
+                  disabled={movPage === movPages || movLoading}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >Próximo →</button>
               </div>
             )}
           </div>
@@ -665,14 +755,24 @@ export default function WarehouseItemDetailPage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
-            <input
-              type="text"
-              className="input text-gray-800 font-mono"
-              value={editData.ean13}
-              onChange={(e) => setEditData({ ...editData, ean13: e.target.value })}
-              placeholder="0000000000000"
-              maxLength={13}
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="input text-gray-800 font-mono flex-1"
+                value={editData.ean13}
+                onChange={(e) => setEditData({ ...editData, ean13: e.target.value })}
+                placeholder="0000000000000"
+                maxLength={13}
+              />
+              <button
+                type="button"
+                onClick={generateEan13}
+                disabled={generatingEan}
+                className="btn btn-secondary shrink-0"
+              >
+                {generatingEan ? '...' : 'Gerar'}
+              </button>
+            </div>
           </div>
 
           <div>
@@ -705,7 +805,6 @@ export default function WarehouseItemDetailPage() {
               className="input text-gray-800"
               value={editData.value}
               onChange={(e) => setEditData({ ...editData, value: e.target.value })}
-              required
             />
           </div>
 
@@ -778,6 +877,45 @@ export default function WarehouseItemDetailPage() {
         </form>
       )}
 
+      {showSnMigration && item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Introduzir Números de Série</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Este artigo tem <span className="font-semibold">{item.mainWarehouse}</span> unidade(s) em stock.
+              Introduz os números de série existentes (um por linha).
+            </p>
+            <textarea
+              className="input text-gray-800 font-mono text-sm w-full"
+              rows={8}
+              value={snMigrationInput}
+              onChange={e => setSnMigrationInput(e.target.value)}
+              placeholder={'SN001\nSN002\nSN003\n...'}
+              autoFocus
+            />
+            <p className="text-xs text-gray-400 mt-1 mb-4">
+              {snMigrationInput.split('\n').filter(s => s.trim()).length} número(s) introduzido(s)
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={confirmSnMigration}
+                disabled={snMigrating}
+                className="btn btn-primary flex-1"
+              >
+                {snMigrating ? 'A guardar...' : 'Guardar'}
+              </button>
+              <button
+                onClick={() => { setShowSnMigration(false); setPendingEditData(null) }}
+                disabled={snMigrating}
+                className="btn btn-secondary"
+              >
+                {tCommon('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showStockModal && item && (
         <StockOperationModal
           itemId={item.id}
@@ -794,6 +932,7 @@ export default function WarehouseItemDetailPage() {
           onSuccess={() => {
             setShowStockModal(false)
             fetchItem()
+            fetchMovements(1, movSnFilter)
             if (item.tracksSerialNumbers) {
               fetchSerialNumbers()
             }

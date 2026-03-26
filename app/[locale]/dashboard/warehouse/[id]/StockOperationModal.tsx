@@ -118,7 +118,7 @@ export default function StockOperationModal({
     try {
       const token = localStorage.getItem('token')
       let url = `/api/warehouse/items/${itemId}/serial-numbers?status=AVAILABLE`
-      if (operation === 'TRANSFER_TO_TECH' || operation === 'REMOVE_STOCK' || operation === 'REPAIR_IN') {
+      if (operation === 'TRANSFER_TO_TECH' || operation === 'REMOVE_STOCK' || operation === 'MOVE_TO_DESTRUCTION' || operation === 'REPAIR_IN') {
         url += '&location=MAIN_WAREHOUSE'
       } else if (operation === 'TRANSFER_FROM_TECH' && formData.technicianId) {
         url += `&location=TECHNICIAN&technicianId=${formData.technicianId}`
@@ -336,10 +336,11 @@ export default function StockOperationModal({
     )
   }
 
-  // For USE / REPAIR_IN / REPAIR_OUT: show the serial picker immediately
+  // For USE / REPAIR_IN / REPAIR_OUT / REMOVE_STOCK / MOVE_TO_DESTRUCTION: show the serial picker immediately
   // For TRANSFER ops: wait until a technician is selected
   const showSerialPicker = tracksSerialNumbers && operation !== 'ADD_STOCK' && (
-    operation === 'USE' || operation === 'REPAIR_IN' || operation === 'REPAIR_OUT' || !!formData.technicianId
+    operation === 'USE' || operation === 'REPAIR_IN' || operation === 'REPAIR_OUT' ||
+    operation === 'REMOVE_STOCK' || operation === 'MOVE_TO_DESTRUCTION' || !!formData.technicianId
   )
 
   return (
@@ -347,7 +348,8 @@ export default function StockOperationModal({
       <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <h3 className="text-xl font-bold mb-2">
           {operation === 'ADD_STOCK' && t('addStock')}
-          {operation === 'REMOVE_STOCK' && t('removeStock')}
+          {operation === 'REMOVE_STOCK' && 'Remover Definitivamente'}
+          {operation === 'MOVE_TO_DESTRUCTION' && 'Enviar para Destruição'}
           {operation === 'TRANSFER_TO_TECH' && t('transferToTech')}
           {operation === 'TRANSFER_FROM_TECH' && t('transferFromTech')}
           {operation === 'USE' && t('useStock')}

@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check availability based on operation type
-    if (movementType === 'TRANSFER_TO_TECH' || movementType === 'REMOVE_STOCK' || movementType === 'REPAIR_IN') {
+    if (movementType === 'TRANSFER_TO_TECH' || movementType === 'REMOVE_STOCK' || movementType === 'MOVE_TO_DESTRUCTION' || movementType === 'REPAIR_IN') {
       // Must be in main warehouse
       const notInWarehouse = serialNumbers.filter(sn => sn.location !== 'MAIN_WAREHOUSE')
       if (notInWarehouse.length > 0) {
@@ -145,10 +145,24 @@ export async function POST(request: NextRequest) {
           location: 'USED',
         },
       })
-      // Decrement main warehouse counter (all removed items came from there)
       await prisma.warehouseItem.update({
         where: { id: itemId },
         data: { mainWarehouse: { decrement: serialNumberIds.length } },
+      })
+    } else if (movementType === 'MOVE_TO_DESTRUCTION') {
+      await prisma.serialNumberStock.updateMany({
+        where: { id: { in: serialNumberIds } },
+        data: {
+          location: 'DESTRUCTION',
+          technicianId: null,
+        },
+      })
+      await prisma.warehouseItem.update({
+        where: { id: itemId },
+        data: {
+          mainWarehouse: { decrement: serialNumberIds.length },
+          destructionStock: { increment: serialNumberIds.length },
+        } as any,
       })
     } else if (movementType === 'USE') {
       // Count items coming from each source before clearing locations

@@ -60,6 +60,19 @@ export async function POST(request: NextRequest) {
           mainWarehouse: item.mainWarehouse - quantity,
         }
         break
+
+      case 'MOVE_TO_DESTRUCTION':
+        if (item.mainWarehouse < quantity) {
+          return NextResponse.json(
+            { error: 'Insufficient stock in main warehouse' },
+            { status: 400 }
+          )
+        }
+        updateData = {
+          mainWarehouse: item.mainWarehouse - quantity,
+          destructionStock: (item as any).destructionStock + quantity,
+        }
+        break
         
       case 'TRANSFER_TO_TECH':
         if (!data.toUserId) {

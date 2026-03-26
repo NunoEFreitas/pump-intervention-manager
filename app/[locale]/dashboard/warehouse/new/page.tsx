@@ -16,6 +16,7 @@ export default function NewWarehouseItemPage() {
   const tErrors = useTranslations('errors')
 
   const [loading, setLoading] = useState(false)
+  const [generatingEan, setGeneratingEan] = useState(false)
   const [error, setError] = useState('')
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
@@ -59,6 +60,21 @@ export default function NewWarehouseItemPage() {
       }
       return next
     })
+  }
+
+  const generateEan13 = async () => {
+    setGeneratingEan(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch('/api/warehouse/generate-ean13', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (res.ok) setFormData(f => ({ ...f, ean13: data.ean13 }))
+    } finally {
+      setGeneratingEan(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,14 +168,24 @@ export default function NewWarehouseItemPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
-          <input
-            type="text"
-            className="input text-gray-800"
-            value={formData.ean13}
-            onChange={(e) => setFormData({ ...formData, ean13: e.target.value })}
-            placeholder="0000000000000"
-            maxLength={13}
-          />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              className="input text-gray-800 font-mono flex-1"
+              value={formData.ean13}
+              onChange={(e) => setFormData({ ...formData, ean13: e.target.value })}
+              placeholder="0000000000000"
+              maxLength={13}
+            />
+            <button
+              type="button"
+              onClick={generateEan13}
+              disabled={generatingEan}
+              className="btn btn-secondary shrink-0"
+            >
+              {generatingEan ? '...' : 'Gerar'}
+            </button>
+          </div>
         </div>
 
         <div>
@@ -243,7 +269,7 @@ export default function NewWarehouseItemPage() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('value')} (€) *
+            {t('value')} (€)
           </label>
           <input
             type="number"
@@ -252,7 +278,6 @@ export default function NewWarehouseItemPage() {
             value={formData.value}
             onChange={(e) => setFormData({ ...formData, value: e.target.value })}
             placeholder="0.00"
-            required
           />
         </div>
 

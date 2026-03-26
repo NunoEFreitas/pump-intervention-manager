@@ -37,15 +37,20 @@ export async function GET(request: NextRequest) {
         snExample: string | null
         equipmentTypeId: string | null
         brandId: string | null
+        equipmentTypeName: string | null
+        brandName: string | null
         createdAt: Date
         updatedAt: Date
       }>>`
-        SELECT id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock",
-               "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
-               "ean13", "createdAt", "updatedAt"
-        FROM "WarehouseItem"
-        WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
-        ORDER BY "createdAt" DESC
+        SELECT w.id, w."itemName", w."partNumber", w.value, w."mainWarehouse", w."repairStock", w."destructionStock",
+               w."tracksSerialNumbers", w."autoSn", w."snExample", w."equipmentTypeId", w."brandId",
+               w."ean13", w."createdAt", w."updatedAt",
+               et.name AS "equipmentTypeName", eb.name AS "brandName"
+        FROM "WarehouseItem" w
+        LEFT JOIN "EquipmentType" et ON et.id = w."equipmentTypeId"
+        LEFT JOIN "EquipmentBrand" eb ON eb.id = w."brandId"
+        WHERE LOWER(w."itemName") LIKE ${searchLike} OR LOWER(w."partNumber") LIKE ${searchLike}
+        ORDER BY w."createdAt" DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
       prisma.$queryRaw<Array<{
@@ -135,9 +140,9 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json()
 
-    if (!data.partNumber || data.value === undefined) {
+    if (!data.partNumber) {
       return NextResponse.json(
-        { error: 'Part number and value are required' },
+        { error: 'Part number is required' },
         { status: 400 }
       )
     }
@@ -168,7 +173,7 @@ export async function POST(request: NextRequest) {
       data: {
         itemName,
         partNumber: data.partNumber,
-        value: parseFloat(data.value),
+        value: data.value !== undefined && data.value !== '' ? parseFloat(data.value) : 0,
         mainWarehouse: initialStock,
         tracksSerialNumbers,
       },

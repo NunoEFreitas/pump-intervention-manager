@@ -16,6 +16,8 @@ interface WarehouseItem {
   tracksSerialNumbers: boolean
   totalTechnicianStock: number
   totalStock: number
+  equipmentTypeName: string | null
+  brandName: string | null
   technicianStocks: Array<{
     technician: { id: string; name: string }
     quantity: number
@@ -436,31 +438,25 @@ export default function WarehousePage() {
           ) : (
             <div className="space-y-4">
               {items.map((item) => (
-                <div key={item.id} className="card hover:shadow-lg transition-shadow cursor-pointer" onClick={() => router.push(`/${locale}/dashboard/warehouse/${item.id}`)}>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-xl font-semibold text-gray-900">{item.itemName}</h3>
-                        {item.tracksSerialNumbers && <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN Tracked</span>}
-                      </div>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-                        <div><span className="font-medium text-gray-600">{t('partNumber')}:</span><p className="text-gray-900">{item.partNumber}</p></div>
-                        <div><span className="font-medium text-gray-600">{t('value')}:</span><p className="text-gray-900">€{item.value.toFixed(2)}</p></div>
-                      </div>
-                      <div className="flex flex-wrap gap-3 mb-4">
-                        <div className="px-4 py-2 bg-blue-50 rounded"><p className="text-xs text-blue-600 font-medium">Armazém Principal</p><p className="text-2xl font-bold text-blue-900">{item.mainWarehouse}</p></div>
-                        <div className="px-4 py-2 bg-green-50 rounded"><p className="text-xs text-green-600 font-medium">Técnicos</p><p className="text-2xl font-bold text-green-900">{item.totalTechnicianStock}</p></div>
-                        {item.repairStock > 0 && (
-                          <div className="px-4 py-2 bg-yellow-50 rounded"><p className="text-xs text-yellow-600 font-medium">Reparação</p><p className="text-2xl font-bold text-yellow-900">{item.repairStock}</p></div>
-                        )}
-                        {item.clientPartsCount > 0 && (
-                          <div className="px-4 py-2 bg-orange-50 rounded"><p className="text-xs text-orange-600 font-medium">Cliente</p><p className="text-2xl font-bold text-orange-900">{item.clientPartsCount}</p></div>
-                        )}
-                        {item.destructionStock > 0 && (
-                          <div className="px-4 py-2 bg-red-50 rounded"><p className="text-xs text-red-600 font-medium">Destruição</p><p className="text-2xl font-bold text-red-900">{item.destructionStock}</p></div>
-                        )}
-                      </div>
+                <div key={item.id} className="card hover:shadow-lg transition-shadow cursor-pointer w-full" onClick={() => router.push(`/${locale}/dashboard/warehouse/${item.id}`)}>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">{item.itemName}</h3>
+                      {item.tracksSerialNumbers && <span className="shrink-0 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN</span>}
                     </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded text-sm font-medium">{item.mainWarehouse} <span className="font-normal text-blue-600">Armazém</span></span>
+                      <span className="px-3 py-1.5 bg-green-50 text-green-800 rounded text-sm font-medium">{item.totalTechnicianStock} <span className="font-normal text-green-600">Técnicos</span></span>
+                      {item.repairStock > 0 && <span className="px-3 py-1.5 bg-yellow-50 text-yellow-800 rounded text-sm font-medium">{item.repairStock} <span className="font-normal text-yellow-600">Reparação</span></span>}
+                      {item.clientPartsCount > 0 && <span className="px-3 py-1.5 bg-orange-50 text-orange-800 rounded text-sm font-medium">{item.clientPartsCount} <span className="font-normal text-orange-600">Cliente</span></span>}
+                      {item.destructionStock > 0 && <span className="px-3 py-1.5 bg-red-50 text-red-800 rounded text-sm font-medium">{item.destructionStock} <span className="font-normal text-red-600">Destruição</span></span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                    {item.equipmentTypeName && <span><span className="text-gray-400">Tipo:</span> {item.equipmentTypeName}</span>}
+                    {item.brandName && <span><span className="text-gray-400">Marca:</span> {item.brandName}</span>}
+                    {item.partNumber && <span><span className="text-gray-400">{t('partNumber')}:</span> {item.partNumber}</span>}
+                    <span className="ml-auto">€{item.value.toFixed(2)}</span>
                   </div>
                 </div>
               ))}
