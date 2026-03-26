@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
       JOIN "WarehouseItem" wi ON wi.id = j."itemId"
       LEFT JOIN "Intervention" inv ON inv.id = j."interventionId"
       WHERE j.type = 'CLIENT'
+        AND j.status NOT IN ('RETURNED_TO_CLIENT', 'NOT_REPAIRED', 'WRITTEN_OFF')
         AND (
           j."deliveredToClientId" = ${clientId}
           OR inv."clientId" = ${clientId}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
+import { generateProjectReference } from '@/lib/reference'
 
 async function getClientUser(userId: string) {
   const userRows = await prisma.$queryRaw<{ id: string; clientId: string | null; role: string }[]>`
@@ -85,12 +86,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const reference = await generateProjectReference()
+
     const intervention = await prisma.intervention.create({
       data: {
         clientId: user.clientId,
         locationId: locationId || null,
         breakdown,
         status: 'OPEN',
+        reference,
       },
     })
 
