@@ -339,7 +339,10 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
         {loading ? (
           <div className="p-8 text-center text-gray-600">{t('loadingStock')}</div>
         ) : stock.length === 0 ? (
-          <div className="p-8 text-center text-gray-600">{t('noStockAvailable')}</div>
+          <div className="p-8 text-center text-gray-600">
+            <p className="mb-4">{t('noStockAvailable')}</p>
+            <button type="button" onClick={onClose} className="btn btn-secondary">{tCommon('back')}</button>
+          </div>
         ) : (
           <>
             {/* SN picker overlay */}

@@ -497,30 +497,41 @@ export default function WarehousePage() {
           ) : (
             <div className="space-y-3">
               {filteredRequests.map(req => (
-                <div key={req.id} className="card">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="font-semibold text-gray-900">{req.itemName}</span>
-                        {req.partNumber && <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{req.partNumber}</span>}
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PR_STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-600'}`}>{PR_STATUS_LABEL[req.status] ?? req.status}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 flex flex-wrap gap-x-3">
-                        <span className="font-medium text-gray-700">{req.clientName}</span>
-                        {req.interventionReference && <span>#{req.interventionReference}</span>}
-                        <span>Técnico: {req.requesterName}</span>
-                        <span>Qtd: {req.quantity}</span>
-                        <span>{new Date(req.createdAt).toLocaleDateString()}</span>
-                      </div>
-                      {req.notes && <p className="text-xs text-gray-500 mt-1 italic">{req.notes}</p>}
+                <div key={req.id} className="card w-full">
+                  {/* Main row */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-lg font-semibold text-gray-900 truncate">{req.itemName}</span>
+                      {req.partNumber && <span className="shrink-0 text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">{req.partNumber}</span>}
                     </div>
-                    <div className="flex flex-col gap-1.5 flex-shrink-0">
-                      {req.status === 'PENDING' && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'ORDERED')} className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">Marcar Encomendado</button>}
-                      {req.status === 'ORDERED' && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'RECEIVED')} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50">Marcar Recebido</button>}
-                      {req.status === 'RECEIVED' && <button onClick={() => openTransferModal(req)} className="text-xs px-2.5 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">Transferir para Técnico</button>}
-                      {(req.status === 'PENDING' || req.status === 'ORDERED') && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'CANCELLED')} className="text-xs px-2.5 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50">Cancelar</button>}
-                      <button onClick={() => router.push(`/${locale}/dashboard/interventions/${req.interventionId}`)} className="text-xs px-2.5 py-1 border border-gray-300 text-gray-600 rounded hover:bg-gray-50">Ver Intervenção</button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="px-3 py-1.5 bg-gray-50 text-gray-800 rounded text-sm font-medium">
+                        {req.quantity} <span className="font-normal text-gray-500">un.</span>
+                      </span>
+                      <span className={`px-2.5 py-1.5 rounded text-xs font-medium ${PR_STATUS_COLOR[req.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {PR_STATUS_LABEL[req.status] ?? req.status}
+                      </span>
                     </div>
+                  </div>
+                  {/* Secondary row */}
+                  <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
+                    <span className="font-medium text-gray-700">{req.clientName}</span>
+                    {req.interventionReference && (
+                      <button onClick={() => router.push(`/${locale}/dashboard/interventions/${req.interventionId}`)} className="font-mono text-blue-600 hover:underline text-xs">
+                        #{req.interventionReference}
+                      </button>
+                    )}
+                    <span><span className="text-gray-400">Técnico:</span> {req.requesterName}</span>
+                    <span className="ml-auto text-xs">{new Date(req.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  {req.notes && <p className="text-xs text-gray-400 mt-1 italic">{req.notes}</p>}
+                  {/* Actions row */}
+                  <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                    {req.status === 'PENDING' && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'ORDERED')} className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">Marcar Encomendado</button>}
+                    {req.status === 'ORDERED' && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'RECEIVED')} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50">Marcar Recebido</button>}
+                    {req.status === 'RECEIVED' && <button onClick={() => openTransferModal(req)} className="text-xs px-2.5 py-1 bg-purple-600 text-white rounded hover:bg-purple-700">Transferir para Técnico</button>}
+                    {(req.status === 'PENDING' || req.status === 'ORDERED') && <button disabled={updatingId === req.id} onClick={() => updateStatus(req.id, 'CANCELLED')} className="text-xs px-2.5 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50">Cancelar</button>}
+                    {!req.interventionReference && <button onClick={() => router.push(`/${locale}/dashboard/interventions/${req.interventionId}`)} className="text-xs px-2.5 py-1 border border-gray-300 text-gray-600 rounded hover:bg-gray-50">Ver Intervenção</button>}
                   </div>
                 </div>
               ))}
@@ -539,53 +550,50 @@ export default function WarehousePage() {
           ) : (
             <div className="space-y-3">
               {clientParts.map(part => (
-                <div key={part.id} className="card p-4">
-                  {/* Top row: item info + status badge */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 text-sm leading-tight">{part.itemName}</p>
-                      <p className="text-xs text-gray-500 font-mono mt-0.5">{part.partNumber}</p>
+                <div key={part.id} className="card w-full">
+                  {/* Main row */}
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <span className="text-lg font-semibold text-gray-900 truncate">{part.itemName}</span>
+                      <span className="shrink-0 font-mono text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{part.serialNumber}</span>
                     </div>
-                    {part.clientPartStatus === 'REPAIR' && part.repairStatus && (
-                      <span className={`shrink-0 text-xs px-2 py-0.5 rounded-full font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {part.clientPartStatus === 'REPAIR' && part.repairStatus && (
+                        <span className={`px-2.5 py-1.5 rounded text-xs font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
+                        </span>
+                      )}
+                      {part.repairReference && (
+                        <span className="font-mono text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-1 rounded">{part.repairReference}</span>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Meta row */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600 mb-3">
-                    <span className="font-mono bg-gray-100 text-gray-800 px-2 py-0.5 rounded">{part.serialNumber}</span>
-                    {part.clientName && <span><span className="text-gray-400">Cliente:</span> {part.clientName}</span>}
+                  {/* Secondary row */}
+                  <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
+                    {part.partNumber && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>}
+                    {part.clientName && <span className="font-medium text-gray-700">{part.clientName}</span>}
                     {part.interventionReference && (
-                      <button
-                        onClick={() => router.push(`/${locale}/dashboard/interventions/${part.interventionId}`)}
-                        className="font-mono text-blue-600 hover:underline"
-                      >
-                        {part.interventionReference}
+                      <button onClick={() => router.push(`/${locale}/dashboard/interventions/${part.interventionId}`)} className="font-mono text-blue-600 hover:underline text-xs">
+                        #{part.interventionReference}
                       </button>
                     )}
                     {(part.technicianName || part.pickedUpByName) && (
                       <span><span className="text-gray-400">Técnico:</span> {part.technicianName || part.pickedUpByName}</span>
                     )}
-                    {part.repairReference && (
-                      <span className="font-mono bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded">{part.repairReference}</span>
-                    )}
                   </div>
-
                   {/* Actions row */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
                     {(!part.clientPartStatus || part.clientPartStatus === 'PENDING') && (
                       <>
                         <button
                           onClick={() => openCpModal('swap', part)}
                           disabled={part.mainWarehouse < 1}
                           title={part.mainWarehouse < 1 ? 'Sem stock disponível para substituição' : undefined}
-                          className="px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           Trocar{part.mainWarehouse < 1 ? ' (sem stock)' : ''}
                         </button>
-                        <button onClick={() => openCpModal('repair', part)} className="px-3 py-1.5 text-xs font-medium rounded bg-orange-500 text-white hover:bg-orange-600 transition-colors">
+                        <button onClick={() => openCpModal('repair', part)} className="text-xs px-2.5 py-1 bg-orange-500 text-white rounded hover:bg-orange-600">
                           Reparar
                         </button>
                       </>
@@ -593,12 +601,12 @@ export default function WarehousePage() {
                     {part.clientPartStatus === 'REPAIR' && (
                       <>
                         {part.clientRepairJobId && (
-                          <button onClick={() => router.push(`/${locale}/dashboard/repairs/${part.clientRepairJobId}`)} className="px-3 py-1.5 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                          <button onClick={() => router.push(`/${locale}/dashboard/repairs/${part.clientRepairJobId}`)} className="text-xs px-2.5 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
                             Ver reparação
                           </button>
                         )}
                         {part.repairStatus && TERMINAL_REPAIR_STATUSES.includes(part.repairStatus) && (
-                          <button onClick={() => handleReturnToTech(part)} className="px-3 py-1.5 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 transition-colors">
+                          <button onClick={() => handleReturnToTech(part)} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700">
                             Devolver ao Técnico
                           </button>
                         )}

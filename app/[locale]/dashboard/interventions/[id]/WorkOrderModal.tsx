@@ -355,12 +355,7 @@ export default function WorkOrderModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Descrição <span className="text-red-500">*</span></label>
-                <textarea rows={4} className="input text-gray-800" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Horas gastas</label>
-                <input type="number" step="0.5" className="input text-gray-800 w-32" value={form.timeSpent} onChange={e => setForm(f => ({ ...f, timeSpent: e.target.value }))} placeholder="0" />
+                <textarea rows={8} className="input text-gray-800" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
               </div>
 
               {!form.internal && (
