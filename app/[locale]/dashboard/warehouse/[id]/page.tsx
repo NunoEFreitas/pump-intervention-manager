@@ -415,10 +415,6 @@ export default function WarehouseItemDetailPage() {
                   <p className="text-lg font-semibold font-mono text-gray-900">{item.ean13}</p>
                 </div>
               )}
-              <div>
-                <p className="text-sm text-gray-600">{t('value')}</p>
-                <p className="text-lg font-semibold text-gray-900">€{item.value != null ? Number(item.value).toFixed(2) : '—'}</p>
-              </div>
             </div>
 
             {/* Stock summary — always shown */}

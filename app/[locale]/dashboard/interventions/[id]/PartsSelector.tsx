@@ -495,7 +495,6 @@ export default function PartsSelector({ technicianId, onClose, onPartAdded, inte
                               )}
                             </p>
                           </div>
-                          <span className="text-sm font-bold text-blue-600 shrink-0">€{item.value.toFixed(2)}</span>
                           {!item.tracksSerialNumbers && (
                             <input
                               type="number"

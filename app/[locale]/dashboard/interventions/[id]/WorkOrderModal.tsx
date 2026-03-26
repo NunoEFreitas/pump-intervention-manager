@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import PartsSelector from './PartsSelector'
+import AddPartModal from './AddPartModal'
 
 interface WorkOrderSession {
   id: string
@@ -44,7 +44,7 @@ export interface WorkOrder {
 interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
 interface Technician { id: string; name: string; email: string }
 interface Equipment { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }
-interface WarehouseItem { id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null }
+interface WarehouseItem { id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }
 interface SavedPdf { id: string; createdAt: string; clientSignature: string | null; techSignature: string | null }
 
 interface Props {
@@ -65,8 +65,6 @@ interface Props {
 }
 
 type Tab = 'details' | 'hours' | 'parts'
-type CartEntry = { tempId: string; itemId: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; qty: number; serialNumberIds: string[] }
-type SnPicker = { itemId: string; itemName: string; partNumber: string; sns: { id: string; serialNumber: string }[]; selected: string[]; qty: number }
 
 function calcDuration(sd: string, st: string, ed: string, et: string): string {
   if (!sd || !st || !ed || !et) return ''
@@ -111,37 +109,16 @@ export default function WorkOrderModal({
   const [sessionForm, setSessionForm] = useState({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
   const [sessionSaving, setSessionSaving] = useState(false)
 
-  // Parts - tech
-  const [showTechParts, setShowTechParts] = useState(false)
-
-  // Parts - warehouse
-  const [showWhParts, setShowWhParts] = useState(false)
-  const [whCart, setWhCart] = useState<CartEntry[]>([])
-  const [whPickerItemId, setWhPickerItemId] = useState('')
-  const [whPickerQty, setWhPickerQty] = useState('1')
-  const [whSnPicker, setWhSnPicker] = useState<SnPicker | null>(null)
-  const [whSnLoading, setWhSnLoading] = useState(false)
-  const [whPartLoading, setWhPartLoading] = useState(false)
-  const [whScanning, setWhScanning] = useState(false)
-  const [whScanError, setWhScanError] = useState<string | null>(null)
-  const [whScanFeedback, setWhScanFeedback] = useState<string | null>(null)
-  const whVideoRef = useRef<HTMLVideoElement>(null)
-  const whReaderRef = useRef<any>(null)
-  const whStreamRef = useRef<MediaStream | null>(null)
-  const whItemSelectorRef = useRef<HTMLDivElement>(null)
-  const whDropdownBtnRef = useRef<HTMLButtonElement>(null)
-  const [whItemSearch, setWhItemSearch] = useState('')
-  const [whItemSelectorOpen, setWhItemSelectorOpen] = useState(false)
-  const [whDropdownPos, setWhDropdownPos] = useState<{ top: number; left: number; width: number } | null>(null)
+  // Parts
+  const [showAddPart, setShowAddPart] = useState(false)
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (vehicleRef.current && !vehicleRef.current.contains(e.target as Node)) setVehicleOpen(false)
       if (helperRef.current && !helperRef.current.contains(e.target as Node)) setHelperOpen(false)
-      if (whItemSelectorRef.current && !whItemSelectorRef.current.contains(e.target as Node)) { setWhItemSelectorOpen(false); setWhDropdownPos(null) }
     }
     document.addEventListener('mousedown', handler)
-    return () => { document.removeEventListener('mousedown', handler); stopWhScanner() }
+    return () => { document.removeEventListener('mousedown', handler) }
   }, [])
 
   const handleSave = async () => {
@@ -205,94 +182,6 @@ export default function WorkOrderModal({
     onRefresh()
   }
 
-  const stopWhScanner = () => {
-    if (whReaderRef.current) { try { whReaderRef.current.reset() } catch {} whReaderRef.current = null }
-    if (whStreamRef.current) { whStreamRef.current.getTracks().forEach(t => t.stop()); whStreamRef.current = null }
-  }
-
-  const startWhScanner = async () => {
-    setWhScanError(null); setWhScanFeedback(null); setWhScanning(true)
-    let stream: MediaStream
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }) }
-    catch { try { stream = await navigator.mediaDevices.getUserMedia({ video: true }) } catch { setWhScanError('Permissão de câmara negada'); setWhScanning(false); return } }
-    whStreamRef.current = stream
-    try {
-      const { BrowserMultiFormatReader } = await import('@zxing/browser')
-      const reader = new BrowserMultiFormatReader()
-      whReaderRef.current = reader
-      await new Promise(r => setTimeout(r, 100))
-      if (!whVideoRef.current) { stopWhScanner(); setWhScanning(false); return }
-      await reader.decodeFromStream(stream, whVideoRef.current, (result) => { if (result) handleScannedCode(result.getText()) })
-    } catch { stopWhScanner(); setWhScanError('Erro ao iniciar scanner'); setWhScanning(false) }
-  }
-
-  const handleScannedCode = async (code: string) => {
-    const found = warehouseItems.find(i => i.ean13 === code)
-    if (!found) { setWhScanFeedback(`Artigo não encontrado: ${code}`); return }
-    stopWhScanner(); setWhScanning(false)
-    if (found.tracksSerialNumbers) {
-      setWhSnLoading(true)
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`/api/warehouse/items/${found.id}/serial-numbers?location=MAIN_WAREHOUSE&status=AVAILABLE`, { headers: { Authorization: `Bearer ${token}` } })
-        const data = await res.json()
-        setWhSnPicker({ itemId: found.id, itemName: found.itemName, partNumber: found.partNumber, sns: Array.isArray(data) ? data.map((s: any) => ({ id: s.id, serialNumber: s.serialNumber })) : [], selected: [], qty: 1 })
-      } catch { setWhScanFeedback('Falha ao carregar números de série') }
-      finally { setWhSnLoading(false) }
-    } else {
-      setWhCart(prev => [...prev, { tempId: crypto.randomUUID(), itemId: found.id, itemName: found.itemName, partNumber: found.partNumber, tracksSerialNumbers: false, qty: 1, serialNumberIds: [] }])
-      setWhScanFeedback(`✓ ${found.itemName}`)
-      setTimeout(() => setWhScanFeedback(null), 3000)
-    }
-  }
-
-  const addToCart = async () => {
-    const found = warehouseItems.find(i => i.id === whPickerItemId)
-    if (!found) return
-    const qty = parseInt(whPickerQty) || 1
-    if (found.tracksSerialNumbers) {
-      setWhSnLoading(true)
-      try {
-        const token = localStorage.getItem('token')
-        const res = await fetch(`/api/warehouse/items/${found.id}/serial-numbers?location=MAIN_WAREHOUSE&status=AVAILABLE`, { headers: { Authorization: `Bearer ${token}` } })
-        const data = await res.json()
-        setWhSnPicker({ itemId: found.id, itemName: found.itemName, partNumber: found.partNumber, sns: Array.isArray(data) ? data.map((s: any) => ({ id: s.id, serialNumber: s.serialNumber })) : [], selected: [], qty })
-      } catch { alert('Falha ao carregar números de série') }
-      finally { setWhSnLoading(false) }
-    } else {
-      setWhCart(prev => [...prev, { tempId: crypto.randomUUID(), itemId: found.id, itemName: found.itemName, partNumber: found.partNumber, tracksSerialNumbers: false, qty, serialNumberIds: [] }])
-      setWhPickerItemId(''); setWhPickerQty('1'); setWhItemSearch('')
-    }
-  }
-
-  const confirmSnSelection = () => {
-    if (!whSnPicker || whSnPicker.selected.length !== whSnPicker.qty) return
-    setWhCart(prev => [...prev, { tempId: crypto.randomUUID(), itemId: whSnPicker.itemId, itemName: whSnPicker.itemName, partNumber: whSnPicker.partNumber, tracksSerialNumbers: true, qty: whSnPicker.qty, serialNumberIds: whSnPicker.selected }])
-    setWhSnPicker(null); setWhPickerItemId(''); setWhPickerQty('1'); setWhItemSearch('')
-  }
-
-  const submitWhCart = async () => {
-    if (!wo || whCart.length === 0) return
-    setWhPartLoading(true)
-    const token = localStorage.getItem('token')
-    const errors: string[] = []
-    for (const entry of whCart) {
-      try {
-        const res = await fetch(`/api/interventions/${interventionId}/work-orders/${wo.id}/warehouse-parts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ itemId: entry.itemId, quantity: entry.qty, serialNumberIds: entry.tracksSerialNumbers ? entry.serialNumberIds : undefined }),
-        })
-        if (!res.ok) { const d = await res.json(); errors.push(`${entry.itemName}: ${d.error || 'Erro'}`) }
-      } catch { errors.push(`${entry.itemName}: Erro de rede`) }
-    }
-    setWhPartLoading(false)
-    if (errors.length === 0) {
-      setShowWhParts(false); setWhCart([]); setWhPickerItemId(''); setWhPickerQty('1'); setWhSnPicker(null)
-      onRefresh()
-    } else { alert(errors.join('\n')) }
-  }
-
   const updateSessionForm = (patch: Partial<typeof sessionForm>) => {
     const next = { ...sessionForm, ...patch }
     const dur = calcDuration(next.startDate, next.startTime, next.endDate, next.endTime)
@@ -303,6 +192,7 @@ export default function WorkOrderModal({
   const totalSessionHours = (wo?.sessions ?? []).reduce((s, x) => s + (x.duration ?? 0), 0)
 
   return (
+    <>
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
 
@@ -546,181 +436,24 @@ export default function WorkOrderModal({
                         )}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-xs text-gray-500">{part.quantity} × €{part.item.value.toFixed(2)}</p>
-                        <p className="font-semibold text-green-800">€{(part.quantity * part.item.value).toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">{part.quantity} un.</p>
                       </div>
                     </div>
                   ))}
-                  <div className="text-right text-sm font-semibold text-green-900 pt-1 border-t">
-                    Total: €{wo!.parts.reduce((s, p) => s + p.quantity * p.item.value, 0).toFixed(2)}
-                  </div>
                 </div>
               )}
 
-              {wo!.parts.length === 0 && !showTechParts && !showWhParts && (
+              {wo!.parts.length === 0 && (
                 <p className="text-sm text-gray-400 text-center py-2">Nenhuma peça utilizada.</p>
               )}
 
-              {canEdit && !showTechParts && !showWhParts && (
-                <div className="grid grid-cols-2 gap-3 pt-2">
-                  {assignedTechnicianId && (
-                    <button onClick={() => setShowTechParts(true)} className="flex items-center justify-center gap-2 py-3 border-2 border-dashed border-purple-300 rounded-lg text-sm text-purple-600 hover:border-purple-400 hover:bg-purple-50 transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                      Peças do Técnico
-                    </button>
-                  )}
-                  <button onClick={() => setShowWhParts(true)} className="flex items-center justify-center gap-2 py-3 border-2 border-dashed border-green-300 rounded-lg text-sm text-green-600 hover:border-green-400 hover:bg-green-50 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                    Peças de Armazém
-                  </button>
-                </div>
-              )}
-
-              {showTechParts && assignedTechnicianId && (
-                <div className="border border-purple-200 rounded-lg overflow-hidden">
-                  <div className="bg-purple-50 px-4 py-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-purple-800 uppercase tracking-wide">Peças do Técnico</p>
-                    <button onClick={() => setShowTechParts(false)} className="text-xs text-purple-400 hover:text-purple-600">✕ Fechar</button>
-                  </div>
-                  <div className="p-3">
-                    <PartsSelector
-                      technicianId={assignedTechnicianId}
-                      interventionId={interventionId}
-                      workOrderId={wo!.id}
-                      onClose={() => setShowTechParts(false)}
-                      onPartAdded={() => { onRefresh(); setShowTechParts(false) }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {showWhParts && (
-                <div className="border border-green-200 rounded-lg overflow-hidden">
-                  <div className="bg-green-50 px-4 py-2 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-green-800 uppercase tracking-wide">Peças de Armazém</p>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => { if (whScanning) { stopWhScanner(); setWhScanning(false) } else startWhScanner() }} className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${whScanning ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-white text-green-800 border border-green-300 hover:bg-green-100'}`}>
-                        <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5h2.25m0 0V2.25m0 2.25v2.25M3.75 19.5h2.25m0 0v2.25m0-2.25v-2.25M19.5 4.5h-2.25m0 0V2.25m0 2.25v2.25M19.5 19.5h-2.25m0 0v2.25m0-2.25v-2.25M7.5 9h9M7.5 12h9M7.5 15h9" />
-                        </svg>
-                        {whScanning ? 'Parar' : 'Scan'}
-                      </button>
-                      <button onClick={() => { stopWhScanner(); setWhScanning(false); setShowWhParts(false); setWhCart([]); setWhSnPicker(null) }} className="text-xs text-green-400 hover:text-green-600">✕ Fechar</button>
-                    </div>
-                  </div>
-
-                  {whScanning && (
-                    <div className="relative bg-black" style={{ height: 160 }}>
-                      <video ref={whVideoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                        <div className="border-2 border-white rounded opacity-70 w-2/3 h-10" />
-                      </div>
-                      <p className="absolute bottom-1 left-0 right-0 text-center text-white text-xs opacity-80">EAN-13</p>
-                      {whScanError && <div className="absolute top-1 left-1 right-1 bg-red-600 text-white text-xs rounded px-2 py-1 text-center">{whScanError}</div>}
-                    </div>
-                  )}
-                  {whScanFeedback && (
-                    <div className={`px-3 py-1.5 text-xs font-medium ${whScanFeedback.startsWith('✓') ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>{whScanFeedback}</div>
-                  )}
-
-                  <div className="p-3 space-y-3">
-                    {whSnPicker ? (
-                      <div className="bg-white border border-blue-200 rounded-lg p-3 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-900">{whSnPicker.itemName}</p>
-                            <p className="text-xs text-gray-500">{whSnPicker.partNumber}</p>
-                          </div>
-                          <button onClick={() => setWhSnPicker(null)} className="text-gray-400 hover:text-gray-600 text-xs px-2">✕</button>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Quantidade</label>
-                          <input type="number" min="1" max={whSnPicker.sns.length} value={whSnPicker.qty} onChange={e => setWhSnPicker(p => p ? { ...p, qty: parseInt(e.target.value) || 1, selected: [] } : p)} className="input text-gray-800 text-sm w-24" />
-                          <p className="text-xs text-gray-400 mt-1">{whSnPicker.sns.length} disponíveis</p>
-                        </div>
-                        <div className="border rounded-lg p-2 max-h-40 overflow-y-auto space-y-1">
-                          {whSnPicker.sns.length === 0 ? (
-                            <p className="text-xs text-gray-400 p-1">Sem números de série disponíveis</p>
-                          ) : whSnPicker.sns.map(sn => (
-                            <label key={sn.id} className={`flex items-center gap-2 p-1.5 rounded cursor-pointer text-sm ${whSnPicker.selected.includes(sn.id) ? 'bg-blue-100' : 'hover:bg-gray-50'}`}>
-                              <input type="checkbox" checked={whSnPicker.selected.includes(sn.id)} onChange={() => setWhSnPicker(p => { if (!p) return p; const sel = p.selected.includes(sn.id) ? p.selected.filter(id => id !== sn.id) : p.selected.length < p.qty ? [...p.selected, sn.id] : p.selected; return { ...p, selected: sel } })} disabled={!whSnPicker.selected.includes(sn.id) && whSnPicker.selected.length >= whSnPicker.qty} className="w-3.5 h-3.5" />
-                              <span className="font-mono text-xs">{sn.serialNumber}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <p className="text-xs text-gray-500">{whSnPicker.selected.length} / {whSnPicker.qty} selecionados</p>
-                        <button onClick={confirmSnSelection} disabled={whSnPicker.selected.length !== whSnPicker.qty} className="btn btn-primary text-xs py-1 px-3 w-full disabled:opacity-50">Adicionar à lista</button>
-                      </div>
-                    ) : (
-                      <>
-                        {whCart.length > 0 && (
-                          <div className="space-y-1">
-                            {whCart.map(entry => (
-                              <div key={entry.tempId} className="flex items-center gap-2 bg-white border border-green-200 rounded px-2 py-1">
-                                <div className="flex-1 min-w-0">
-                                  <span className="text-sm text-gray-800 truncate block">{entry.itemName}</span>
-                                  <span className="text-xs text-gray-500">{entry.partNumber}{entry.tracksSerialNumbers && ` · ${entry.serialNumberIds.length} SN(s)`}</span>
-                                </div>
-                                {!entry.tracksSerialNumbers && (
-                                  <input type="number" min="1" value={entry.qty} onChange={e => setWhCart(prev => prev.map(c => c.tempId === entry.tempId ? { ...c, qty: parseInt(e.target.value) || 1 } : c))} className="w-14 text-center border border-gray-300 rounded px-1 py-0.5 text-sm text-gray-800 focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                                )}
-                                <button onClick={() => setWhCart(prev => prev.filter(c => c.tempId !== entry.tempId))} className="text-red-400 hover:text-red-600 text-xs px-1">✕</button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div className="flex gap-2 items-start">
-                          <div ref={whItemSelectorRef} className="relative flex-1 min-w-0">
-                            <button
-                              ref={whDropdownBtnRef}
-                              type="button"
-                              onClick={() => {
-                                const rect = whDropdownBtnRef.current?.getBoundingClientRect()
-                                if (rect) setWhDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width })
-                                setWhItemSelectorOpen(o => !o)
-                              }}
-                              className="input text-gray-800 text-sm w-full text-left flex items-center justify-between"
-                            >
-                              <span className={whPickerItemId ? 'text-gray-800' : 'text-gray-400'}>
-                                {whPickerItemId ? (() => { const f = warehouseItems.find(i => i.id === whPickerItemId); return f ? `${f.itemName} (${f.partNumber})` : 'Selecionar...' })() : 'Selecionar artigo...'}
-                              </span>
-                              <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                            </button>
-                            {whItemSelectorOpen && whDropdownPos && (
-                              <div style={{ position: 'fixed', top: whDropdownPos.top, left: whDropdownPos.left, width: whDropdownPos.width, zIndex: 200 }} className="bg-white border border-gray-300 rounded-lg shadow-lg">
-                                <div className="p-2 border-b border-gray-200">
-                                  <input type="text" autoFocus placeholder="Pesquisar..." value={whItemSearch} onChange={e => setWhItemSearch(e.target.value)} className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                                </div>
-                                <ul className="overflow-y-auto" style={{ maxHeight: '13rem' }}>
-                                  {warehouseItems.filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())).map(item => (
-                                    <li key={item.id} onMouseDown={() => { setWhPickerItemId(item.id); setWhItemSelectorOpen(false); setWhItemSearch('') }} className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${whPickerItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
-                                      {item.itemName} ({item.partNumber}){item.tracksSerialNumbers ? ' 🔢' : ''}
-                                    </li>
-                                  ))}
-                                  {warehouseItems.filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(whItemSearch.toLowerCase())).length === 0 && (
-                                    <li className="px-3 py-2 text-sm text-gray-400">Sem resultados</li>
-                                  )}
-                                </ul>
-                              </div>
-                            )}
-                          </div>
-                          {!warehouseItems.find(i => i.id === whPickerItemId)?.tracksSerialNumbers && (
-                            <input type="number" min="1" className="input text-gray-800 text-sm w-20 shrink-0" value={whPickerQty} onChange={e => setWhPickerQty(e.target.value)} placeholder="Qtd" />
-                          )}
-                          <button type="button" onClick={addToCart} disabled={!whPickerItemId || whSnLoading} className="btn btn-secondary text-xs py-2 px-3 shrink-0">
-                            {whSnLoading ? '…' : '+'}
-                          </button>
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={submitWhCart} disabled={whPartLoading || whCart.length === 0} className="btn btn-primary text-sm disabled:opacity-50">
-                            {whPartLoading ? 'A guardar...' : `Guardar${whCart.length > 0 ? ` (${whCart.length})` : ''}`}
-                          </button>
-                          <button onClick={() => { stopWhScanner(); setWhScanning(false); setShowWhParts(false); setWhCart([]); setWhSnPicker(null) }} className="btn btn-secondary text-sm">Cancelar</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </div>
+              {canEdit && (
+                <button
+                  onClick={() => setShowAddPart(true)}
+                  className="w-full py-3 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                >
+                  + Adicionar Peça
+                </button>
               )}
             </>
           )}
@@ -747,5 +480,17 @@ export default function WorkOrderModal({
         )}
       </div>
     </div>
+
+    {showAddPart && wo && (
+      <AddPartModal
+        interventionId={interventionId}
+        workOrderId={wo.id}
+        technicianId={assignedTechnicianId}
+        warehouseItems={warehouseItems}
+        onPartAdded={onRefresh}
+        onClose={() => setShowAddPart(false)}
+      />
+    )}
+  </>
   )
 }

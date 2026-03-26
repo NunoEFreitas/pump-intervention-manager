@@ -138,7 +138,7 @@ export default function InterventionDetailPage() {
   const [clientPartItemId, setClientPartItemId] = useState('')
   const [clientPartSn, setClientPartSn] = useState('')
   const [clientPartLoading, setClientPartLoading] = useState(false)
-  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null }[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }[]>([])
   const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
   const [itemSearch, setItemSearch] = useState('')
   const itemSelectorRef = useRef<HTMLDivElement>(null)
@@ -507,7 +507,7 @@ export default function InterventionDetailPage() {
       })
       const data = await response.json()
       const list = Array.isArray(data) ? data : (data.items ?? [])
-      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null })))
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0 })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     }
@@ -720,8 +720,6 @@ export default function InterventionDetailPage() {
   const availableStatuses = getAvailableStatuses(userRole as any, intervention.status as any, !!intervention.assignedTo)
   const mapsUrl = getMapsUrl()
   const totalHours = workOrders.reduce((s, wo) => s + (wo.timeSpent || 0), 0)
-  const grandTotal = workOrders.flatMap(wo => wo.parts).reduce((s, p) => s + p.quantity * p.item.value, 0)
-
   return (
     <div>
       <div className="mb-6">
@@ -1259,7 +1257,6 @@ export default function InterventionDetailPage() {
             ) : (
               <div className="space-y-2">
                 {workOrders.map((wo) => {
-                  const woTotal = wo.parts.reduce((s: number, p: any) => s + p.quantity * p.item.value, 0)
                   return (
                     <button
                       key={wo.id}
@@ -1277,16 +1274,14 @@ export default function InterventionDetailPage() {
                         <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
                           {wo.timeSpent ? <span className="text-blue-700 font-medium">{wo.timeSpent}h</span> : null}
                           {wo.parts.length > 0 && <span>{wo.parts.length} pç</span>}
-                          {woTotal > 0 && <span className="font-semibold text-green-800">€{woTotal.toFixed(2)}</span>}
                           <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </div>
                       </div>
                     </button>
                   )
                 })}
-                <div className="border-t pt-3 flex justify-between items-center">
+                <div className="border-t pt-3">
                   <span className="font-semibold text-gray-700">{t('totalHours')}: {totalHours}</span>
-                  <span className="text-xl font-bold text-green-900">{t('grandTotal')}: €{grandTotal.toFixed(2)}</span>
                 </div>
               </div>
             )}

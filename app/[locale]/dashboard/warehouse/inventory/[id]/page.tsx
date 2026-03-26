@@ -255,7 +255,6 @@ export default function InventorySessionPage() {
         <SummaryCard label="Total artigos" value={session.entries.length} color="gray" />
         <SummaryCard label="Contados" value={`${session.entries.length - uncounted.length}/${session.entries.length}`} color="blue" />
         <SummaryCard label="Divergências" value={discrepancies.length} color={discrepancies.length > 0 ? 'red' : 'green'} />
-        <SummaryCard label="Impacto valor" value={`€${totalValue.toFixed(2)}`} color={totalValue > 0 ? 'red' : 'green'} />
       </div>
 
       {/* PENDING APPROVAL VIEW */}
@@ -306,9 +305,6 @@ export default function InventorySessionPage() {
                           <span className={`ml-1 font-bold ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
                             ({diff > 0 ? '+' : ''}{diff})
                           </span>
-                        </p>
-                        <p className={`text-xs ${valueImpact >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {valueImpact > 0 ? '+' : ''}€{valueImpact.toFixed(2)}
                         </p>
                       </div>
                     </label>
@@ -502,7 +498,7 @@ function EntryRow({ entry, isOpen, saving, onCount, onOpenSnModal }: {
           <div>Esperado: <span className="font-semibold text-gray-700">{entry.expectedQty}</span></div>
           {diff !== null && diff !== 0 && (
             <div className={`font-bold ${diff > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {diff > 0 ? '+' : ''}{diff} (€{(diff * entry.value).toFixed(2)})
+              {diff > 0 ? '+' : ''}{diff}
             </div>
           )}
           {diff === 0 && <div className="text-green-600 font-medium">✓ OK</div>}

@@ -74,9 +74,6 @@ export default function TechniciansPage() {
                   <span className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded text-sm font-medium">
                     {tech.totalItems} <span className="font-normal text-blue-600">{t('totalItems')}</span>
                   </span>
-                  <span className="px-3 py-1.5 bg-green-50 text-green-800 rounded text-sm font-medium">
-                    €{tech.totalValue.toFixed(2)}
-                  </span>
                 </div>
               </div>
 

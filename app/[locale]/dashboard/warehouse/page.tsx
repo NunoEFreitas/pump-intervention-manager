@@ -456,7 +456,6 @@ export default function WarehousePage() {
                     {item.equipmentTypeName && <span><span className="text-gray-400">Tipo:</span> {item.equipmentTypeName}</span>}
                     {item.brandName && <span><span className="text-gray-400">Marca:</span> {item.brandName}</span>}
                     {item.partNumber && <span><span className="text-gray-400">{t('partNumber')}:</span> {item.partNumber}</span>}
-                    <span className="ml-auto">€{item.value.toFixed(2)}</span>
                   </div>
                 </div>
               ))}

@@ -122,9 +122,6 @@ export default function TechnicianStockPage() {
             <span className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded text-sm font-medium">
               {technician.totalItems} <span className="font-normal text-blue-600">{t('totalItems')}</span>
             </span>
-            <span className="px-3 py-1.5 bg-green-50 text-green-800 rounded text-sm font-medium">
-              €{technician.totalValue.toFixed(2)}
-            </span>
           </div>
         </div>
       </div>
@@ -156,7 +153,6 @@ export default function TechnicianStockPage() {
                     <span className="px-3 py-1.5 bg-purple-50 text-purple-800 rounded text-sm font-medium">
                       {stock.tracksSerialNumbers ? (stock.serialNumbers?.length ?? 0) : stock.quantity} <span className="font-normal text-purple-600">un.</span>
                     </span>
-                    <span className="text-sm text-gray-500">€{stock.totalValue.toFixed(2)}</span>
                     <button
                       onClick={() => openModal('add', stock)}
                       className="btn btn-primary text-sm py-1 px-3"
@@ -178,7 +174,6 @@ export default function TechnicianStockPage() {
                 <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
                   {stock.partNumber && <span><span className="text-gray-400">{t('partNumber')}:</span> {stock.partNumber}</span>}
                   <span><span className="text-gray-400">{t('mainWarehouse')}:</span> {stock.mainWarehouseStock}</span>
-                  <span><span className="text-gray-400">{t('value')}:</span> €{stock.value.toFixed(2)}</span>
                 </div>
 
                 {/* Serial numbers — collapsible */}
