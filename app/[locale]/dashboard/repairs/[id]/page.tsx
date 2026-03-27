@@ -32,6 +32,8 @@ interface RepairJob {
   itemName: string
   partNumber: string
   tracksSerialNumbers: boolean
+  snExample: string | null
+  mainWarehouse: number
   snNumber: string | null
   sentByName: string | null
   completedByName: string | null
@@ -56,7 +58,7 @@ const STATUS_LABELS: Record<string, string> = {
   REPAIRED: 'Devolvido ao Stock',
   NOT_REPAIRED: 'Não Reparado',
   WRITTEN_OFF: 'Abate',
-  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
+  RETURNED_TO_CLIENT: 'Reparado',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -121,6 +123,17 @@ export default function RepairDetailPage() {
   // Complete modal (STOCK: choose stock/destruction; CLIENT: repaired/not)
   const [showCompleteModal, setShowCompleteModal] = useState(false)
   const [completeNotes, setCompleteNotes] = useState('')
+
+  // Swap modal (CLIENT jobs only)
+  const [showSwapModal, setShowSwapModal] = useState(false)
+  const [swapSnOptions, setSwapSnOptions] = useState<Array<{ id: string; serialNumber: string }>>([])
+  const [swapSnLoading, setSwapSnLoading] = useState(false)
+  const [swapReplacementSnId, setSwapReplacementSnId] = useState('')
+  const [swapClientSnMode, setSwapClientSnMode] = useState<'auto' | 'manual'>('auto')
+  const [swapClientSnValue, setSwapClientSnValue] = useState('')
+  const [swapNotes, setSwapNotes] = useState('')
+  const [swapError, setSwapError] = useState('')
+  const [swapSubmitting, setSwapSubmitting] = useState(false)
 
   // Quote form
   const [showQuoteForm, setShowQuoteForm] = useState(false)
@@ -242,17 +255,82 @@ export default function RepairDetailPage() {
     setPhotoMap(prev => { const n = { ...prev }; delete n[photoId]; return n })
   }
 
+  const TERMINAL_ACTIONS = ['return_to_stock', 'send_to_destruction', 'complete_repaired', 'complete_not_repaired', 'ovm_not_approved']
+
   const doAction = async (body: Record<string, unknown>) => {
     setActionLoading(true); setActionError('')
     try {
       const res = await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Erro') }
-      await fetchJob()
+      if (TERMINAL_ACTIONS.includes(body.action as string)) {
+        router.push(`/${locale}/dashboard/repairs`)
+      } else {
+        await fetchJob()
+      }
     } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Erro ao executar ação') }
     finally { setActionLoading(false) }
   }
 
+  const openSwapModal = async () => {
+    if (!job) return
+    setSwapReplacementSnId(''); setSwapClientSnMode(job.snExample && !job.clientItemSn ? 'auto' : 'manual'); setSwapClientSnValue(job.clientItemSn || ''); setSwapNotes(''); setSwapError('')
+    setShowSwapModal(true)
+    if (job.tracksSerialNumbers) {
+      setSwapSnLoading(true)
+      try {
+        const data = await fetch(
+          `/api/warehouse/items/${job.itemId}/serial-numbers?status=AVAILABLE&location=MAIN_WAREHOUSE`,
+          { headers: { Authorization: `Bearer ${token()}` } }
+        ).then(r => r.json())
+        setSwapSnOptions(Array.isArray(data) ? data.filter((s: any) => !s.isClientPart) : [])
+      } catch { setSwapSnOptions([]) } finally { setSwapSnLoading(false) }
+    }
+  }
+
+  const handleConfirmSwap = async () => {
+    if (!job?.clientPartId) return
+    setSwapSubmitting(true); setSwapError('')
+    try {
+      const body: Record<string, any> = { notes: swapNotes }
+      if (job.tracksSerialNumbers) {
+        body.replacementSnId = swapReplacementSnId
+        body.clientSnMode = swapClientSnMode
+        if (swapClientSnMode === 'manual') body.clientSnValue = swapClientSnValue
+      }
+      const res = await fetch(`/api/client-parts/${job.clientPartId}/swap`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSwapError(data.error || 'Erro ao processar troca'); return }
+      setShowSwapModal(false)
+      router.push(`/${locale}/dashboard/repairs/${data.repairJobId}`)
+    } catch { setSwapError('Erro inesperado') }
+    finally { setSwapSubmitting(false) }
+  }
+
   const handleStart = () => doAction({ action: 'start' })
+
+  const handleCancelClientRepair = async () => {
+    if (!job?.clientPartId) return
+    if (!confirm('Cancelar esta reparação? A peça voltará ao estado Pendente na intervenção.')) return
+    setActionLoading(true); setActionError('')
+    try {
+      const res = await fetch(`/api/client-parts/${job.clientPartId}/cancel-repair`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}` },
+      })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Erro') }
+      // Repair job was deleted — go back to the intervention
+      if (job.interventionId) {
+        router.push(`/${locale}/dashboard/interventions/${job.interventionId}`)
+      } else {
+        router.push(`/${locale}/dashboard/repairs`)
+      }
+    } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Erro ao cancelar reparação') }
+    finally { setActionLoading(false) }
+  }
   const handleAcceptQuote = () => doAction({ action: 'accept_quote' })
   const handleRejectQuote = async () => { await doAction({ action: 'reject_quote' }) }
   const handleSendToOvm = () => doAction({ action: 'send_to_ovm' })
@@ -335,17 +413,17 @@ export default function RepairDetailPage() {
   const currentIdx = timelineOrder.indexOf(job.status)
 
   return (
-    <div className="px-4 sm:px-0 max-w-4xl">
+    <div className="px-4 sm:px-0">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => router.push(`/${locale}/dashboard/repairs`)} className="text-gray-400 hover:text-gray-600 transition-colors">
+      <div className="flex items-start gap-3 mb-6">
+        <button onClick={() => router.push(`/${locale}/dashboard/repairs`)} className="mt-1 text-gray-400 hover:text-gray-600 transition-colors shrink-0">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             {job.type === 'CLIENT' && <span className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 px-1.5 py-0.5 rounded">CLIENTE</span>}
             {job.reference && <span className={`text-xs font-mono font-semibold px-1.5 py-0.5 rounded ${job.type === 'CLIENT' ? 'text-orange-700 bg-orange-50' : 'text-blue-600 bg-blue-50'}`}>{job.reference}</span>}
-            <h1 className="text-xl font-bold text-gray-900 truncate">{job.itemName}</h1>
+            <h1 className="text-xl font-bold text-gray-900">{job.itemName}</h1>
             <span className="text-sm text-gray-500">{job.partNumber}</span>
             {job.snNumber && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-mono">SN: {job.snNumber}</span>}
             <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${STATUS_COLORS[job.status] ?? 'bg-gray-100 text-gray-600'}`}>{STATUS_LABELS[job.status] ?? job.status}</span>
@@ -356,9 +434,9 @@ export default function RepairDetailPage() {
 
       {actionError && <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{actionError}</div>}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-6">
         {/* ── Left column ─────────────────────────────────────────────────── */}
-        <div className="lg:col-span-2 space-y-5">
+        <div className="space-y-5">
           {/* Client info card — CLIENT type only */}
           {job.type === 'CLIENT' && job.clientName && (
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
@@ -375,19 +453,41 @@ export default function RepairDetailPage() {
           {/* Info card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Informação</h2>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-              <div><dt className="text-gray-500">Criada em</dt><dd className="font-medium text-gray-900">{new Date(job.sentAt).toLocaleDateString('pt-PT')}</dd></div>
-              {job.sentByName && <div><dt className="text-gray-500">Criada por</dt><dd className="font-medium text-gray-900">{job.sentByName}</dd></div>}
-              {job.completedAt && <div><dt className="text-gray-500">Concluída em</dt><dd className="font-medium text-gray-900">{new Date(job.completedAt).toLocaleDateString('pt-PT')}</dd></div>}
-              {job.completedByName && <div><dt className="text-gray-500">Concluída por</dt><dd className="font-medium text-gray-900">{job.completedByName}</dd></div>}
-              {job.snNumber && <div className="col-span-2"><dt className="text-gray-500">Número de série</dt><dd className="font-semibold font-mono text-gray-900">{job.snNumber}</dd></div>}
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+              <div><dt className="text-gray-500 text-xs">Criada em</dt><dd className="font-medium text-gray-900">{new Date(job.sentAt).toLocaleDateString('pt-PT')}</dd></div>
+              {job.sentByName && <div><dt className="text-gray-500 text-xs">Criada por</dt><dd className="font-medium text-gray-900">{job.sentByName}</dd></div>}
+              {job.completedAt && <div><dt className="text-gray-500 text-xs">Concluída em</dt><dd className="font-medium text-gray-900">{new Date(job.completedAt).toLocaleDateString('pt-PT')}</dd></div>}
+              {job.completedByName && <div><dt className="text-gray-500 text-xs">Concluída por</dt><dd className="font-medium text-gray-900">{job.completedByName}</dd></div>}
+              <div>
+                <dt className="text-gray-500 text-xs">Técnico responsável</dt>
+                <dd>
+                  {techLoading ? (
+                    <span className="text-sm text-gray-400">A carregar...</span>
+                  ) : (
+                    <select
+                      disabled={isTerminal}
+                      value={job.repairedByTechId ?? ''}
+                      onChange={async e => {
+                        const val = e.target.value
+                        setJob(prev => prev ? { ...prev, repairedByTechId: val || null, repairedByTechName: technicians.find(t => t.id === val)?.name ?? null } : prev)
+                        await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ repairedByTechId: val || null }) })
+                      }}
+                      className="input w-full text-gray-800 text-sm disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:shadow-none mt-0.5"
+                    >
+                      <option value="">— Não atribuído —</option>
+                      {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  )}
+                </dd>
+              </div>
+              {job.snNumber && <div><dt className="text-gray-500 text-xs">Número de série</dt><dd className="font-semibold font-mono text-gray-900">{job.snNumber}</dd></div>}
               {job.type === 'CLIENT' && job.interventionId && (
-                <div className="col-span-2">
-                  <dt className="text-gray-500">Intervenção</dt>
+                <div>
+                  <dt className="text-gray-500 text-xs">Intervenção</dt>
                   <dd className="font-medium">
                     <button
                       onClick={() => router.push(`/${locale}/dashboard/interventions/${job.interventionId}`)}
-                      className="text-blue-600 hover:text-blue-800 hover:underline font-mono"
+                      className="text-blue-600 hover:text-blue-800 hover:underline font-mono text-sm"
                     >
                       {job.interventionReference ?? job.interventionId}
                     </button>
@@ -396,7 +496,7 @@ export default function RepairDetailPage() {
               )}
               {job.type === 'CLIENT' && (
                 <div className="col-span-2">
-                  <dt className="text-gray-500">Nº série do artigo do cliente</dt>
+                  <dt className="text-gray-500 text-xs">Nº série do artigo do cliente</dt>
                   <dd className="font-semibold font-mono text-gray-900">
                     <input
                       type="text"
@@ -410,40 +510,20 @@ export default function RepairDetailPage() {
                 </div>
               )}
             </dl>
-
-            {/* Technician who performed the repair */}
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Técnico responsável pela reparação</label>
-              {techLoading ? (
-                <p className="text-sm text-gray-400">A carregar...</p>
-              ) : (
-                <select
-                  disabled={isTerminal}
-                  value={job.repairedByTechId ?? ''}
-                  onChange={async e => {
-                    const val = e.target.value
-                    setJob(prev => prev ? { ...prev, repairedByTechId: val || null, repairedByTechName: technicians.find(t => t.id === val)?.name ?? null } : prev)
-                    await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ repairedByTechId: val || null }) })
-                  }}
-                  className="input w-full text-gray-800 disabled:bg-gray-50 disabled:text-gray-500"
-                >
-                  <option value="">— Não atribuído —</option>
-                  {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              )}
-            </div>
           </div>
 
           {/* Problem */}
           <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Detalhes da Avaria</h2>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Problema</label>
-              <textarea rows={3} disabled={isTerminal} value={problem} onChange={e => { setProblem(e.target.value); scheduleSave('problem', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Descrição do problema..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Estado do artigo</label>
-              <textarea rows={2} disabled={isTerminal} value={conditionDesc} onChange={e => { setConditionDesc(e.target.value); scheduleSave('conditionDescription', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Estado do artigo na entrada..." />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Problema</label>
+                <textarea rows={3} disabled={isTerminal} value={problem} onChange={e => { setProblem(e.target.value); scheduleSave('problem', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Descrição do problema..." />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estado do artigo</label>
+                <textarea rows={3} disabled={isTerminal} value={conditionDesc} onChange={e => { setConditionDesc(e.target.value); scheduleSave('conditionDescription', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Estado do artigo na entrada..." />
+              </div>
             </div>
             <div>
               <label className="flex items-center gap-2 cursor-pointer mb-2">
@@ -594,6 +674,20 @@ export default function RepairDetailPage() {
                 </>
               )}
 
+              {/* Trocar / Cancelar — CLIENT, active statuses */}
+              {job.type === 'CLIENT' && job.clientPartId && ['PENDING', 'IN_REPAIR'].includes(job.status) && (
+                <>
+                  <button onClick={openSwapModal} disabled={actionLoading} className="w-full btn bg-indigo-600 hover:bg-indigo-700 text-white text-sm">
+                    Trocar ao Cliente
+                  </button>
+                  {job.status === 'PENDING' && (
+                    <button onClick={handleCancelClientRepair} disabled={actionLoading} className="w-full btn bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-sm">
+                      Cancelar Reparação
+                    </button>
+                  )}
+                </>
+              )}
+
               {/* QUOTE state — CLIENT */}
               {job.status === 'QUOTE' && (
                 <>
@@ -696,6 +790,108 @@ export default function RepairDetailPage() {
         </div>
       )}
 
+      {/* Swap modal */}
+      {showSwapModal && job && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-1">Trocar Peça ao Cliente</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Uma unidade de <strong>{job.itemName}</strong> será retirada do stock normal e entregue ao técnico. A peça do cliente entra no nosso stock para reparação.
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 text-xs text-blue-800 space-y-1">
+                <div>— 1 unidade do stock normal ({job.mainWarehouse} disponível)</div>
+                <div>+ 1 unidade no stock do técnico</div>
+                <div>Peça do cliente abre reparação de stock (REP-xxx)</div>
+                {['PENDING', 'IN_REPAIR'].includes(job.status) && <div className="text-orange-700 font-medium">A reparação de cliente atual será fechada como Não Reparada.</div>}
+              </div>
+
+              {job.mainWarehouse < 1 && (
+                <p className="text-sm text-red-600 bg-red-50 rounded p-3 mb-4">Sem stock disponível para substituição.</p>
+              )}
+
+              {job.tracksSerialNumbers && (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Peça de substituição <span className="text-red-500">*</span>
+                      <span className="text-xs font-normal text-gray-400 ml-1">— SN a entregar ao técnico</span>
+                    </label>
+                    {swapSnLoading ? (
+                      <p className="text-sm text-gray-500 py-2">A carregar...</p>
+                    ) : swapSnOptions.length === 0 ? (
+                      <p className="text-sm text-red-600 bg-red-50 rounded p-3">Sem números de série disponíveis no armazém.</p>
+                    ) : (
+                      <div className="border rounded-lg max-h-36 overflow-y-auto divide-y divide-gray-100">
+                        {swapSnOptions.map(sn => (
+                          <label key={sn.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                            <input type="radio" name="swapReplacementSn" value={sn.id} checked={swapReplacementSnId === sn.id} onChange={() => setSwapReplacementSnId(sn.id)} className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm font-mono">{sn.serialNumber}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nº série da peça recebida
+                      <span className="text-xs font-normal text-gray-400 ml-1">— como registar no nosso stock</span>
+                    </label>
+                    {job.snExample ? (
+                      <>
+                        <div className="flex gap-3 mb-2">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="swapClientSnMode" value="auto" checked={swapClientSnMode === 'auto'} onChange={() => setSwapClientSnMode('auto')} className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">Auto-gerar ({job.snExample}-N)</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="swapClientSnMode" value="manual" checked={swapClientSnMode === 'manual'} onChange={() => setSwapClientSnMode('manual')} className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">Especificar</span>
+                          </label>
+                        </div>
+                        {swapClientSnMode === 'auto' && (
+                          <p className="text-xs text-gray-500 bg-gray-50 rounded p-2">
+                            Gerado automaticamente com prefixo <strong>{job.snExample}</strong>.
+                            {job.clientItemSn && <> SN do cliente (<span className="font-mono">{job.clientItemSn}</span>) será substituído.</>}
+                          </p>
+                        )}
+                        {swapClientSnMode === 'manual' && (
+                          <input type="text" className="input w-full text-sm font-mono" placeholder={`ex: ${job.snExample}-X`} value={swapClientSnValue} onChange={e => setSwapClientSnValue(e.target.value)} />
+                        )}
+                      </>
+                    ) : (
+                      <input type="text" className="input w-full text-sm font-mono" placeholder="ex: SN-001" value={swapClientSnValue} onChange={e => setSwapClientSnValue(e.target.value)} />
+                    )}
+                  </div>
+                </>
+              )}
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notas (opcional)</label>
+                <textarea className="input w-full text-gray-800 resize-none" rows={2} placeholder="Observações..." value={swapNotes} onChange={e => setSwapNotes(e.target.value)} />
+              </div>
+              {swapError && <p className="text-sm text-red-600 mb-3">{swapError}</p>}
+            </div>
+            <div className="flex justify-end gap-3 px-6 pb-6">
+              <button onClick={() => setShowSwapModal(false)} className="btn btn-secondary" disabled={swapSubmitting}>Cancelar</button>
+              <button
+                onClick={handleConfirmSwap}
+                className="btn btn-primary"
+                disabled={
+                  swapSubmitting ||
+                  job.mainWarehouse < 1 ||
+                  (job.tracksSerialNumbers && (!swapReplacementSnId || swapSnOptions.length === 0)) ||
+                  (job.tracksSerialNumbers && (swapClientSnMode === 'manual' || !job.snExample) && !swapClientSnValue.trim())
+                }
+              >
+                {swapSubmitting ? 'A processar...' : 'Confirmar Troca'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Complete STOCK modal */}
       {showCompleteModal && job.type !== 'CLIENT' && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
@@ -731,7 +927,7 @@ export default function RepairDetailPage() {
             </div>
             <div className="space-y-2">
               <button onClick={() => handleCompleteClient(true)} disabled={actionLoading} className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm">
-                Reparado — Devolver ao Cliente
+                Reparado
               </button>
               <button onClick={() => handleCompleteClient(false)} disabled={actionLoading} className="w-full btn bg-red-500 hover:bg-red-600 text-white text-sm">
                 Não Reparado

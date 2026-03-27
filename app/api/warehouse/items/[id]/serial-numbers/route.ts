@@ -123,7 +123,7 @@ export async function POST(
 
       const prefix = snExamplePrefix + '-'
       const maxSuffix = allExisting.reduce((max, sn) => {
-        if (sn.serialNumber.startsWith(prefix)) {
+        if (sn.serialNumber?.startsWith(prefix)) {
           const num = parseInt(sn.serialNumber.slice(prefix.length))
           if (!isNaN(num) && num > max) return num
         }

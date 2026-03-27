@@ -18,7 +18,8 @@ export async function POST(
     const now = new Date()
 
     const [clientPart] = await prisma.$queryRaw<any[]>`
-      SELECT sn.*, wi."itemName",
+      SELECT sn.id, sn."itemId", sn."technicianId", sn."clientPartStatus", sn."clientRepairJobId",
+             wi."itemName",
              rj.status AS "repairStatus"
       FROM "SerialNumberStock" sn
       JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
@@ -38,24 +39,16 @@ export async function POST(
       return NextResponse.json({ error: 'Técnico não encontrado' }, { status: 400 })
     }
 
-    // Move SN to the target technician as a regular (non-client) part
+    // Move SN to the target technician — keep isClientPart=true so it remains visible in intervention
     await prisma.$executeRaw`
       UPDATE "SerialNumberStock"
       SET location = 'TECHNICIAN',
           status = 'AVAILABLE',
-          "isClientPart" = false,
+          "isClientPart" = true,
           "clientPartStatus" = 'RESOLVED',
           "technicianId" = ${targetTechnicianId},
           "updatedAt" = ${now}::timestamptz
       WHERE id = ${serialNumberId}
-    `
-
-    // Increment target technician stock
-    await prisma.$executeRaw`
-      INSERT INTO "TechnicianStock" (id, "itemId", "technicianId", quantity, "createdAt", "updatedAt")
-      VALUES (${crypto.randomUUID()}, ${clientPart.itemId}, ${targetTechnicianId}, 1, ${now}::timestamptz, ${now}::timestamptz)
-      ON CONFLICT ("itemId", "technicianId")
-      DO UPDATE SET quantity = "TechnicianStock".quantity + 1, "updatedAt" = ${now}::timestamptz
     `
 
     // Record movement

@@ -33,7 +33,7 @@ const STATUS_LABELS: Record<string, string> = {
   REPAIRED: 'Devolvido ao Stock',
   NOT_REPAIRED: 'Não Reparado',
   WRITTEN_OFF: 'Abate',
-  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
+  RETURNED_TO_CLIENT: 'Reparado',
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -68,7 +68,7 @@ const FILTER_OPTIONS = [
   { value: 'REPAIRED', label: 'Devolvido ao Stock' },
   { value: 'NOT_REPAIRED', label: 'Não Reparado' },
   { value: 'WRITTEN_OFF', label: 'Abate' },
-  { value: 'RETURNED_TO_CLIENT', label: 'Entregue ao Cliente' },
+  { value: 'RETURNED_TO_CLIENT', label: 'Reparado' },
 ]
 
 interface WarehouseItemOption {
@@ -156,7 +156,7 @@ export default function RepairsPage() {
     setCrItemLoading(true)
     try {
       const token = localStorage.getItem('token')
-      const data = await fetch(`/api/warehouse?search=${encodeURIComponent(q)}&limit=20`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      const data = await fetch(`/api/warehouse?search=${encodeURIComponent(q)}&limit=20&minStock=1`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       setCrItemOptions(Array.isArray(data.items) ? data.items : [])
     } catch { setCrItemOptions([]) } finally { setCrItemLoading(false) }
   }
@@ -338,45 +338,6 @@ export default function RepairsPage() {
             <div className="p-6 space-y-4">
               <h2 className="text-lg font-bold text-gray-900">Criar Reparação</h2>
 
-              {/* Type */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="crType" value="STOCK" checked={crType === 'STOCK'} onChange={() => { setCrType('STOCK'); setCrSnId(''); setCrSnOptions([]); if (crSelectedItem?.tracksSerialNumbers) selectItem(crSelectedItem) }} className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm font-medium">Stock</span>
-                    <span className="text-xs text-gray-400">(REP-xxx)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="crType" value="CLIENT" checked={crType === 'CLIENT'} onChange={() => { setCrType('CLIENT'); setCrSnId(''); setCrSnOptions([]) }} className="w-4 h-4 text-orange-500" />
-                    <span className="text-sm font-medium">Cliente</span>
-                    <span className="text-xs text-gray-400">(REC-xxx)</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Client — only for CLIENT type */}
-              {crType === 'CLIENT' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
-                    <select className="input w-full text-gray-800" value={crClientId} onChange={e => setCrClientId(e.target.value)}>
-                      <option value="">— Sem cliente associado —</option>
-                      {crClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Número de série do artigo</label>
-                    <input
-                      type="text"
-                      className="input w-full text-gray-800 font-mono"
-                      placeholder="Ex: SN-12345"
-                      value={crClientSn}
-                      onChange={e => setCrClientSn(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
 
               {/* Item search */}
               <div className="relative">

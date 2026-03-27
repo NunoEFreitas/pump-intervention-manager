@@ -31,6 +31,11 @@ model User {
   itemMovementsCreated    ItemMovement[] @relation("MovementCreatedBy")
   workOrdersCreated       WorkOrder[] @relation("WorkOrderCreatedBy")
   clientPartsPickedUp     SerialNumberStock[] @relation("ClientPartPickedUpBy")
+  clientPartsReturned             SerialNumberStock[] @relation("ClientPartReturnedBy")
+  clientPartsReturnedRegistered   SerialNumberStock[] @relation("ClientPartReturnedRegisteredBy")
+  clientPartsReceived             SerialNumberStock[] @relation("ClientPartReceivedBy")
+  clientPartsSentOut              SerialNumberStock[] @relation("ClientPartSentOutBy")
+  clientPartsSentOutTechnician    SerialNumberStock[] @relation("ClientPartSentOutTechnician")
   workOrderPartsUsed      WorkOrderPart[] @relation("WorkOrderPartUsedBy")
 
   @@index([role])
@@ -246,7 +251,7 @@ model SerialNumberStock {
   id              String                  @id @default(uuid())
   itemId          String
   item            WarehouseItem           @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  serialNumber    String                  // The actual serial number
+  serialNumber      String?                 // The actual serial number (optional for client parts)
   location        StockLocation           @default(MAIN_WAREHOUSE)
   technicianId    String?
   technician      User?                   @relation("TechnicianSerialNumbers", fields: [technicianId], references: [id])
@@ -258,8 +263,22 @@ model SerialNumberStock {
   intervention      Intervention?           @relation("ClientPartSerialNumbers", fields: [interventionId], references: [id])
   pickedUpById      String?
   pickedUpBy        User?                   @relation("ClientPartPickedUpBy", fields: [pickedUpById], references: [id])
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  faultDescription    String?               // Description of the fault (for client parts)
+  receivedAtWarehouseAt    DateTime?          // When the part was received at the warehouse (IN_TRANSIT → PENDING)
+  receivedAtWarehouseById  String?            // Who received the part at the warehouse
+  receivedAtWarehouseBy    User?              @relation("ClientPartReceivedBy", fields: [receivedAtWarehouseById], references: [id])
+  sentOutAt                DateTime?          // When the part was sent out to the client (SWAP/REPAIR → RETURNING)
+  sentOutById              String?            // User who registered the send-out
+  sentOutBy                User?              @relation("ClientPartSentOutBy", fields: [sentOutById], references: [id])
+  sentOutTechnicianId      String?            // Technician who will deliver the part to the client
+  sentOutTechnician        User?              @relation("ClientPartSentOutTechnician", fields: [sentOutTechnicianId], references: [id])
+  returnedToClientAt  DateTime?             // When the part was returned to the client
+  returnedToClientById       String?        // Technician who delivered the part to the client
+  returnedToClientBy         User?          @relation("ClientPartReturnedBy", fields: [returnedToClientById], references: [id])
+  returnedToClientRegisteredById String?    // User who registered the delivery in the system
+  returnedToClientRegisteredBy   User?      @relation("ClientPartReturnedRegisteredBy", fields: [returnedToClientRegisteredById], references: [id])
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
   movements         MovementSerialNumber[]
 
   @@unique([itemId, serialNumber]) // Serial number must be unique per item
@@ -273,6 +292,7 @@ model SerialNumberStock {
 enum StockLocation {
   MAIN_WAREHOUSE
   TECHNICIAN
+  CLIENT_WAREHOUSE
   USED
   REPAIR
   DESTRUCTION
@@ -286,10 +306,12 @@ enum SerialStatus {
 }
 
 enum ClientPartStatus {
-  PENDING   // Awaiting decision (swap or repair)
-  SWAP      // Swap chosen — replacement issued to technician
-  REPAIR    // Client repair job opened
-  RESOLVED  // Returned to client
+  IN_TRANSIT  // Collected from client, en route to us
+  PENDING     // Received — awaiting decision (swap or repair)
+  SWAP        // Swap chosen — replacement issued to technician
+  REPAIR      // Client repair job opened
+  RETURNING   // Sent out, en route back to client
+  RESOLVED    // Delivered to client
 }
 
 // Join table for movements and serial numbers

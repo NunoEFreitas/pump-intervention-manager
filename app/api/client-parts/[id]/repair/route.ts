@@ -24,7 +24,8 @@ export async function POST(
 
     // Fetch the client part
     const [clientPart] = await prisma.$queryRaw<any[]>`
-      SELECT sn.*, wi."itemName", wi."partNumber"
+      SELECT sn.id, sn."itemId", sn."technicianId", sn."interventionId", sn."clientPartStatus", sn."serialNumber", sn.location,
+             wi."itemName", wi."partNumber"
       FROM "SerialNumberStock" sn
       JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
       WHERE sn.id = ${serialNumberId} AND sn."isClientPart" = true

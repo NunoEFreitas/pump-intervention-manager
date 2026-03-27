@@ -13,6 +13,7 @@ interface WarehouseItem {
   repairStock: number
   destructionStock: number
   clientPartsCount: number
+  ean13: string | null
   tracksSerialNumbers: boolean
   totalTechnicianStock: number
   totalStock: number
@@ -59,6 +60,7 @@ interface ClientPart {
   id: string
   itemId: string
   serialNumber: string
+  faultDescription: string | null
   clientPartStatus: string | null
   clientRepairJobId: string | null
   interventionId: string | null
@@ -83,7 +85,7 @@ const REPAIR_STATUS_LABELS: Record<string, string> = {
   REPAIRED: 'Reparada',
   NOT_REPAIRED: 'Não Reparada',
   WRITTEN_OFF: 'Destruição',
-  RETURNED_TO_CLIENT: 'Devolvida ao Cliente',
+  RETURNED_TO_CLIENT: 'Reparado',
 }
 
 const REPAIR_STATUS_COLORS: Record<string, string> = {
@@ -167,6 +169,10 @@ export default function WarehousePage() {
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
   const [cpLoading, setCpLoading] = useState(false)
   const [cpModal, setCpModal] = useState<ModalType>(null)
+  // Dar Saída modal
+  const [sendOutModal, setSendOutModal] = useState<ClientPart | null>(null)
+  const [sendOutTechId, setSendOutTechId] = useState('')
+  const [sendOutSubmitting, setSendOutSubmitting] = useState(false)
   // Return-to-tech modal
   const [returnModal, setReturnModal] = useState<ClientPart | null>(null)
   const [returnTechId, setReturnTechId] = useState('')
@@ -296,8 +302,8 @@ export default function WarehousePage() {
   }, [])
 
   const openCpModal = async (type: ModalType, part: ClientPart) => {
-    setCpSelected(part); setCpModal(type); setCpNotes(''); setCpProblem(''); setCpError('')
-    setCpReplacementSnId(''); setCpClientSnMode('auto'); setCpClientSnValue(''); setCpSnOptions([])
+    setCpSelected(part); setCpModal(type); setCpNotes(''); setCpProblem(type === 'repair' ? (part.faultDescription ?? '') : ''); setCpError('')
+    setCpReplacementSnId(''); setCpClientSnMode(part.snExample && !part.serialNumber ? 'auto' : 'manual'); setCpClientSnValue(part.serialNumber || ''); setCpSnOptions([])
     if (type === 'swap' && part.tracksSerialNumbers) {
       setCpSnLoading(true)
       try {
@@ -331,7 +337,7 @@ export default function WarehousePage() {
       const data = await res.json()
       if (!res.ok) { setCpError(data.error || 'Erro ao processar troca'); return }
       closeCpModal()
-      router.push(`/${locale}/dashboard/repairs/${data.repairJobId}`)
+      fetchClientParts()
     } finally { setCpSubmitting(false) }
   }
 
@@ -371,7 +377,73 @@ export default function WarehousePage() {
     finally { setReturnSubmitting(false) }
   }
 
-  const cpPendingCount = clientParts.filter(p => !p.clientPartStatus || p.clientPartStatus === 'PENDING').length
+  const handleCancelClientPart = async (partId: string) => {
+    if (!confirm('Cancelar recolha desta peça?')) return
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/client-parts/${partId}/cancel`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error || 'Erro ao cancelar'); return }
+    fetchClientParts()
+  }
+
+  const handleReceivePart = async (partId: string) => {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/client-parts/${partId}/receive`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error || 'Erro ao dar entrada da peça'); return }
+    fetchClientParts()
+  }
+
+  const handleSendOut = (part: ClientPart) => {
+    setSendOutTechId(part.technicianId || '')
+    setSendOutModal(part)
+  }
+
+  const submitSendOut = async () => {
+    if (!sendOutModal) return
+    setSendOutSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/client-parts/${sendOutModal.id}/send-out`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ technicianId: sendOutTechId || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Erro ao dar saída da peça'); return }
+      setSendOutModal(null)
+      fetchClientParts()
+    } finally {
+      setSendOutSubmitting(false)
+    }
+  }
+
+  const handleReturnToClient = async (partId: string) => {
+    if (!confirm('Confirmar entrega ao cliente?')) return
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/client-parts/${partId}/return-to-client`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) { alert(data.error || 'Erro ao confirmar entrega'); return }
+    fetchClientParts()
+  }
+
+  const cpPendingCount = clientParts.filter(p =>
+    p.clientPartStatus === 'IN_TRANSIT' ||
+    !p.clientPartStatus ||
+    p.clientPartStatus === 'PENDING' ||
+    p.clientPartStatus === 'SWAP' ||
+    p.clientPartStatus === 'RETURNING' ||
+    (p.clientPartStatus === 'REPAIR' && p.repairStatus && TERMINAL_REPAIR_STATUSES.includes(p.repairStatus))
+  ).length
 
   return (
     <>
@@ -442,14 +514,15 @@ export default function WarehousePage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <h3 className="text-lg font-semibold text-gray-900 truncate">{item.itemName}</h3>
+                      {item.ean13 && <span className="shrink-0 text-xs font-mono text-gray-400">{item.ean13}</span>}
                       {item.tracksSerialNumbers && <span className="shrink-0 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN</span>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded text-sm font-medium">{item.mainWarehouse} <span className="font-normal text-blue-600">Armazém</span></span>
-                      <span className="px-3 py-1.5 bg-green-50 text-green-800 rounded text-sm font-medium">{item.totalTechnicianStock} <span className="font-normal text-green-600">Técnicos</span></span>
-                      {item.repairStock > 0 && <span className="px-3 py-1.5 bg-yellow-50 text-yellow-800 rounded text-sm font-medium">{item.repairStock} <span className="font-normal text-yellow-600">Reparação</span></span>}
-                      {item.clientPartsCount > 0 && <span className="px-3 py-1.5 bg-orange-50 text-orange-800 rounded text-sm font-medium">{item.clientPartsCount} <span className="font-normal text-orange-600">Cliente</span></span>}
-                      {item.destructionStock > 0 && <span className="px-3 py-1.5 bg-red-50 text-red-800 rounded text-sm font-medium">{item.destructionStock} <span className="font-normal text-red-600">Destruição</span></span>}
+                      {item.mainWarehouse > 0 && <div className="px-3 py-1.5 bg-blue-50 rounded-lg text-center"><p className="text-xs text-blue-600 font-medium">Armazém</p><p className="text-lg font-bold text-blue-900">{item.mainWarehouse}</p></div>}
+                      {item.totalTechnicianStock > 0 && <div className="px-3 py-1.5 bg-green-50 rounded-lg text-center"><p className="text-xs text-green-600 font-medium">Técnicos</p><p className="text-lg font-bold text-green-900">{item.totalTechnicianStock}</p></div>}
+                      {item.repairStock > 0 && <div className="px-3 py-1.5 bg-orange-50 rounded-lg text-center"><p className="text-xs text-orange-600 font-medium">Em Reparação</p><p className="text-lg font-bold text-orange-900">{item.repairStock}</p></div>}
+                      {item.clientPartsCount > 0 && <div className="px-3 py-1.5 bg-yellow-50 rounded-lg text-center"><p className="text-xs text-yellow-600 font-medium">Cliente</p><p className="text-lg font-bold text-yellow-900">{item.clientPartsCount}</p></div>}
+                      {item.destructionStock > 0 && <div className="px-3 py-1.5 bg-red-50 rounded-lg text-center"><p className="text-xs text-red-600 font-medium">Destruição</p><p className="text-lg font-bold text-red-900">{item.destructionStock}</p></div>}
                     </div>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
@@ -557,6 +630,15 @@ export default function WarehousePage() {
                       <span className="shrink-0 font-mono text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{part.serialNumber}</span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      {part.clientPartStatus === 'IN_TRANSIT' && (
+                        <span className="px-2.5 py-1.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Em Trânsito</span>
+                      )}
+                      {part.clientPartStatus === 'SWAP' && (
+                        <span className="px-2.5 py-1.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Trocada</span>
+                      )}
+                      {part.clientPartStatus === 'RETURNING' && (
+                        <span className="px-2.5 py-1.5 rounded text-xs font-medium bg-purple-100 text-purple-800">A Devolver</span>
+                      )}
                       {part.clientPartStatus === 'REPAIR' && part.repairStatus && (
                         <span className={`px-2.5 py-1.5 rounded text-xs font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
                           {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
@@ -582,7 +664,17 @@ export default function WarehousePage() {
                   </div>
                   {/* Actions row */}
                   <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
-                    {(!part.clientPartStatus || part.clientPartStatus === 'PENDING') && (
+                    {part.clientPartStatus === 'IN_TRANSIT' && (
+                      <>
+                        <button onClick={() => handleReceivePart(part.id)} className="text-xs px-2.5 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                          Dar Entrada
+                        </button>
+                        <button onClick={() => handleCancelClientPart(part.id)} className="text-xs px-2.5 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+                          Cancelar
+                        </button>
+                      </>
+                    )}
+                    {part.clientPartStatus === 'PENDING' && (
                       <>
                         <button
                           onClick={() => openCpModal('swap', part)}
@@ -597,6 +689,11 @@ export default function WarehousePage() {
                         </button>
                       </>
                     )}
+                    {part.clientPartStatus === 'SWAP' && (
+                      <button onClick={() => handleSendOut(part)} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700">
+                        Dar Saída
+                      </button>
+                    )}
                     {part.clientPartStatus === 'REPAIR' && (
                       <>
                         {part.clientRepairJobId && (
@@ -605,8 +702,8 @@ export default function WarehousePage() {
                           </button>
                         )}
                         {part.repairStatus && TERMINAL_REPAIR_STATUSES.includes(part.repairStatus) && (
-                          <button onClick={() => handleReturnToTech(part)} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700">
-                            Devolver ao Técnico
+                          <button onClick={() => handleSendOut(part)} className="text-xs px-2.5 py-1 bg-green-600 text-white rounded hover:bg-green-700">
+                            Dar Saída
                           </button>
                         )}
                       </>
@@ -655,6 +752,36 @@ export default function WarehousePage() {
             <div className="flex gap-3">
               <button onClick={executeTransfer} disabled={transferring || (transferModal.tracksSerialNumbers ? selectedSns.length === 0 : transferModal.mainWarehouse < 1)} className="btn btn-primary flex-1 disabled:opacity-50">{transferring ? 'A transferir...' : 'Confirmar Transferência'}</button>
               <button onClick={() => setTransferModal(null)} disabled={transferring} className="btn btn-secondary">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Dar Saída modal ─────────────────────────────────────────────────── */}
+      {sendOutModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-6 space-y-4">
+              <h2 className="text-lg font-bold text-gray-900">Dar Saída — Envio ao Cliente</h2>
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">{sendOutModal.itemName}</span>
+                {sendOutModal.serialNumber && <span className="ml-1 font-mono text-xs text-gray-400">({sendOutModal.serialNumber})</span>}
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Técnico que efectua a entrega</label>
+                <select className="input text-gray-800" value={sendOutTechId} onChange={e => setSendOutTechId(e.target.value)}>
+                  <option value="">— Selecionar técnico —</option>
+                  {technicians.map(t => (
+                    <option key={t.id} value={t.id}>{t.name}{t.id === sendOutModal.technicianId ? ' (original)' : ''}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button onClick={submitSendOut} disabled={sendOutSubmitting} className="btn btn-primary flex-1 disabled:opacity-50">
+                  {sendOutSubmitting ? 'A processar...' : 'Confirmar Saída'}
+                </button>
+                <button onClick={() => setSendOutModal(null)} disabled={sendOutSubmitting} className="btn btn-secondary">Cancelar</button>
+              </div>
             </div>
           </div>
         </div>
@@ -754,30 +881,30 @@ export default function WarehousePage() {
                       Nº série da peça recebida
                       <span className="text-xs font-normal text-gray-400 ml-1">— como registar no nosso stock</span>
                     </label>
-                    <div className="flex gap-3 mb-2">
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="radio" name="clientSnMode" value="auto" checked={cpClientSnMode === 'auto'} onChange={() => setCpClientSnMode('auto')} className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm">Auto-gerar{cpSelected.snExample ? ` (${cpSelected.snExample}-N)` : ''}</span>
-                      </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer">
-                        <input type="radio" name="clientSnMode" value="manual" checked={cpClientSnMode === 'manual'} onChange={() => setCpClientSnMode('manual')} className="w-4 h-4 text-blue-600" />
-                        <span className="text-sm">Especificar</span>
-                      </label>
-                    </div>
-                    {cpClientSnMode === 'auto' && (
-                      <p className="text-xs text-gray-500 bg-gray-50 rounded p-2">
-                        Será gerado automaticamente com o prefixo <strong>{cpSelected.snExample || '?'}</strong>.
-                        O SN do cliente (<span className="font-mono">{cpSelected.serialNumber}</span>) será substituído.
-                      </p>
-                    )}
-                    {cpClientSnMode === 'manual' && (
-                      <input
-                        type="text"
-                        className="input w-full text-sm font-mono"
-                        placeholder={`ex: ${cpSelected.snExample ? cpSelected.snExample + '-X' : 'SN-001'}`}
-                        value={cpClientSnValue}
-                        onChange={e => setCpClientSnValue(e.target.value)}
-                      />
+                    {cpSelected.snExample ? (
+                      <>
+                        <div className="flex gap-3 mb-2">
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="clientSnMode" value="auto" checked={cpClientSnMode === 'auto'} onChange={() => setCpClientSnMode('auto')} className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">Auto-gerar ({cpSelected.snExample}-N)</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="clientSnMode" value="manual" checked={cpClientSnMode === 'manual'} onChange={() => setCpClientSnMode('manual')} className="w-4 h-4 text-blue-600" />
+                            <span className="text-sm">Especificar</span>
+                          </label>
+                        </div>
+                        {cpClientSnMode === 'auto' && (
+                          <p className="text-xs text-gray-500 bg-gray-50 rounded p-2">
+                            Gerado automaticamente com o prefixo <strong>{cpSelected.snExample}</strong>.
+                            O SN do cliente (<span className="font-mono">{cpSelected.serialNumber}</span>) será substituído.
+                          </p>
+                        )}
+                        {cpClientSnMode === 'manual' && (
+                          <input type="text" className="input w-full text-sm font-mono" placeholder={`ex: ${cpSelected.snExample}-X`} value={cpClientSnValue} onChange={e => setCpClientSnValue(e.target.value)} />
+                        )}
+                      </>
+                    ) : (
+                      <input type="text" className="input w-full text-sm font-mono" placeholder="ex: SN-001" value={cpClientSnValue} onChange={e => setCpClientSnValue(e.target.value)} />
                     )}
                   </div>
                 </>
@@ -797,7 +924,7 @@ export default function WarehousePage() {
                 disabled={
                   cpSubmitting ||
                   (cpSelected.tracksSerialNumbers && (!cpReplacementSnId || cpSnOptions.length === 0)) ||
-                  (cpSelected.tracksSerialNumbers && cpClientSnMode === 'manual' && !cpClientSnValue.trim())
+                  (cpSelected.tracksSerialNumbers && (cpClientSnMode === 'manual' || !cpSelected.snExample) && !cpClientSnValue.trim())
                 }
               >
                 {cpSubmitting ? 'A processar...' : 'Confirmar Troca'}

@@ -16,7 +16,7 @@ export async function GET(
 
     const { id } = await params
 
-    const [itemRows, techRows, movementRows, extraRows] = await Promise.all([
+    const [itemRows, techRows, movementRows, extraRows, stockRepairRows] = await Promise.all([
       prisma.$queryRaw<any[]>`
         SELECT id, "itemName", "partNumber", "ean13", value, "mainWarehouse", "repairStock", "destructionStock",
                "tracksSerialNumbers", "autoSn", "snExample", "equipmentTypeId", "brandId",
@@ -49,6 +49,12 @@ export async function GET(
         LEFT JOIN "EquipmentType" et ON et.id = wi."equipmentTypeId"
         LEFT JOIN "EquipmentBrand" eb ON eb.id = wi."brandId"
         WHERE wi.id = ${id}
+      `,
+      prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) AS count FROM "PartRepairJob"
+        WHERE "itemId" = ${id}
+          AND type = 'STOCK'
+          AND status NOT IN ('REPAIRED', 'NOT_REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT')
       `,
     ])
 
@@ -93,6 +99,7 @@ export async function GET(
       movements,
       typeName: extra.typeName ?? null,
       brandName: extra.brandName ?? null,
+      stockRepairCount: Number(stockRepairRows[0]?.count ?? 0),
     })
   } catch (error) {
     console.error('Error fetching warehouse item:', error)

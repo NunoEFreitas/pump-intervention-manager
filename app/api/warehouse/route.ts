@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 
@@ -16,13 +17,16 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'))
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')))
     const offset = (page - 1) * limit
+    const minStock = parseInt(searchParams.get('minStock') || '0')
 
     const searchLike = `%${search.toLowerCase()}%`
+    const stockFilter = minStock > 0 ? Prisma.sql`AND w."mainWarehouse" >= ${minStock}` : Prisma.sql``
 
     const [countRows, items, extraFields, clientPartsCounts] = await Promise.all([
       prisma.$queryRaw<[{ count: bigint }]>`
-        SELECT COUNT(*)::bigint AS count FROM "WarehouseItem"
-        WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+        SELECT COUNT(*)::bigint AS count FROM "WarehouseItem" w
+        WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
+        ${stockFilter}
       `,
       prisma.$queryRaw<Array<{
         id: string
@@ -49,7 +53,8 @@ export async function GET(request: NextRequest) {
         FROM "WarehouseItem" w
         LEFT JOIN "EquipmentType" et ON et.id = w."equipmentTypeId"
         LEFT JOIN "EquipmentBrand" eb ON eb.id = w."brandId"
-        WHERE LOWER(w."itemName") LIKE ${searchLike} OR LOWER(w."partNumber") LIKE ${searchLike}
+        WHERE (LOWER(w."itemName") LIKE ${searchLike} OR LOWER(w."partNumber") LIKE ${searchLike} OR LOWER(COALESCE(w."ean13", '')) LIKE ${searchLike})
+        ${stockFilter}
         ORDER BY w."createdAt" DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
@@ -64,7 +69,7 @@ export async function GET(request: NextRequest) {
         JOIN "User" u ON u.id = ts."technicianId"
         WHERE ts."itemId" IN (
           SELECT id FROM "WarehouseItem"
-          WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+          WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike}
           ORDER BY "createdAt" DESC
           LIMIT ${limit} OFFSET ${offset}
         )
@@ -76,7 +81,7 @@ export async function GET(request: NextRequest) {
           AND ("clientPartStatus" IS NULL OR "clientPartStatus" NOT IN ('RESOLVED'))
           AND "itemId" IN (
             SELECT id FROM "WarehouseItem"
-            WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike}
+            WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike}
             ORDER BY "createdAt" DESC
             LIMIT ${limit} OFFSET ${offset}
           )

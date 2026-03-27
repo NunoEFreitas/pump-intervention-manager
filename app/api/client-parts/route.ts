@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         sn."interventionId",
         sn."pickedUpById",
         sn."technicianId",
+        sn."faultDescription",
         sn."createdAt",
         wi."itemName",
         wi."partNumber",
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
           ${showAll}::boolean = true
           OR (${resolvedOnly}::boolean = true AND sn."clientPartStatus" = 'RESOLVED')
           OR (${showAll}::boolean = false AND ${resolvedOnly}::boolean = false
-              AND (sn."clientPartStatus" IS NULL OR sn."clientPartStatus" IN ('PENDING', 'SWAP', 'REPAIR')))
+              AND (sn."clientPartStatus" IS NULL OR sn."clientPartStatus" != 'RESOLVED'))
         )
       ORDER BY sn."createdAt" DESC
     `

@@ -26,6 +26,13 @@ export async function GET(request: NextRequest) {
       assignedTo: { select: { id: true, name: true } },
     }
 
+    // All technicians (for today view columns)
+    const technicians = await prisma.user.findMany({
+      where: { role: 'TECHNICIAN' },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    })
+
     // Unassigned open interventions for today's drag-and-drop panel
     const unassignedOpen = await prisma.intervention.findMany({
       where: { status: 'OPEN', assignedToId: null },
@@ -100,12 +107,13 @@ export async function GET(request: NextRequest) {
       take: 20,
     })
 
-    // Calendar: today + next 6 days, all statuses except canceled
-    const calendarEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7, 23, 59, 59)
+    // Calendar: -30 days to +90 days (wide range to support navigation)
+    const calendarStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0)
+    const calendarEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 90, 23, 59, 59)
     const calendarInterventions = await prisma.intervention.findMany({
       where: {
         status: { notIn: ['CANCELED'] },
-        scheduledDate: { gte: todayStart, lte: calendarEnd },
+        scheduledDate: { gte: calendarStart, lte: calendarEnd },
       },
       include,
       orderBy: { scheduledDate: 'asc' },
@@ -143,6 +151,7 @@ export async function GET(request: NextRequest) {
       weekDayCounts,
       techLoad,
       upcoming: withComments(upcoming),
+      technicians,
     })
   } catch (error) {
     console.error('Dashboard stats error:', error)

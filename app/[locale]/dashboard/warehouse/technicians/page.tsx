@@ -77,16 +77,6 @@ export default function TechniciansPage() {
                 </div>
               </div>
 
-              {tech.stockItems.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-sm text-gray-500">
-                  {tech.stockItems.slice(0, 5).map((item, idx) => (
-                    <span key={idx}>{item.itemName} <span className="font-semibold text-gray-700">{item.quantity}</span></span>
-                  ))}
-                  {tech.stockItems.length > 5 && (
-                    <span className="text-gray-400">+{tech.stockItems.length - 5} {t('moreItems', { count: tech.stockItems.length - 5 })}</span>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>

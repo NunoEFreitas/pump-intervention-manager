@@ -15,7 +15,6 @@ const STATUS_META: Record<string, { label: string; dot: string; badge: string }>
   CANCELED:           { label: 'Cancelada',         dot: 'bg-gray-400',   badge: 'bg-gray-50 text-gray-500 border-gray-200' },
 }
 
-const DAY_LABELS = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
 
 interface ContactInfo {
   name: string
@@ -48,6 +47,7 @@ interface DashboardData {
   weekDayCounts: number[]
   techLoad: { id: string; name: string; count: number }[]
   upcoming: Intervention[]
+  technicians: { id: string; name: string }[]
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -89,11 +89,12 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
-  const [view, setView] = useState<'board' | 'calendar' | 'today'>('board')
+  const [view, setView] = useState<'board' | 'today'>('board')
   const [filterTechId, setFilterTechId] = useState('')
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [dropHover, setDropHover] = useState<{ techId: string; hour: number } | null>(null)
+  const [calendarOffset, setCalendarOffset] = useState(0) // days offset from today
   const gridRef = useRef<HTMLDivElement>(null)
 
   const fetchData = useCallback(async () => {
@@ -135,11 +136,6 @@ export default function DashboardPage() {
 
   const todayLabel = new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' })
 
-  const weekDayIndex = (() => {
-    const d = new Date().getDay()
-    return d === 0 ? 6 : d - 1
-  })()
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -149,9 +145,6 @@ export default function DashboardPage() {
   }
 
   if (!data) return null
-
-  const maxWeek = Math.max(...data.weekDayCounts, 1)
-  const maxTech  = Math.max(...data.techLoad.map(t => t.count), 1)
 
   // Unique techs from all calendar interventions (for the filter select)
   const calendarTechs = Array.from(
@@ -173,10 +166,11 @@ export default function DashboardPage() {
     else upcomingGroups.push({ label, date: dateKey, items: [iv] })
   }
 
-  // Calendar: build 7 columns (today + 6 days)
+  // Calendar: build 7 columns starting from today + calendarOffset
+  const todayKey = new Date(new Date().setHours(0, 0, 0, 0)).toDateString()
   const calendarColumns = Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() + i)
+    d.setDate(d.getDate() + calendarOffset + i)
     d.setHours(0, 0, 0, 0)
     const key = d.toDateString()
     const items = data.calendarInterventions.filter(iv => {
@@ -189,7 +183,7 @@ export default function DashboardPage() {
     })
     return {
       date: d,
-      isToday: i === 0,
+      isToday: key === todayKey,
       dayLabel: d.toLocaleDateString('pt-PT', { weekday: 'short' }),
       dateLabel: d.toLocaleDateString('pt-PT', { day: 'numeric', month: 'short' }),
       items,
@@ -203,18 +197,30 @@ export default function DashboardPage() {
   const TOTAL_H = (HOUR_END - HOUR_START) * PX_PER_HOUR
   const hours = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i)
 
-  const todayItems = calendarColumns[0].items // already filtered to today
+  const todayItems = data.calendarInterventions.filter(iv => {
+    if (!iv.scheduledDate) return false
+    const ivd = new Date(iv.scheduledDate)
+    ivd.setHours(0, 0, 0, 0)
+    if (ivd.toDateString() !== todayKey) return false
+    if (filterTechId) return iv.assignedTo?.id === filterTechId
+    return true
+  })
 
-  // Build tech columns (sorted by name, unassigned at end)
-  const techMap = new Map<string, { id: string; name: string; items: Intervention[] }>()
+  // Build tech columns: all techs when no filter, else only filtered tech
+  const techColBase: { id: string; name: string; items: Intervention[] }[] = filterTechId
+    ? data.technicians
+        .filter(t => t.id === filterTechId)
+        .map(t => ({ ...t, items: [] }))
+    : data.technicians.map(t => ({ ...t, items: [] }))
+
+  const techMap = new Map(techColBase.map(t => [t.id, t]))
   for (const iv of todayItems) {
-    const key = iv.assignedTo?.id ?? '__none__'
-    if (!techMap.has(key)) techMap.set(key, { id: key, name: iv.assignedTo?.name ?? 'Sem Atribuição', items: [] })
-    techMap.get(key)!.items.push(iv)
+    const key = iv.assignedTo?.id
+    if (key && techMap.has(key)) {
+      techMap.get(key)!.items.push(iv)
+    }
   }
-  const techCols = Array.from(techMap.values()).sort((a, b) =>
-    a.id === '__none__' ? 1 : b.id === '__none__' ? -1 : a.name.localeCompare(b.name)
-  )
+  const techCols = Array.from(techMap.values())
 
   function ivTop(iv: Intervention): number {
     const t = iv.scheduledTime ?? (iv.scheduledDate ? new Date(iv.scheduledDate).toTimeString().slice(0, 5) : null)
@@ -273,15 +279,6 @@ export default function DashboardPage() {
               </svg>
             </button>
             <button
-              onClick={() => setView('calendar')}
-              title="Vista de calendário — semana"
-              className={`px-2.5 py-1.5 transition-colors ${view === 'calendar' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </button>
-            <button
               onClick={() => setView('today')}
               title="Vista do dia — horário"
               className={`px-2.5 py-1.5 transition-colors ${view === 'today' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}
@@ -291,7 +288,7 @@ export default function DashboardPage() {
               </svg>
             </button>
           </div>
-          {(view === 'calendar' || view === 'today') && calendarTechs.length > 0 && (
+          {view === 'today' && calendarTechs.length > 0 && (
             <select
               value={filterTechId}
               onChange={e => setFilterTechId(e.target.value)}
@@ -314,57 +311,6 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
-
-      {view === 'calendar' && (
-        <div className="overflow-x-auto">
-          <div className="min-w-[700px] grid grid-cols-7 gap-2">
-            {/* Day headers */}
-            {calendarColumns.map((col, i) => (
-              <div
-                key={i}
-                className={`rounded-t-lg px-2 py-2 text-center ${col.isToday ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}
-              >
-                <div className="text-xs font-semibold uppercase tracking-wide">{col.dayLabel}</div>
-                <div className={`text-lg font-bold leading-tight ${col.isToday ? 'text-white' : 'text-gray-900'}`}>{col.date.getDate()}</div>
-                <div className={`text-xs ${col.isToday ? 'text-indigo-200' : 'text-gray-400'}`}>{col.date.toLocaleDateString('pt-PT', { month: 'short' })}</div>
-              </div>
-            ))}
-            {/* Day columns */}
-            {calendarColumns.map((col, i) => (
-              <div
-                key={i}
-                className={`min-h-64 rounded-b-lg border ${col.isToday ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 bg-white'} p-1.5 space-y-1.5`}
-              >
-                {col.items.length === 0 ? (
-                  <div className="h-8 flex items-center justify-center">
-                    <span className="text-xs text-gray-300">—</span>
-                  </div>
-                ) : (
-                  col.items.map(iv => (
-                    <div
-                      key={iv.id}
-                      onClick={() => goTo(iv.id)}
-                      className={`border-l-4 ${STATUS_BORDER[iv.status] ?? 'border-l-gray-300'} bg-white rounded-r-md px-2 py-1.5 cursor-pointer hover:shadow-md transition-shadow`}
-                    >
-                      <div className="text-xs font-semibold text-gray-900 truncate leading-tight">{iv.client.name}</div>
-                      {(iv.location?.city || iv.client.city) && (
-                        <div className="text-xs text-gray-400 truncate">{iv.location?.city || iv.client.city}</div>
-                      )}
-                      {iv.assignedTo
-                        ? <div className="text-xs text-indigo-600 truncate mt-0.5">{iv.assignedTo.name}</div>
-                        : <div className="text-xs text-amber-500 mt-0.5">⚠ Por atribuir</div>
-                      }
-                      <div className="mt-1">
-                        <StatusBadge status={iv.status} />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {view === 'today' && (
         <div className="flex gap-4 items-start">
@@ -400,55 +346,57 @@ export default function DashboardPage() {
 
           {/* Time grid */}
           <div className="flex-1 card p-0 overflow-hidden min-w-0">
-            {/* Column headers */}
-            <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
-              <div className="w-14 shrink-0 border-r border-gray-200 flex items-center justify-center">
-                <button
-                  onClick={() => printAllTechsDaySchedule(techCols.filter(tc => tc.id !== '__none__'), todayLabel)}
-                  title="Imprimir agenda de todos os técnicos"
-                  className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                </button>
-              </div>
-              {techCols.filter(tc => tc.id !== '__none__').map(tc => (
-                <div key={tc.id} className="flex-1 min-w-32 px-2 py-2 border-r border-gray-200 last:border-r-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <div className="text-xs font-semibold text-gray-800 truncate">{tc.name}</div>
+            {/* Single scroll container — both axes — so header and grid scroll together horizontally */}
+            <div className="overflow-auto max-h-[75vh]" ref={gridRef}>
+              <div className="flex flex-col" style={{ minWidth: `${56 + techCols.length * 128}px` }}>
+
+                {/* Column headers — sticky vertically within the scroll container */}
+                <div className="flex border-b border-gray-200 bg-gray-50 sticky top-0 z-10">
+                  <div className="w-14 shrink-0 border-r border-gray-200 flex items-center justify-center">
                     <button
-                      onClick={() => printTechDaySchedule(tc.name, tc.items, todayLabel)}
-                      title="Imprimir agenda"
-                      className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                      onClick={() => printAllTechsDaySchedule(techCols, todayLabel)}
+                      title="Imprimir agenda de todos os técnicos"
+                      className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
                     >
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                       </svg>
                     </button>
                   </div>
-                  <div className="text-xs text-gray-400">{tc.items.length} interv.</div>
-                </div>
-              ))}
-              {techCols.filter(tc => tc.id !== '__none__').length === 0 && (
-                <div className="flex-1 px-4 py-2 text-xs text-gray-400">Nenhuma intervenção agendada hoje. Arraste intervenções para atribuir.</div>
-              )}
-            </div>
-
-            {/* Scrollable time grid */}
-            <div className="overflow-y-auto max-h-[75vh]" ref={gridRef}>
-              <div className="flex">
-                {/* Time gutter */}
-                <div className="w-14 shrink-0 border-r border-gray-200 select-none">
-                  {hours.map(h => (
-                    <div key={h} className="border-b border-gray-100 flex items-start justify-end pr-2 pt-1" style={{ height: PX_PER_HOUR }}>
-                      <span className="text-xs text-gray-400 font-mono leading-none">{String(h).padStart(2,'0')}:00</span>
+                  {techCols.length === 0 ? (
+                    <div className="flex-1 px-4 py-2 text-xs text-gray-400">Nenhum técnico disponível.</div>
+                  ) : techCols.map(tc => (
+                    <div key={tc.id} className="flex-1 min-w-32 px-2 py-2 border-r border-gray-200 last:border-r-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="text-xs font-semibold text-gray-800 truncate">{tc.name}</div>
+                        <button
+                          onClick={() => printTechDaySchedule(tc.name, tc.items, todayLabel)}
+                          title="Imprimir agenda"
+                          className="shrink-0 p-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="text-xs text-gray-400">{tc.items.length} interv.</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Tech columns — only real techs, no __none__ */}
-                {techCols.filter(tc => tc.id !== '__none__').map(tc => (
+                {/* Time grid body */}
+                <div className="flex">
+                  {/* Time gutter */}
+                  <div className="w-14 shrink-0 border-r border-gray-200 select-none">
+                    {hours.map(h => (
+                      <div key={h} className="border-b border-gray-100 flex items-start justify-end pr-2 pt-1" style={{ height: PX_PER_HOUR }}>
+                        <span className="text-xs text-gray-400 font-mono leading-none">{String(h).padStart(2,'0')}:00</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Tech columns */}
+                  {techCols.map(tc => (
                   <div
                     key={tc.id}
                     className="flex-1 min-w-32 border-r border-gray-200 last:border-r-0 relative"
@@ -520,6 +468,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
                 ))}
+                </div>
               </div>
             </div>
           </div>
@@ -530,10 +479,10 @@ export default function DashboardPage() {
       {/* Counter strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { label: 'Em Curso Agora',     value: data.counters.activeNow,       color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100', status: 'IN_PROGRESS' },
-          { label: 'Agendadas Hoje',      value: data.counters.scheduledToday,  color: 'text-blue-600',   bg: 'bg-blue-50',    border: 'border-blue-100',   status: 'ASSIGNED' },
-          { label: 'Concluídas Hoje',     value: data.counters.completedToday,  color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100',  status: 'COMPLETED' },
-          { label: 'Sem Agendamento',     value: data.counters.needsPlanning,   color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100',  status: 'OPEN' },
+          { label: 'Em Curso Agora',  value: data.counters.activeNow,      color: 'text-indigo-600', bg: 'bg-indigo-50',  border: 'border-indigo-100', status: 'IN_PROGRESS' },
+          { label: 'Agendadas Hoje',  value: data.counters.scheduledToday, color: 'text-blue-600',   bg: 'bg-blue-50',    border: 'border-blue-100',   status: 'ASSIGNED' },
+          { label: 'Concluídas Hoje', value: data.counters.completedToday, color: 'text-green-600',  bg: 'bg-green-50',   border: 'border-green-100',  status: 'COMPLETED' },
+          { label: 'Sem Agendamento', value: data.counters.needsPlanning,  color: 'text-amber-600',  bg: 'bg-amber-50',   border: 'border-amber-100',  status: 'OPEN' },
         ].map(c => (
           <div
             key={c.label}
@@ -546,123 +495,121 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Main two-column */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+      {/* Main layout: today list (left) + calendar (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 items-start">
 
-        {/* Left: Today's list */}
-        <div className="lg:col-span-3 card p-0 overflow-hidden">
+        {/* Left: Today's interventions */}
+        <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">Intervenções de Hoje</h2>
-            <span className="text-xs text-gray-400">{data.todayList.length} total</span>
+            <h2 className="text-sm font-semibold text-gray-900">Hoje</h2>
+            <span className="text-xs text-gray-400">{data.todayList.length} interv.</span>
           </div>
           {data.todayList.length === 0 ? (
             <div className="px-4 py-8 text-center text-sm text-gray-400">Nenhuma intervenção para hoje.</div>
           ) : (
-            <div className="p-2 space-y-0.5 max-h-96 overflow-y-auto">
+            <div className="p-2 space-y-0.5 max-h-[520px] overflow-y-auto">
               {data.todayList.map(iv => (
                 <InterventionRow key={iv.id} iv={iv} onClick={() => goTo(iv.id)} />
               ))}
             </div>
           )}
+          {(data.unassignedOpen?.length ?? 0) > 0 && (
+            <div
+              onClick={() => router.push(`/${locale}/dashboard/interventions?status=OPEN`)}
+              className="px-4 py-2.5 border-t border-amber-100 bg-amber-50 flex items-center gap-2 cursor-pointer hover:bg-amber-100 transition-colors"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span className="text-xs text-amber-700 font-medium">{data.unassignedOpen.length} sem atribuição</span>
+            </div>
+          )}
         </div>
 
-        {/* Right: Week + Tech load */}
-        <div className="lg:col-span-2 space-y-4">
-
-          {/* Week bar */}
-          <div className="card">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Esta Semana</h2>
-            <div className="flex items-end gap-1.5">
-              {data.weekDayCounts.map((count, i) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  {count > 0 && (
-                    <span className="text-xs font-semibold text-gray-600">{count}</span>
+        {/* Right: Weekly calendar */}
+        <div className="card p-0 overflow-hidden">
+          {/* Calendar header with navigation */}
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
+            <button
+              onClick={() => setCalendarOffset(o => o - 7)}
+              disabled={calendarOffset <= -28}
+              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold text-gray-900">
+                {calendarColumns[0].date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'long' })}
+                {' — '}
+                {calendarColumns[6].date.toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </h2>
+              {calendarOffset !== 0 && (
+                <button
+                  onClick={() => setCalendarOffset(0)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-medium border border-indigo-200 rounded px-2 py-0.5 hover:bg-indigo-50 transition-colors"
+                >
+                  Hoje
+                </button>
+              )}
+            </div>
+            <button
+              onClick={() => setCalendarOffset(o => o + 7)}
+              disabled={calendarOffset >= 84}
+              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          {/* Calendar grid */}
+          <div className="overflow-x-auto">
+            <div className="min-w-[560px] grid grid-cols-7">
+              {/* Day headers */}
+              {calendarColumns.map((col, i) => (
+                <div
+                  key={i}
+                  className={`px-2 py-2.5 text-center border-r last:border-r-0 border-gray-100 ${col.isToday ? 'bg-indigo-600 text-white' : 'bg-gray-50 text-gray-600'}`}
+                >
+                  <div className="text-[10px] font-semibold uppercase tracking-wide opacity-80">{col.dayLabel}</div>
+                  <div className={`text-base font-bold leading-tight mt-0.5 ${col.isToday ? 'text-white' : 'text-gray-900'}`}>{col.date.getDate()}</div>
+                </div>
+              ))}
+              {/* Day columns */}
+              {calendarColumns.map((col, i) => (
+                <div
+                  key={i}
+                  className={`min-h-52 p-1.5 space-y-1 border-r last:border-r-0 border-t ${col.isToday ? 'border-indigo-100 bg-indigo-50/20' : 'border-gray-100 bg-white'}`}
+                >
+                  {col.items.length === 0 ? (
+                    <div className="h-8 flex items-center justify-center">
+                      <span className="text-xs text-gray-200">—</span>
+                    </div>
+                  ) : (
+                    col.items.map(iv => (
+                      <div
+                        key={iv.id}
+                        onClick={() => goTo(iv.id)}
+                        className={`border-l-2 ${STATUS_BORDER[iv.status] ?? 'border-l-gray-300'} bg-white rounded-r px-1.5 py-1 cursor-pointer hover:shadow-sm transition-shadow`}
+                      >
+                        <div className="text-[11px] font-semibold text-gray-900 truncate leading-tight">{iv.client.name}</div>
+                        {iv.scheduledTime && (
+                          <div className="text-[10px] text-gray-400 font-mono">{iv.scheduledTime}</div>
+                        )}
+                        {iv.assignedTo
+                          ? <div className="text-[10px] text-indigo-500 truncate">{iv.assignedTo.name}</div>
+                          : <div className="text-[10px] text-amber-500">⚠ Por atribuir</div>
+                        }
+                      </div>
+                    ))
                   )}
-                  <div
-                    className={`w-full rounded-t transition-all ${
-                      i === weekDayIndex
-                        ? 'bg-indigo-500'
-                        : count > 0 ? 'bg-indigo-200' : 'bg-gray-100'
-                    }`}
-                    style={{ height: `${Math.max(4, Math.round((count / maxWeek) * 80))}px` }}
-                  />
-                  <span className={`text-xs ${i === weekDayIndex ? 'font-bold text-indigo-600' : 'text-gray-400'}`}>
-                    {DAY_LABELS[i]}
-                  </span>
                 </div>
               ))}
             </div>
           </div>
-
-          {/* Tech load */}
-          <div className="card">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Carga por Técnico — Semana</h2>
-            {data.techLoad.length === 0 ? (
-              <p className="text-xs text-gray-400">Nenhuma atribuição esta semana.</p>
-            ) : (
-              <div className="space-y-2.5">
-                {data.techLoad.map(t => (
-                  <div key={t.id}>
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-xs text-gray-700 truncate">{t.name}</span>
-                      <span className="text-xs font-semibold text-gray-500 ml-2 shrink-0">{t.count}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-1.5">
-                      <div
-                        className="bg-indigo-400 h-1.5 rounded-full transition-all"
-                        style={{ width: `${Math.round((t.count / maxTech) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
         </div>
+
       </div>
-
-      {/* Upcoming */}
-      {upcomingGroups.length > 0 && (
-        <div className="card p-0 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h2 className="text-sm font-semibold text-gray-900">Próximos 7 Dias</h2>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {upcomingGroups.map(group => (
-              <div key={group.date} className="flex gap-0">
-                {/* Date column */}
-                <div className="w-24 shrink-0 px-4 py-3 bg-gray-50 border-r border-gray-100 flex items-start">
-                  <span className="text-xs font-semibold text-gray-600 capitalize">{group.label}</span>
-                </div>
-                {/* Items */}
-                <div className="flex-1 py-1">
-                  {group.items.map(iv => (
-                    <div
-                      key={iv.id}
-                      onClick={() => goTo(iv.id)}
-                      className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 cursor-pointer"
-                    >
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_META[iv.status]?.dot ?? 'bg-gray-400'}`} />
-                      <span className="text-sm text-gray-900 truncate flex-1">{iv.client.name}</span>
-                      {iv.location?.city && <span className="text-xs text-gray-400 truncate">{iv.location.city}</span>}
-                      {!iv.assignedTo
-                        ? <span className="text-xs font-medium text-amber-600 shrink-0">⚠ Por atribuir</span>
-                        : <span className="text-xs text-gray-400 shrink-0">{iv.assignedTo.name}</span>
-                      }
-                      <StatusBadge status={iv.status} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {upcomingGroups.length === 0 && data.todayList.length === 0 && (
-        <div className="text-center py-12 text-gray-400 text-sm">Nenhuma intervenção agendada nos próximos 7 dias.</div>
-      )}
       </>}
     </div>
   )

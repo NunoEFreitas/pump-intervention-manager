@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
-import PartsSelector from './PartsSelector'
 import WorkOrderModal, { type WorkOrder } from './WorkOrderModal'
 import WorkOrderSignatureModal from './WorkOrderSignatureModal'
 import OVMForm, { type OVMData, migrateOVMData } from './OVMForm'
@@ -13,15 +12,26 @@ import { printOVMPDF } from '@/lib/ovmPrint'
 
 interface ClientPart {
   id: string
-  serialNumber: string
+  serialNumber: string | null
+  faultDescription: string | null
+  clientPartStatus: string | null
+  repairReference: string | null
+  repairStatus: string | null
   itemId: string
   itemName: string
   partNumber: string
   createdAt: string
+  receivedAtWarehouseAt: string | null
+  receivedAtWarehouseByName: string | null
+  sentOutAt: string | null
+  sentOutByName: string | null
+  sentOutTechnicianName: string | null
+  returnedToClientAt: string | null
+  returnedByName: string | null
+  returnedRegisteredByName: string | null
   location: string
   pickedUpByName: string | null
-  usedAt: string | null
-  usedByName: string | null
+  technicianName: string | null
 }
 
 
@@ -137,6 +147,8 @@ export default function InterventionDetailPage() {
   const [showClientPartForm, setShowClientPartForm] = useState(false)
   const [clientPartItemId, setClientPartItemId] = useState('')
   const [clientPartSn, setClientPartSn] = useState('')
+  const [clientPartFaultDesc, setClientPartFaultDesc] = useState('')
+  const [clientPartTechId, setClientPartTechId] = useState('')
   const [clientPartLoading, setClientPartLoading] = useState(false)
   const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }[]>([])
   const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
@@ -514,7 +526,7 @@ export default function InterventionDetailPage() {
   }
 
   const addClientPart = async () => {
-    if (!clientPartItemId || !clientPartSn.trim()) return
+    if (!clientPartItemId) return
     setClientPartLoading(true)
     try {
       const token = localStorage.getItem('token')
@@ -524,12 +536,19 @@ export default function InterventionDetailPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ warehouseItemId: clientPartItemId, serialNumber: clientPartSn.trim() }),
+        body: JSON.stringify({
+          warehouseItemId: clientPartItemId,
+          serialNumber: clientPartSn.trim() || null,
+          faultDescription: clientPartFaultDesc.trim() || null,
+          technicianId: clientPartTechId || null,
+        }),
       })
       if (response.ok) {
         setShowClientPartForm(false)
         setClientPartItemId('')
         setClientPartSn('')
+        setClientPartFaultDesc('')
+        setClientPartTechId('')
         fetchClientParts()
       } else {
         const data = await response.json()
@@ -539,6 +558,31 @@ export default function InterventionDetailPage() {
       console.error('Error adding client part:', error)
     } finally {
       setClientPartLoading(false)
+    }
+  }
+
+  const handleSendOut = async (partId: string) => {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/client-parts/${partId}/send-out`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (res.ok) { fetchClientParts() }
+    else { const d = await res.json(); alert(d.error || 'Erro ao dar saída') }
+  }
+
+  const handleReturnToClient = async (partId: string) => {
+    if (!confirm('Confirmar entrega ao cliente?')) return
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/client-parts/${partId}/return-to-client`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) { fetchClientParts() }
+      else { const d = await res.json(); alert(d.error || 'Erro ao confirmar entrega') }
+    } catch (error) {
+      console.error('Error returning part to client:', error)
     }
   }
 
@@ -579,7 +623,7 @@ export default function InterventionDetailPage() {
     }
   }
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
     try {
@@ -1178,7 +1222,7 @@ export default function InterventionDetailPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número de série do artigo
+                    Número de série <span className="text-gray-400 font-normal">(opcional)</span>
                   </label>
                   <input
                     type="text"
@@ -1188,16 +1232,50 @@ export default function InterventionDetailPage() {
                     className="input text-gray-800 w-full"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descrição da avaria <span className="text-gray-400 font-normal">(opcional)</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Ex: Não liga, sensor danificado..."
+                    value={clientPartFaultDesc}
+                    onChange={e => setClientPartFaultDesc(e.target.value)}
+                    className="input text-gray-800 w-full"
+                  />
+                </div>
+                {userRole !== 'TECHNICIAN' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Técnico que recebe a peça
+                      {intervention.assignedTo && <span className="text-gray-400 font-normal"> (omitir = técnico atribuído)</span>}
+                    </label>
+                    <select
+                      value={clientPartTechId}
+                      onChange={e => setClientPartTechId(e.target.value)}
+                      className="input text-gray-800"
+                    >
+                      {intervention.assignedTo
+                        ? <option value="">{intervention.assignedTo.name}</option>
+                        : <option value="">Selecionar técnico...</option>
+                      }
+                      {technicians
+                        .filter(t => t.id !== intervention.assignedTo?.id)
+                        .map(t => <option key={t.id} value={t.id}>{t.name}</option>)
+                      }
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
                     onClick={addClientPart}
-                    disabled={clientPartLoading || !clientPartItemId || !clientPartSn.trim()}
+                    disabled={clientPartLoading || !clientPartItemId}
                     className="btn btn-primary text-sm"
                   >
                     {clientPartLoading ? tCommon('saving') : tCommon('save')}
                   </button>
                   <button
-                    onClick={() => { setShowClientPartForm(false); setClientPartItemId(''); setClientPartSn('') }}
+                    onClick={() => { setShowClientPartForm(false); setClientPartItemId(''); setClientPartSn(''); setClientPartFaultDesc(''); setClientPartTechId('') }}
                     className="btn btn-secondary text-sm"
                   >
                     {tCommon('cancel')}
@@ -1213,28 +1291,118 @@ export default function InterventionDetailPage() {
                 {clientParts.map((part) => (
                   <div
                     key={part.id}
-                    className={`border rounded-lg px-4 py-3 ${part.location === 'USED' ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}
+                    className={`border rounded-lg px-4 py-3 ${
+                      part.clientPartStatus === 'RESOLVED'   ? 'bg-green-50 border-green-200' :
+                      part.clientPartStatus === 'RETURNING'  ? 'bg-purple-50 border-purple-200' :
+                      part.clientPartStatus === 'REPAIR'     ? 'bg-blue-50 border-blue-200' :
+                      part.clientPartStatus === 'SWAP'       ? 'bg-purple-50 border-purple-200' :
+                      part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-50 border-yellow-200' :
+                      'bg-amber-50 border-amber-200'
+                    }`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${part.location === 'USED' ? 'bg-green-200 text-green-900' : 'bg-amber-300 text-amber-900'}`}>
-                        {t('clientPartBadge')}
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${
+                        part.clientPartStatus === 'RESOLVED'   ? 'bg-green-200 text-green-900' :
+                        part.clientPartStatus === 'RETURNING'  ? 'bg-purple-200 text-purple-900' :
+                        part.clientPartStatus === 'REPAIR'     ? 'bg-blue-200 text-blue-900' :
+                        part.clientPartStatus === 'SWAP'       ? 'bg-purple-200 text-purple-900' :
+                        part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-200 text-yellow-900' :
+                        'bg-amber-300 text-amber-900'
+                      }`}>
+                        {part.clientPartStatus === 'RESOLVED' && part.repairReference ? 'Reparada' :
+                         part.clientPartStatus === 'RESOLVED'   ? 'Trocada' :
+                         part.clientPartStatus === 'RETURNING'  ? 'A Devolver' :
+                         part.clientPartStatus === 'REPAIR'     ? 'Em Reparação' :
+                         part.clientPartStatus === 'SWAP'       ? 'Troca' :
+                         part.clientPartStatus === 'IN_TRANSIT' ? 'Em Trânsito' :
+                         'Pendente'}
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-gray-900 text-sm">{part.itemName}</p>
                         <p className="text-xs text-gray-500">{part.partNumber}</p>
+                        {part.faultDescription && (
+                          <p className="text-xs text-amber-800 mt-0.5 italic">{part.faultDescription}</p>
+                        )}
+                        {part.repairReference && (
+                          <p className="text-xs font-mono font-semibold mt-0.5 text-blue-700 flex items-center gap-1.5">
+                            {part.repairReference}
+                            {part.repairStatus && (
+                              <span className={`font-sans font-medium px-1.5 py-0.5 rounded text-xs ${
+                                part.repairStatus === 'REPAIRED'           ? 'bg-green-100 text-green-800' :
+                                part.repairStatus === 'IN_REPAIR'         ? 'bg-blue-100 text-blue-800' :
+                                part.repairStatus === 'RETURNED_TO_CLIENT'? 'bg-gray-100 text-gray-700' :
+                                part.repairStatus === 'WRITTEN_OFF'       ? 'bg-red-100 text-red-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {part.repairStatus === 'PENDING'            ? 'Criada' :
+                                 part.repairStatus === 'IN_REPAIR'          ? 'Em Progresso' :
+                                 part.repairStatus === 'REPAIRED'           ? 'Devolvido ao Stock' :
+                                 part.repairStatus === 'RETURNED_TO_CLIENT' ? 'Reparado' :
+                                 part.repairStatus === 'NOT_REPAIRED'       ? 'Não Reparado' :
+                                 part.repairStatus === 'WRITTEN_OFF'        ? 'Abatida' :
+                                 part.repairStatus}
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
-                      <span className="font-mono text-sm text-gray-700 bg-white border border-gray-200 rounded px-2 py-0.5 shrink-0">
-                        {part.serialNumber}
+                      {part.serialNumber && (
+                        <span className="font-mono text-sm text-gray-700 bg-white border border-gray-200 rounded px-2 py-0.5 shrink-0">
+                          {part.serialNumber}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1.5 text-xs text-gray-500 flex flex-wrap items-center justify-between gap-2">
+                      <span>
+                        {t('clientPartPickedUp')}: {new Date(part.createdAt).toLocaleString()}
+                        {part.technicianName && ` — ${part.technicianName}`}
+                        {part.pickedUpByName && part.pickedUpByName !== part.technicianName && (
+                          <span className="text-gray-400"> (reg. {part.pickedUpByName})</span>
+                        )}
+                        {part.receivedAtWarehouseAt && (
+                          <span className="ml-2 text-blue-700 font-medium">
+                            · Entrada armazém: {new Date(part.receivedAtWarehouseAt).toLocaleString()}{part.receivedAtWarehouseByName && ` — ${part.receivedAtWarehouseByName}`}
+                          </span>
+                        )}
+                        {part.sentOutAt && (
+                          <span className="ml-2 text-purple-700 font-medium">
+                            · Saída armazém: {new Date(part.sentOutAt).toLocaleString()}
+                            {part.sentOutTechnicianName && ` — ${part.sentOutTechnicianName}`}
+                            {part.sentOutByName && part.sentOutByName !== part.sentOutTechnicianName && (
+                              <span className="text-purple-500 font-normal"> (reg. {part.sentOutByName})</span>
+                            )}
+                          </span>
+                        )}
+                        {part.returnedToClientAt && (
+                          <span className="ml-2 text-green-700 font-medium">
+                            · Devolvida: {new Date(part.returnedToClientAt).toLocaleString()}
+                            {part.returnedByName && ` — ${part.returnedByName}`}
+                            {part.returnedRegisteredByName && part.returnedRegisteredByName !== part.returnedByName && (
+                              <span className="text-green-500 font-normal"> (reg. {part.returnedRegisteredByName})</span>
+                            )}
+                          </span>
+                        )}
                       </span>
+                      {part.clientPartStatus === 'IN_TRANSIT' && (
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Cancelar recolha desta peça?')) return
+                            const token = localStorage.getItem('token')
+                            const res = await fetch(`/api/client-parts/${part.id}/cancel`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+                            if (res.ok) fetchClientParts()
+                            else { const d = await res.json(); alert(d.error || 'Erro ao cancelar') }
+                          }}
+                          className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300 font-medium"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                      {part.clientPartStatus === 'RETURNING' && (
+                        <button onClick={() => handleReturnToClient(part.id)} className="px-2 py-1 bg-green-700 text-white text-xs rounded hover:bg-green-800 font-medium">
+                          Confirmar Entrega
+                        </button>
+                      )}
                     </div>
-                    <div className={`mt-1.5 text-xs ${part.location === 'USED' ? 'text-green-700' : 'text-amber-700'}`}>
-                      <span>{t('clientPartPickedUp')}: {new Date(part.createdAt).toLocaleString()}{part.pickedUpByName && ` — ${part.pickedUpByName}`}</span>
-                    </div>
-                    {part.location === 'USED' && part.usedAt && (
-                      <div className="mt-0.5 text-xs text-green-700 font-medium">
-                        {t('clientPartReturned')}: {new Date(part.usedAt).toLocaleString()}{part.usedByName && ` — ${part.usedByName}`}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>

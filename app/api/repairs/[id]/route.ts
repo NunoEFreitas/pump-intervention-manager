@@ -22,7 +22,7 @@ export async function GET(
         j."quoteAmount", j."quoteNotes", j."quoteStatus", j."quotedAt",
         j."sentAt", j."completedAt", j."deliveredToClientId",
         j."sentById", j."completedById", j."createdAt", j."updatedAt",
-        wi."itemName", wi."partNumber", wi."tracksSerialNumbers",
+        wi."itemName", wi."partNumber", wi."tracksSerialNumbers", wi."snExample",
         wi."mainWarehouse", wi."repairStock", wi."destructionStock",
         sn."serialNumber" AS "snNumber",
         sb.name AS "sentByName",
@@ -67,9 +67,11 @@ export async function PUT(
     const now = new Date()
 
     const [job] = await prisma.$queryRaw<any[]>`
-      SELECT j.*, wi."tracksSerialNumbers", wi."repairStock", wi."mainWarehouse", wi."destructionStock"
+      SELECT j.*, wi."tracksSerialNumbers", wi."repairStock", wi."mainWarehouse", wi."destructionStock",
+             sn."isClientPart" AS "snIsClientPart"
       FROM "PartRepairJob" j
       JOIN "WarehouseItem" wi ON wi.id = j."itemId"
+      LEFT JOIN "SerialNumberStock" sn ON sn.id = j."serialNumberId"
       WHERE j.id = ${id}
     `
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -88,20 +90,33 @@ export async function PUT(
       if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
       if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
 
-      if (job.tracksSerialNumbers && job.serialNumberId) {
+      // Client part SNs are not tracked in repairStock — only update mainWarehouse
+      const isClientPartSwap = job.snIsClientPart === true
+      if (job.serialNumberId) {
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
-          SET location = 'MAIN_WAREHOUSE', status = 'AVAILABLE', "updatedAt" = ${now}::timestamptz
+          SET location = 'MAIN_WAREHOUSE', status = 'AVAILABLE',
+              "clientPartStatus" = CASE WHEN "isClientPart" = true THEN 'RESOLVED' ELSE "clientPartStatus" END,
+              "updatedAt" = ${now}::timestamptz
           WHERE id = ${job.serialNumberId}
         `
       }
-      await prisma.$executeRaw`
-        UPDATE "WarehouseItem"
-        SET "repairStock" = "repairStock" - ${job.quantity},
-            "mainWarehouse" = "mainWarehouse" + ${job.quantity},
-            "updatedAt" = ${now}::timestamptz
-        WHERE id = ${job.itemId}
-      `
+      if (isClientPartSwap) {
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "mainWarehouse" = "mainWarehouse" + ${job.quantity},
+              "updatedAt" = ${now}::timestamptz
+          WHERE id = ${job.itemId}
+        `
+      } else {
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "repairStock" = "repairStock" - ${job.quantity},
+              "mainWarehouse" = "mainWarehouse" + ${job.quantity},
+              "updatedAt" = ${now}::timestamptz
+          WHERE id = ${job.itemId}
+        `
+      }
       const movId = crypto.randomUUID()
       const note = job.reference
         ? (data.workNotes ? `[${job.reference}] ${data.workNotes}` : `[${job.reference}]`)
@@ -131,20 +146,32 @@ export async function PUT(
       if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
       if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
 
-      if (job.tracksSerialNumbers && job.serialNumberId) {
+      const isClientPartSwapD = job.snIsClientPart === true
+      if (job.serialNumberId) {
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
-          SET location = 'DESTRUCTION', status = 'DAMAGED', "updatedAt" = ${now}::timestamptz
+          SET location = 'DESTRUCTION', status = 'DAMAGED',
+              "clientPartStatus" = CASE WHEN "isClientPart" = true THEN 'RESOLVED' ELSE "clientPartStatus" END,
+              "updatedAt" = ${now}::timestamptz
           WHERE id = ${job.serialNumberId}
         `
       }
-      await prisma.$executeRaw`
-        UPDATE "WarehouseItem"
-        SET "repairStock" = "repairStock" - ${job.quantity},
-            "destructionStock" = "destructionStock" + ${job.quantity},
-            "updatedAt" = ${now}::timestamptz
-        WHERE id = ${job.itemId}
-      `
+      if (isClientPartSwapD) {
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "destructionStock" = "destructionStock" + ${job.quantity},
+              "updatedAt" = ${now}::timestamptz
+          WHERE id = ${job.itemId}
+        `
+      } else {
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "repairStock" = "repairStock" - ${job.quantity},
+              "destructionStock" = "destructionStock" + ${job.quantity},
+              "updatedAt" = ${now}::timestamptz
+          WHERE id = ${job.itemId}
+        `
+      }
       const movId = crypto.randomUUID()
       const note = job.reference
         ? (data.workNotes ? `[${job.reference}] ${data.workNotes}` : `[${job.reference}] Enviado para destruição`)

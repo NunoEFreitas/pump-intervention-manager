@@ -25,10 +25,16 @@ interface Movement {
 
 interface SerialNumber {
   id: string
-  serialNumber: string
+  serialNumber: string | null
   location: string
   status: string
-  technician?: { id: string; name: string } | null
+  isClientPart: boolean
+  clientPartStatus: string | null
+  faultDescription: string | null
+  interventionId: string | null
+  createdAt: string
+  technicianId: string | null
+  technician?: { id: string; name: string; email: string } | null
 }
 
 interface EquipmentType { id: string; name: string }
@@ -46,6 +52,7 @@ interface Item {
   value: number
   mainWarehouse: number
   repairStock: number
+  stockRepairCount: number
   tracksSerialNumbers: boolean
   autoSn: boolean
   snExample: string | null
@@ -133,10 +140,8 @@ export default function WarehouseItemDetailPage() {
       })
       setItemNameEdited(false)
 
-      // Fetch serial numbers if item tracks them
-      if (data.tracksSerialNumbers) {
-        fetchSerialNumbers()
-      }
+      // Always fetch SNs — needed for client parts even on non-SN items
+      fetchSerialNumbers()
     } catch (error) {
       console.error('Error fetching item:', error)
     } finally {
@@ -420,43 +425,64 @@ export default function WarehouseItemDetailPage() {
             {/* Stock summary — always shown */}
             {(() => {
               const mainCount = item.tracksSerialNumbers
-                ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').length
+                ? serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE' && !(sn.isClientPart && sn.clientPartStatus === 'RESOLVED')).length
                 : item.mainWarehouse
               const techCount = item.tracksSerialNumbers
-                ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN').length
-                : (item.technicianStocks ?? []).reduce((s, ts) => s + ts.quantity, 0)
+                ? serialNumbers.filter(sn => sn.location === 'TECHNICIAN' && !sn.isClientPart).length
+                : (item.technicianStocks ?? []).reduce((s: number, ts: { quantity: number }) => s + ts.quantity, 0)
               const repairCount = item.tracksSerialNumbers
-                ? serialNumbers.filter(sn => sn.location === 'REPAIR').length
+                ? serialNumbers.filter(sn => sn.location === 'REPAIR' && !sn.isClientPart).length
                 : item.repairStock
               const destructionCount = item.tracksSerialNumbers
                 ? serialNumbers.filter(sn => sn.location === 'DESTRUCTION').length
                 : (item as any).destructionStock ?? 0
+              const clientPartsCount = serialNumbers.filter(sn => sn.isClientPart && sn.clientPartStatus !== 'RESOLVED').length
               return (
-                <div className="flex flex-wrap gap-3 mb-6">
-                  <div className="px-4 py-2 bg-blue-50 rounded-lg">
-                    <p className="text-xs text-blue-600 font-medium">{t('mainWarehouse')}</p>
-                    <p className="text-2xl font-bold text-blue-900">{mainCount}</p>
+                <div className="flex items-start justify-between gap-3 mb-6 flex-wrap">
+                  {/* Left: own stock */}
+                  <div className="flex flex-wrap gap-3">
+                    <div className="px-4 py-2 bg-blue-50 rounded-lg">
+                      <p className="text-xs text-blue-600 font-medium">{t('mainWarehouse')}</p>
+                      <p className="text-2xl font-bold text-blue-900">{mainCount}</p>
+                    </div>
+                    <div className="px-4 py-2 bg-green-50 rounded-lg">
+                      <p className="text-xs text-green-600 font-medium">{t('technicianStock')}</p>
+                      <p className="text-2xl font-bold text-green-900">{techCount}</p>
+                    </div>
+                    {repairCount > 0 && (
+                      <div className="px-4 py-2 bg-orange-50 rounded-lg">
+                        <p className="text-xs text-orange-600 font-medium">{t('inRepair')}</p>
+                        <p className="text-2xl font-bold text-orange-900">{repairCount}</p>
+                      </div>
+                    )}
+                    {destructionCount > 0 && (
+                      <div className="px-4 py-2 bg-red-50 rounded-lg">
+                        <p className="text-xs text-red-600 font-medium">Destruição</p>
+                        <p className="text-2xl font-bold text-red-900">{destructionCount}</p>
+                      </div>
+                    )}
+                    <div className="px-4 py-2 bg-purple-50 rounded-lg">
+                      <p className="text-xs text-purple-600 font-medium">{t('totalStock')}</p>
+                      <p className="text-2xl font-bold text-purple-900">{mainCount + techCount + repairCount}</p>
+                    </div>
                   </div>
-                  <div className="px-4 py-2 bg-green-50 rounded-lg">
-                    <p className="text-xs text-green-600 font-medium">{t('technicianStock')}</p>
-                    <p className="text-2xl font-bold text-green-900">{techCount}</p>
-                  </div>
-                  {repairCount > 0 && (
-                    <div className="px-4 py-2 bg-orange-50 rounded-lg">
-                      <p className="text-xs text-orange-600 font-medium">{t('inRepair')}</p>
-                      <p className="text-2xl font-bold text-orange-900">{repairCount}</p>
+                  {/* Right: client-related */}
+                  {(clientPartsCount > 0 || item.stockRepairCount > 0) && (
+                    <div className="flex flex-wrap gap-3">
+                      {clientPartsCount > 0 && (
+                        <div className="px-4 py-2 bg-yellow-50 rounded-lg text-right">
+                          <p className="text-xs text-yellow-600 font-medium">Rep. de Cliente</p>
+                          <p className="text-2xl font-bold text-yellow-900">{clientPartsCount}</p>
+                        </div>
+                      )}
+                      {item.stockRepairCount > 0 && (
+                        <div className="px-4 py-2 bg-amber-50 rounded-lg text-right">
+                          <p className="text-xs text-amber-600 font-medium">Rep. de Stock</p>
+                          <p className="text-2xl font-bold text-amber-900">{item.stockRepairCount}</p>
+                        </div>
+                      )}
                     </div>
                   )}
-                  {destructionCount > 0 && (
-                    <div className="px-4 py-2 bg-red-50 rounded-lg">
-                      <p className="text-xs text-red-600 font-medium">Destruição</p>
-                      <p className="text-2xl font-bold text-red-900">{destructionCount}</p>
-                    </div>
-                  )}
-                  <div className="px-4 py-2 bg-purple-50 rounded-lg">
-                    <p className="text-xs text-purple-600 font-medium">{t('totalStock')}</p>
-                    <p className="text-2xl font-bold text-purple-900">{mainCount + techCount + repairCount}</p>
-                  </div>
                 </div>
               )
             })()}
@@ -481,16 +507,19 @@ export default function WarehouseItemDetailPage() {
               <div className="mb-6 space-y-2">
                 {[
                   { key: 'main', label: t('mainWarehouse'), loc: 'MAIN_WAREHOUSE', color: 'blue' },
-                  ...Array.from(new Set(serialNumbers.filter(sn => sn.location === 'TECHNICIAN').map(sn => sn.technician?.id ?? ''))).map(techId => {
-                    const name = serialNumbers.find(sn => sn.technician?.id === techId)?.technician?.name ?? techId
+                  ...Array.from(new Set(serialNumbers.filter(sn => sn.location === 'TECHNICIAN' && !sn.isClientPart).map(sn => sn.technician?.id ?? ''))).map(techId => {
+                    const name = serialNumbers.find(sn => sn.location === 'TECHNICIAN' && !sn.isClientPart && sn.technician?.id === techId)?.technician?.name ?? techId
                     return { key: `tech-${techId}`, label: name, loc: 'TECHNICIAN', techId, color: 'green' }
                   }),
-                  { key: 'repair', label: t('inRepair'), loc: 'REPAIR', color: 'orange' },
+                  { key: 'repair', label: t('inRepair'), loc: 'REPAIR', color: 'orange', excludeClientParts: true },
                   { key: 'destruction', label: 'Destruição', loc: 'DESTRUCTION', color: 'red' },
                   { key: 'used', label: t('used'), loc: 'USED', color: 'gray' },
-                ].map(({ key, label, loc, techId, color }: { key: string; label: string; loc: string; techId?: string; color: string }) => {
+                ].map(({ key, label, loc, techId, color, excludeClientParts }: { key: string; label: string; loc: string; techId?: string; color: string; excludeClientParts?: boolean }) => {
                   const sns = serialNumbers.filter(sn =>
-                    sn.location === loc && (loc !== 'TECHNICIAN' || sn.technician?.id === techId)
+                    sn.location === loc &&
+                    (loc !== 'TECHNICIAN' || (!sn.isClientPart && sn.technician?.id === techId)) &&
+                    (!excludeClientParts || !sn.isClientPart) &&
+                    !(sn.isClientPart && sn.clientPartStatus === 'RESOLVED')
                   )
                   if (sns.length === 0) return null
                   const expanded = snExpanded[key]
@@ -549,6 +578,7 @@ export default function WarehouseItemDetailPage() {
               </div>
             )}
           </div>
+
 
           <div className="card mb-6">
             <h2 className="text-xl font-bold text-gray-900 mb-4">{t('stockOperations')}</h2>

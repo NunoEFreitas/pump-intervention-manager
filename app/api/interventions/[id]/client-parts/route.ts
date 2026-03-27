@@ -18,28 +18,49 @@ export async function GET(
 
     const parts = await prisma.$queryRaw<Array<{
       id: string
-      serialNumber: string
+      serialNumber: string | null
+      faultDescription: string | null
+      clientPartStatus: string | null
+      repairReference: string | null
+      repairStatus: string | null
       itemId: string
       itemName: string
       partNumber: string
       createdAt: Date
       location: string
       pickedUpByName: string | null
-      usedAt: Date | null
-      usedByName: string | null
+      technicianName: string | null
+      returnedToClientAt: Date | null
+      returnedByName: string | null
+      returnedRegisteredByName: string | null
+      receivedAtWarehouseAt: Date | null
+      receivedAtWarehouseByName: string | null
+      sentOutAt: Date | null
+      sentOutByName: string | null
+      sentOutTechnicianName: string | null
     }>>`
-      SELECT sn.id, sn."serialNumber", sn."itemId", wi."itemName", wi."partNumber",
-             sn."createdAt", sn.location,
+      SELECT sn.id, sn."serialNumber", sn."faultDescription", sn."clientPartStatus",
+             rj.reference AS "repairReference", rj.status AS "repairStatus",
+             sn."itemId", wi."itemName", wi."partNumber",
+             sn."createdAt", sn."returnedToClientAt", sn."receivedAtWarehouseAt", sn."sentOutAt", sn.location,
              u.name AS "pickedUpByName",
-             wop."createdAt" AS "usedAt",
-             used_by.name AS "usedByName"
+             tech.name AS "technicianName",
+             ru.name AS "returnedByName",
+             rr.name AS "returnedRegisteredByName",
+             rcv.name AS "receivedAtWarehouseByName",
+             so.name AS "sentOutByName",
+             sot.name AS "sentOutTechnicianName"
       FROM "SerialNumberStock" sn
       JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
       LEFT JOIN "User" u ON u.id = sn."pickedUpById"
-      LEFT JOIN "WorkOrderPart" wop ON sn.id::text = ANY(wop."serialNumberIds")
-      LEFT JOIN "User" used_by ON used_by.id = wop."usedById"
+      LEFT JOIN "User" tech ON tech.id = sn."technicianId"
+      LEFT JOIN "User" ru ON ru.id = sn."returnedToClientById"
+      LEFT JOIN "User" rr ON rr.id = sn."returnedToClientRegisteredById"
+      LEFT JOIN "User" rcv ON rcv.id = sn."receivedAtWarehouseById"
+      LEFT JOIN "User" so ON so.id = sn."sentOutById"
+      LEFT JOIN "User" sot ON sot.id = sn."sentOutTechnicianId"
+      LEFT JOIN "PartRepairJob" rj ON rj.id = sn."clientRepairJobId"
       WHERE sn."interventionId" = ${interventionId}
-        AND sn."isClientPart" = true
       ORDER BY sn."createdAt" ASC
     `
 
@@ -63,22 +84,18 @@ export async function POST(
     }
 
     const { id: interventionId } = await params
-    const { warehouseItemId, serialNumber } = await request.json()
+    const { warehouseItemId, serialNumber, faultDescription, technicianId: requestedTechId } = await request.json()
 
     if (!warehouseItemId) {
       return NextResponse.json({ error: 'Warehouse item is required' }, { status: 400 })
     }
-    if (!serialNumber?.trim()) {
-      return NextResponse.json({ error: 'Serial number is required' }, { status: 400 })
-    }
 
-    // Fetch intervention with client reference
+    // Fetch intervention
     const intervention = await prisma.intervention.findUnique({
       where: { id: interventionId },
       select: {
         id: true,
         assignedToId: true,
-        client: { select: { id: true } },
       },
     })
 
@@ -86,63 +103,58 @@ export async function POST(
       return NextResponse.json({ error: 'Intervention not found' }, { status: 404 })
     }
 
-    if (!intervention.assignedToId) {
-      return NextResponse.json({ error: 'Intervention has no assigned technician' }, { status: 400 })
-    }
-
-    // Verify requester is the assigned tech or admin/supervisor
+    // Fetch requester role
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { role: true },
     })
+
+    // Verify requester is the assigned tech or admin/supervisor
     if (user?.role === 'TECHNICIAN' && payload.userId !== intervention.assignedToId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    // Resolve which technician receives the part
+    // Non-technician users may override; technicians always use the assigned technician
+    const resolvedTechId = user?.role === 'TECHNICIAN'
+      ? intervention.assignedToId
+      : (requestedTechId || intervention.assignedToId)
+
+    if (!resolvedTechId) {
+      return NextResponse.json({ error: 'Nenhum técnico selecionado ou atribuído à intervenção' }, { status: 400 })
     }
 
     // Verify warehouse item exists
     const warehouseItem = await prisma.warehouseItem.findUnique({
       where: { id: warehouseItemId },
-      select: { id: true, itemName: true, partNumber: true },
+      select: { id: true, itemName: true, partNumber: true, tracksSerialNumbers: true },
     })
     if (!warehouseItem) {
       return NextResponse.json({ error: 'Warehouse item not found' }, { status: 404 })
     }
 
-    const sn = serialNumber.trim()
+    const sn = serialNumber?.trim() || null
+    const fd = faultDescription?.trim() || null
     const snId = randomUUID()
-    const movId = randomUUID()
 
-    const result = await prisma.$transaction(async (tx) => {
-      // Create SerialNumberStock
-      await tx.$executeRaw`
-        INSERT INTO "SerialNumberStock" (id, "itemId", "serialNumber", location, "technicianId", status, "isClientPart", "interventionId", "pickedUpById", "createdAt", "updatedAt")
-        VALUES (${snId}, ${warehouseItemId}, ${sn}, 'TECHNICIAN', ${intervention.assignedToId}, 'AVAILABLE', true, ${interventionId}, ${payload.userId}, NOW(), NOW())
-      `
+    // Create SerialNumberStock in CLIENT_WAREHOUSE — no technician stock impact
+    await prisma.$executeRaw`
+      INSERT INTO "SerialNumberStock" (id, "itemId", "serialNumber", "faultDescription", location, "technicianId", status, "isClientPart", "clientPartStatus", "interventionId", "pickedUpById", "createdAt", "updatedAt")
+      VALUES (${snId}, ${warehouseItemId}, ${sn}, ${fd}, 'CLIENT_WAREHOUSE', ${resolvedTechId}, 'AVAILABLE', true, 'IN_TRANSIT', ${interventionId}, ${payload.userId}, NOW(), NOW())
+    `
 
-      // Add to technician stock count
-      await tx.technicianStock.upsert({
-        where: { itemId_technicianId: { itemId: warehouseItemId, technicianId: intervention.assignedToId! } },
-        create: { itemId: warehouseItemId, technicianId: intervention.assignedToId!, quantity: 1 },
-        update: { quantity: { increment: 1 } },
-      })
-
-      // Record movement — TRANSFER_TO_TECH with a note flagging it as a client part
-      await tx.$executeRaw`
-        INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, "toUserId", notes, "createdById", "createdAt")
-        VALUES (${movId}, ${warehouseItemId}, 'TRANSFER_TO_TECH', 1, ${intervention.assignedToId}, ${'CLIENT_PART:' + interventionId}, ${payload.userId}, NOW())
-      `
-
-      const creator = await tx.user.findUnique({ where: { id: payload.userId }, select: { name: true } })
-      return {
-        id: snId,
-        serialNumber: sn,
-        itemId: warehouseItemId,
-        itemName: warehouseItem.itemName,
-        partNumber: warehouseItem.partNumber,
-        createdAt: new Date(),
-        pickedUpByName: creator?.name ?? null,
-      }
-    })
+    const creator = await prisma.user.findUnique({ where: { id: payload.userId }, select: { name: true } })
+    const result = {
+      id: snId,
+      serialNumber: sn,
+      faultDescription: fd,
+      itemId: warehouseItemId,
+      itemName: warehouseItem.itemName,
+      partNumber: warehouseItem.partNumber,
+      createdAt: new Date(),
+      location: 'CLIENT_WAREHOUSE',
+      pickedUpByName: creator?.name ?? null,
+    }
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {

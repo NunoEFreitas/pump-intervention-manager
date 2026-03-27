@@ -73,7 +73,7 @@ const REPAIR_STATUS_LABEL: Record<string, string> = {
   REPAIRED: 'Devolvido ao Stock',
   NOT_REPAIRED: 'Não Reparado',
   WRITTEN_OFF: 'Abate',
-  RETURNED_TO_CLIENT: 'Entregue ao Cliente',
+  RETURNED_TO_CLIENT: 'Reparado',
 }
 
 const REPAIR_STATUS_COLOR: Record<string, string> = {
