@@ -29,6 +29,9 @@ interface RepairJob {
   sentAt: string
   completedAt: string | null
   deliveredToClientId: string | null
+  locationId: string | null
+  locationName: string | null
+  locationCity: string | null
   itemName: string
   partNumber: string
   tracksSerialNumbers: boolean
@@ -41,6 +44,15 @@ interface RepairJob {
   clientPhone: string | null
   clientEmail: string | null
   clientVat: string | null
+}
+
+interface HistoryEntry {
+  id: string
+  eventType: string
+  description: string
+  performedById: string
+  performedByName: string | null
+  performedAt: string
 }
 
 interface Technician { id: string; name: string }
@@ -109,6 +121,8 @@ export default function RepairDetailPage() {
 
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+
+  const [history, setHistory] = useState<HistoryEntry[]>([])
 
   const [parts, setParts] = useState<RepairPart[]>([])
   const [showAddPart, setShowAddPart] = useState(false)
@@ -189,6 +203,16 @@ export default function RepairDetailPage() {
 
   useEffect(() => { fetchParts() }, [fetchParts])
 
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/repairs/${jobId}/history`, { headers: { Authorization: `Bearer ${token()}` } })
+      const d = await res.json()
+      setHistory(Array.isArray(d) ? d : [])
+    } catch { /* non-blocking */ }
+  }, [jobId])
+
+  useEffect(() => { fetchHistory() }, [fetchHistory])
+
   const fetchWarehouseItems = async () => {
     try {
       const res = await fetch('/api/warehouse?limit=100', { headers: { Authorization: `Bearer ${token()}` } })
@@ -265,7 +289,7 @@ export default function RepairDetailPage() {
       if (TERMINAL_ACTIONS.includes(body.action as string)) {
         router.push(`/${locale}/dashboard/repairs`)
       } else {
-        await fetchJob()
+        await Promise.all([fetchJob(), fetchHistory()])
       }
     } catch (e: unknown) { setActionError(e instanceof Error ? e.message : 'Erro ao executar ação') }
     finally { setActionLoading(false) }
@@ -359,7 +383,7 @@ export default function RepairDetailPage() {
       const res = await fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create_quote', quoteAmount: amount, quoteNotes: quoteNotesInput }) })
       if (!res.ok) { const e = await res.json(); setQuoteFormError(e.error || 'Erro ao criar orçamento'); return }
       setShowQuoteForm(false)
-      await fetchJob()
+      await Promise.all([fetchJob(), fetchHistory()])
     } finally { setQuoteSubmitting(false) }
   }
 
@@ -375,14 +399,14 @@ export default function RepairDetailPage() {
       const res = await fetch(`/api/repairs/${jobId}/parts`, { method: 'POST', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: selectedItemId, quantity: partQty, notes: partNotes || undefined }) })
       const d = await res.json()
       if (!res.ok) { setPartError(d.error || 'Erro ao adicionar peça'); return }
-      await fetchParts(); setShowAddPart(false)
+      await Promise.all([fetchParts(), fetchHistory()]); setShowAddPart(false)
     } catch { setPartError('Erro ao adicionar peça') }
     finally { setPartAdding(false) }
   }
 
   const handleRemovePart = async (partId: string) => {
     await fetch(`/api/repairs/${jobId}/parts/${partId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
-    await fetchParts()
+    await Promise.all([fetchParts(), fetchHistory()])
   }
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
@@ -438,17 +462,23 @@ export default function RepairDetailPage() {
         {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="space-y-5">
           {/* Client info card — CLIENT type only */}
-          {job.type === 'CLIENT' && job.clientName && (
+          {(job.type === 'CLIENT' && job.clientName) || job.locationName ? (
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
-              <h2 className="text-sm font-semibold text-orange-700 mb-3 uppercase tracking-wide">Dados do Cliente</h2>
+              <h2 className="text-sm font-semibold text-orange-700 mb-3 uppercase tracking-wide">Cliente / Localização</h2>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                <div className="col-span-2"><dt className="text-orange-600 text-xs">Nome</dt><dd className="font-semibold text-gray-900">{job.clientName}</dd></div>
+                {job.clientName && <div className="col-span-2"><dt className="text-orange-600 text-xs">Cliente</dt><dd className="font-semibold text-gray-900">{job.clientName}</dd></div>}
                 {job.clientVat && <div><dt className="text-orange-600 text-xs">NIF</dt><dd className="font-medium text-gray-900">{job.clientVat}</dd></div>}
                 {job.clientPhone && <div><dt className="text-orange-600 text-xs">Telefone</dt><dd className="font-medium text-gray-900">{job.clientPhone}</dd></div>}
                 {job.clientEmail && <div className="col-span-2"><dt className="text-orange-600 text-xs">Email</dt><dd className="font-medium text-gray-900">{job.clientEmail}</dd></div>}
+                {job.locationName && (
+                  <div className="col-span-2 pt-1 mt-1 border-t border-orange-200">
+                    <dt className="text-orange-600 text-xs">Localização</dt>
+                    <dd className="font-semibold text-gray-900">{job.locationName}{job.locationCity ? ` — ${job.locationCity}` : ''}</dd>
+                  </div>
+                )}
               </dl>
             </div>
-          )}
+          ) : null}
 
           {/* Info card */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -635,6 +665,33 @@ export default function RepairDetailPage() {
               </div>
             )}
           </div>
+          {/* History */}
+          {history.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Histórico</h2>
+              <ol className="relative border-l border-gray-200 space-y-4 ml-2">
+                {history.map((entry) => {
+                  const iconColor =
+                    entry.eventType === 'CREATED' ? 'bg-gray-400' :
+                    entry.eventType === 'PART_ADDED' ? 'bg-blue-500' :
+                    entry.eventType === 'PART_REMOVED' ? 'bg-amber-500' :
+                    entry.eventType === 'QUOTE_CREATED' ? 'bg-yellow-500' :
+                    entry.eventType === 'QUOTE_ACCEPTED' ? 'bg-green-500' :
+                    entry.eventType === 'QUOTE_REJECTED' ? 'bg-red-500' :
+                    'bg-blue-600'
+                  return (
+                    <li key={entry.id} className="ml-4">
+                      <span className={`absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full border-2 border-white ${iconColor}`} />
+                      <p className="text-sm text-gray-800">{entry.description}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {entry.performedByName ?? 'Sistema'} · {new Date(entry.performedAt).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+          )}
         </div>
 
         {/* ── Right column: actions + timeline ────────────────────────────── */}

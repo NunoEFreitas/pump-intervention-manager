@@ -107,6 +107,11 @@ export async function POST(
       VALUES (${partId}, ${jobId}, ${itemId}, ${parsedQty}, ${notes || null}, ${payload.userId}, ${now}::timestamptz)
     `
 
+    await prisma.$executeRaw`
+      INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+      VALUES (${crypto.randomUUID()}, ${jobId}, 'PART_ADDED', ${`Peça adicionada: ${item.itemName} ×${parsedQty}`}, ${payload.userId}, ${now}::timestamptz)
+    `
+
     return NextResponse.json({
       id: partId,
       jobId,

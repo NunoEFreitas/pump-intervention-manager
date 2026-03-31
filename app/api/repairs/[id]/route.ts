@@ -22,6 +22,7 @@ export async function GET(
         j."quoteAmount", j."quoteNotes", j."quoteStatus", j."quotedAt",
         j."sentAt", j."completedAt", j."deliveredToClientId",
         j."sentById", j."completedById", j."createdAt", j."updatedAt",
+        j."locationId",
         wi."itemName", wi."partNumber", wi."tracksSerialNumbers", wi."snExample",
         wi."mainWarehouse", wi."repairStock", wi."destructionStock",
         sn."serialNumber" AS "snNumber",
@@ -32,7 +33,9 @@ export async function GET(
         COALESCE(cl.email, icl.email) AS "clientEmail",
         COALESCE(cl."vatNumber", icl."vatNumber") AS "clientVat",
         rt.name AS "repairedByTechName",
-        inv.reference AS "interventionReference"
+        inv.reference AS "interventionReference",
+        COALESCE(loc.name, invloc.name) AS "locationName",
+        COALESCE(loc.city, invloc.city) AS "locationCity"
       FROM "PartRepairJob" j
       JOIN "WarehouseItem" wi ON wi.id = j."itemId"
       LEFT JOIN "SerialNumberStock" sn ON sn.id = j."serialNumberId"
@@ -42,6 +45,8 @@ export async function GET(
       LEFT JOIN "User" rt ON rt.id = j."repairedByTechId"
       LEFT JOIN "Intervention" inv ON inv.id = j."interventionId"
       LEFT JOIN "Client" icl ON icl.id = inv."clientId"
+      LEFT JOIN "CompanyLocation" loc ON loc.id = j."locationId"
+      LEFT JOIN "CompanyLocation" invloc ON invloc.id = inv."locationId"
       WHERE j.id = ${id}
     `
 
@@ -81,6 +86,10 @@ export async function PUT(
       if (job.status !== 'PENDING') return NextResponse.json({ error: 'Reparação não está em estado Criada' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET status = 'IN_REPAIR', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação iniciada', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -138,6 +147,10 @@ export async function PUT(
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — devolvido ao stock', ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -193,6 +206,10 @@ export async function PUT(
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — enviado para destruição', ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -213,6 +230,10 @@ export async function PUT(
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'QUOTE_CREATED', ${`Orçamento criado: €${amount.toFixed(2)}`}, ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -223,6 +244,10 @@ export async function PUT(
         UPDATE "PartRepairJob"
         SET status = 'IN_REPAIR', "quoteStatus" = 'ACCEPTED', "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
+      `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'QUOTE_ACCEPTED', 'Orçamento aceite pelo cliente', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -236,6 +261,10 @@ export async function PUT(
             "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
+      `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'QUOTE_REJECTED', 'Orçamento rejeitado pelo cliente', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -252,6 +281,10 @@ export async function PUT(
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — devolvido ao cliente', ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -267,6 +300,10 @@ export async function PUT(
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — não reparado', ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -277,6 +314,10 @@ export async function PUT(
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET status = 'OVM', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
       `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Enviado para OVM', ${payload.userId}, ${now}::timestamptz)
+      `
       return NextResponse.json({ ok: true })
     }
 
@@ -286,6 +327,10 @@ export async function PUT(
       if (job.status !== 'OVM') return NextResponse.json({ error: 'Reparação não está em estado OVM' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob" SET status = 'IN_REPAIR', "updatedAt" = ${now}::timestamptz WHERE id = ${id}
+      `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Devolvido de OVM (conforme) — retoma em progresso', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -300,6 +345,10 @@ export async function PUT(
             "completedAt" = ${now}::timestamptz, "completedById" = ${payload.userId},
             "updatedAt" = ${now}::timestamptz
         WHERE id = ${id}
+      `
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'OVM não aprovado — reparação encerrada', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }

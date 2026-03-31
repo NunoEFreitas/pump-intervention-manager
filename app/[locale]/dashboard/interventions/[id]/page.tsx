@@ -175,6 +175,10 @@ export default function InterventionDetailPage() {
   const [commentsDraft, setCommentsDraft] = useState('')
   const [commentsSaving, setCommentsSaving] = useState(false)
 
+  // History
+  type HistoryEntry = { id: string; eventType: string; description: string; performedById: string; performedByName: string | null; performedAt: string }
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+
   // Part Requests
   type PartRequest = { id: string; warehouseItemId: string; itemName: string; partNumber: string; quantity: number; notes: string | null; status: string; requesterName: string; createdAt: string }
   const [partRequests, setPartRequests] = useState<PartRequest[]>([])
@@ -234,6 +238,7 @@ export default function InterventionDetailPage() {
       fetchWarehouseItems()
       fetchPartRequests()
       fetchPhotos()
+      fetchHistory()
     }
   }, [params.id])
 
@@ -268,6 +273,15 @@ export default function InterventionDetailPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchHistory = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/interventions/${params.id}/history`, { headers: { Authorization: `Bearer ${token}` } })
+      const d = await res.json()
+      setHistory(Array.isArray(d) ? d : [])
+    } catch { /* non-blocking */ }
   }
 
   const fetchWorkOrders = async () => {
@@ -650,6 +664,7 @@ export default function InterventionDetailPage() {
 
       setIsEditing(false)
       fetchIntervention()
+      fetchHistory()
     } catch (error) {
       console.error('Error updating intervention:', error)
     }
@@ -672,7 +687,7 @@ export default function InterventionDetailPage() {
           scheduledTime: intervention.scheduledTime,
         }),
       })
-      if (response.ok) fetchIntervention()
+      if (response.ok) { fetchIntervention(); fetchHistory() }
       else {
         const data = await response.json()
         alert(data.error || 'Failed to update status')
@@ -703,6 +718,7 @@ export default function InterventionDetailPage() {
         setShowAssignForm(false)
         setAssignTechId('')
         fetchIntervention()
+        fetchHistory()
       }
     } catch (error) {
       console.error('Error assigning technician:', error)
@@ -728,6 +744,7 @@ export default function InterventionDetailPage() {
       if (response.ok) {
         setShowDateForm(false)
         fetchIntervention()
+        fetchHistory()
       }
     } catch (error) {
       console.error('Error setting date:', error)
@@ -1676,6 +1693,32 @@ export default function InterventionDetailPage() {
               )}
               <p className="text-white text-xs text-center mt-2 opacity-60">{lightboxPhoto.filename}</p>
             </div>
+          </div>
+        )}
+
+        {/* History */}
+        {history.length > 0 && (
+          <div className="card mb-6">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Histórico</h2>
+            <ol className="relative border-l border-gray-200 space-y-4 ml-2">
+              {history.map((entry) => {
+                const dotColor =
+                  entry.eventType === 'CREATED' ? 'bg-gray-400' :
+                  entry.description.includes('Estado') ? 'bg-blue-500' :
+                  entry.description.includes('Técnico') ? 'bg-indigo-500' :
+                  entry.description.includes('Data') ? 'bg-amber-500' :
+                  'bg-gray-400'
+                return (
+                  <li key={entry.id} className="ml-4">
+                    <span className={`absolute -left-1.5 mt-1.5 w-3 h-3 rounded-full border-2 border-white ${dotColor}`} />
+                    <p className="text-sm text-gray-800">{entry.description}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {entry.performedByName ?? 'Sistema'} · {new Date(entry.performedAt).toLocaleString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </li>
+                )
+              })}
+            </ol>
           </div>
         )}
 

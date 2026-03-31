@@ -33,7 +33,7 @@ function NewInterventionContent() {
 
   const t = useTranslations('interventions')
   const tCommon = useTranslations('common')
-  const tNav = useTranslations('nav')
+
 
   const [loading, setLoading] = useState(false)
   const [technicians, setTechnicians] = useState<Technician[]>([])
@@ -127,44 +127,41 @@ function NewInterventionContent() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="text-blue-600 hover:text-blue-800 mb-4"
-        >
-          {tNav('back')}
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{t('createTitle')}</h1>
-        <p className="text-gray-600">{t('createSubtitle')}</p>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{t('createTitle')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t('createSubtitle')}</p>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-          <p className="text-sm text-blue-800">
-            {t('requiredFieldsNew')}
-          </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">{t('requiredFieldsNew')}</p>
         </div>
 
-        <ClientSelector
-          value={formData.clientId}
-          onChange={handleClientChange}
-          label={t('fieldsClient')}
-          required
-        />
-
-        {/* Location dropdown */}
-        {selectedClient && (
+        {/* Row 1: Client + Location */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <ClientSelector
+            value={formData.clientId}
+            onChange={handleClientChange}
+            label={t('fieldsClient')}
+            required
+          />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('fieldsLocation')} *
+              {t('fieldsLocation')} {selectedClient && '*'}
             </label>
             <select
               name="locationId"
               className="input text-gray-800"
               value={formData.locationId}
               onChange={handleChange}
-              required
+              required={!!selectedClient}
+              disabled={!selectedClient}
             >
               <option value="">{t('placeholdersSelectLocation')}</option>
               {locations.map((loc) => (
@@ -173,65 +170,51 @@ function NewInterventionContent() {
                 </option>
               ))}
             </select>
-            {locations.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">
-                {t('noLocationsWarning')}
-              </p>
+            {selectedClient && locations.length === 0 && (
+              <p className="text-xs text-amber-600 mt-1">{t('noLocationsWarning')}</p>
             )}
           </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('fieldsBreakdown')} *
-          </label>
-          <textarea
-            name="breakdown"
-            rows={3}
-            className="input text-gray-800"
-            placeholder={t('placeholdersBreakdown')}
-            value={formData.breakdown}
-            onChange={handleChange}
-            required
-          />
-          <p className="text-xs text-gray-500 mt-1">{t('breakdownHint')}</p>
         </div>
 
-        <div className="flex flex-wrap gap-6">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" name="bill" checked={formData.bill} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">{t('bill')}</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" name="contract" checked={formData.contract} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">{t('contract')}</span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" name="warranty" checked={formData.warranty} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
-            <span className="text-sm font-medium text-gray-700">{t('warranty')}</span>
-          </label>
+        {/* Row 2: Breakdown + Tech */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('fieldsBreakdown')} *
+            </label>
+            <textarea
+              name="breakdown"
+              rows={3}
+              className="input text-gray-800"
+              placeholder={t('placeholdersBreakdown')}
+              value={formData.breakdown}
+              onChange={handleChange}
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">{t('breakdownHint')}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('fieldsAssignedTo')}
+            </label>
+            <select
+              name="assignedToId"
+              className="input text-gray-800"
+              value={formData.assignedToId}
+              onChange={handleChange}
+            >
+              <option value="">{t('placeholdersSelectTechnician')}</option>
+              {technicians.map((tech) => (
+                <option key={tech.id} value={tech.id}>
+                  {tech.name} ({tech.email})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('fieldsAssignedTo')}
-          </label>
-          <select
-            name="assignedToId"
-            className="input text-gray-800"
-            value={formData.assignedToId}
-            onChange={handleChange}
-          >
-            <option value="">{t('placeholdersSelectTechnician')}</option>
-            {technicians.map((tech) => (
-              <option key={tech.id} value={tech.id}>
-                {tech.name} ({tech.email})
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Row 3: Date + Time */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               {t('fieldsScheduledDate')}
@@ -256,28 +239,33 @@ function NewInterventionContent() {
               onChange={handleChange}
             />
           </div>
+          <div className="lg:col-span-2 flex items-end pb-0.5">
+            <div className="flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="bill" checked={formData.bill} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">{t('bill')}</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="contract" checked={formData.contract} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">{t('contract')}</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="warranty" checked={formData.warranty} onChange={handleChange} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700">{t('warranty')}</span>
+              </label>
+            </div>
+          </div>
         </div>
 
         {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">
-            {error}
-          </div>
+          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>
         )}
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            className="btn btn-primary flex-1"
-            disabled={loading}
-          >
+        <div className="flex gap-3 pt-2">
+          <button type="submit" className="btn btn-primary" disabled={loading}>
             {loading ? tCommon('creating') : t('createButton')}
           </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn btn-secondary"
-            disabled={loading}
-          >
+          <button type="button" onClick={() => router.back()} className="btn btn-secondary" disabled={loading}>
             {tCommon('cancel')}
           </button>
         </div>

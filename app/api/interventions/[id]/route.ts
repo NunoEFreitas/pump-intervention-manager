@@ -227,6 +227,42 @@ export async function PUT(
       `
     }
 
+    // ── History logging ────────────────────────────────────────────────────
+    const now = new Date()
+    const STATUS_LABELS: Record<string, string> = {
+      OPEN: 'Aberta', ASSIGNED: 'Atribuída', IN_PROGRESS: 'Em Progresso',
+      QUALITY_ASSESSMENT: 'Controlo de Qualidade', COMPLETED: 'Concluída', CANCELED: 'Cancelada',
+    }
+    const historyEntries: string[] = []
+
+    if (newStatus && newStatus !== intervention.status) {
+      historyEntries.push(`Estado alterado: ${STATUS_LABELS[intervention.status] ?? intervention.status} → ${STATUS_LABELS[newStatus] ?? newStatus}`)
+    }
+    if (data.assignedToId !== undefined && data.assignedToId !== intervention.assignedToId) {
+      if (data.assignedToId) {
+        const techName = updatedIntervention.assignedTo?.name ?? data.assignedToId
+        historyEntries.push(`Técnico atribuído: ${techName}`)
+      } else {
+        historyEntries.push('Técnico removido')
+      }
+    }
+    if (data.scheduledDate !== undefined && data.scheduledDate !== (intervention.scheduledDate ? intervention.scheduledDate.toISOString().slice(0, 10) : null)) {
+      historyEntries.push(data.scheduledDate ? `Data agendada: ${new Date(data.scheduledDate).toLocaleDateString('pt-PT')}` : 'Data agendada removida')
+    }
+    if (data.breakdown !== undefined && data.breakdown !== intervention.breakdown) {
+      historyEntries.push('Descrição de avaria atualizada')
+    }
+    if (data.comments !== undefined && data.comments !== intervention.comments) {
+      historyEntries.push('Comentários atualizados')
+    }
+
+    for (const desc of historyEntries) {
+      await prisma.$executeRaw`
+        INSERT INTO "InterventionHistory" (id, "interventionId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${id}, 'UPDATED', ${desc}, ${payload.userId}, ${now}::timestamptz)
+      `
+    }
+
     return NextResponse.json({
       ...updatedIntervention,
       bill: data.bill ?? false,

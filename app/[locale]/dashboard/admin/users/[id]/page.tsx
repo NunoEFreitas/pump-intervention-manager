@@ -34,7 +34,7 @@ export default function EditUserPage() {
   const tAdmin = useTranslations('admin')
   const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
-  const tNav = useTranslations('nav')
+
 
 
   useEffect(() => {
@@ -138,128 +138,78 @@ export default function EditUserPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <button
-          onClick={() => router.push(`/${locale}/dashboard/admin`)}
-          className="text-blue-600 hover:text-blue-800 mb-4"
-        >
-          {tNav('backToAdmin')}
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button onClick={() => router.push(`/${locale}/dashboard/admin`)} className="text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{tAdmin('editUser')}</h1>
-        <p className="text-gray-600">{tAdmin('updateUser')}</p>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{tAdmin('editUser')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{tAdmin('updateUser')}</p>
+        </div>
       </div>
 
       <div className="card mb-6">
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-3 gap-4 text-sm">
           <div>
-            <span className="font-medium text-gray-700">{tAdmin('userId')}:</span>
+            <span className="text-xs text-gray-500">{tAdmin('userId')}</span>
             {user.reference
               ? <p className="mt-0.5"><span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{user.reference}</span></p>
               : <p className="text-gray-400 text-xs italic">Sem referência</p>}
           </div>
           <div>
-            <span className="font-medium text-gray-700">{tAdmin('assignedInterventions')}:</span>
-            <p className="text-gray-600">{user._count?.assignedInterventions || 0}</p>
+            <span className="text-xs text-gray-500">{tAdmin('assignedInterventions')}</span>
+            <p className="font-medium text-gray-900 mt-0.5">{user._count?.assignedInterventions || 0}</p>
           </div>
           <div>
-            <span className="font-medium text-gray-700">{tAdmin('joined')}:</span>
-            <p className="text-gray-600">{new Date(user.createdAt).toLocaleDateString()}</p>
+            <span className="text-xs text-gray-500">{tAdmin('joined')}</span>
+            <p className="font-medium text-gray-900 mt-0.5">{new Date(user.createdAt).toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
       <form onSubmit={handleSubmit} className="card space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAdmin('fullName')} *
-          </label>
-          <input
-            type="text"
-            name="name"
-            className="input text-gray-800"
-            value={formData.name}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAuth('email')} *
-          </label>
-          <input
-            type="email"
-            name="email"
-            className="input text-gray-800"
-            value={formData.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAdmin('newPassword')}
-          </label>
-          <input
-            type="password"
-            name="password"
-            className="input text-gray-800"
-            value={formData.password}
-            onChange={handleChange}
-            placeholder={tAdmin('passwordPlaceholder')}
-            minLength={6}
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            {tAdmin('passwordNote')}
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {tAdmin('role')} *
-          </label>
-          {user.role === 'CLIENT' ? (
-            <div className="input text-gray-500 bg-gray-50 flex items-center gap-2 cursor-not-allowed">
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Cliente</span>
-              <span className="text-sm text-gray-400">— não pode ser alterado</span>
-            </div>
-          ) : (
-            <select
-              name="role"
-              className="input text-gray-800"
-              value={formData.role}
-              onChange={handleChange}
-              required
-            >
-              <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
-              <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
-              <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
-            </select>
-          )}
-        </div>
-
-        {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">
-            {error}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('fullName')} *</label>
+            <input type="text" name="name" className="input text-gray-800" value={formData.name} onChange={handleChange} required />
           </div>
-        )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{tAuth('email')} *</label>
+            <input type="email" name="email" className="input text-gray-800" value={formData.email} onChange={handleChange} required />
+          </div>
+        </div>
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            className="btn btn-primary flex-1"
-            disabled={saving}
-          >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('newPassword')}</label>
+            <input type="password" name="password" className="input text-gray-800" value={formData.password} onChange={handleChange} placeholder={tAdmin('passwordPlaceholder')} minLength={6} />
+            <p className="text-xs text-gray-500 mt-1">{tAdmin('passwordNote')}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{tAdmin('role')} *</label>
+            {user.role === 'CLIENT' ? (
+              <div className="input text-gray-500 bg-gray-50 flex items-center gap-2 cursor-not-allowed">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">Cliente</span>
+                <span className="text-sm text-gray-400">— não pode ser alterado</span>
+              </div>
+            ) : (
+              <select name="role" className="input text-gray-800" value={formData.role} onChange={handleChange} required>
+                <option value="TECHNICIAN">{tAdmin('rolesTechnician')}</option>
+                <option value="SUPERVISOR">{tAdmin('rolesSupervisor')}</option>
+                <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
+              </select>
+            )}
+          </div>
+        </div>
+
+        {error && <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>}
+
+        <div className="flex gap-3 pt-1">
+          <button type="submit" className="btn btn-primary" disabled={saving}>
             {saving ? tCommon('saving') : tAdmin('saveButton')}
           </button>
-          <button
-            type="button"
-            onClick={() => router.push(`/${locale}/dashboard/admin`)}
-            className="btn btn-secondary"
-            disabled={saving}
-          >
+          <button type="button" onClick={() => router.push(`/${locale}/dashboard/admin`)} className="btn btn-secondary" disabled={saving}>
             {tCommon('cancel')}
           </button>
         </div>

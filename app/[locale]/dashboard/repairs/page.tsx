@@ -117,6 +117,8 @@ export default function RepairsPage() {
   const [crCondition, setCrCondition] = useState('')
   const [crHasAccessories, setCrHasAccessories] = useState(false)
   const [crAccessories, setCrAccessories] = useState('')
+  const [crLocationId, setCrLocationId] = useState('')
+  const [crLocations, setCrLocations] = useState<{ id: string; name: string; city: string | null }[]>([])
   const [crSubmitting, setCrSubmitting] = useState(false)
   const [crError, setCrError] = useState('')
   const itemSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -146,7 +148,8 @@ export default function RepairsPage() {
     setShowCreate(true)
     setCrType('STOCK'); setCrClientId(''); setCrItemSearch(''); setCrItemOptions([])
     setCrSelectedItem(null); setCrSnOptions([]); setCrSnId(''); setCrClientSn('')
-    setCrProblem(''); setCrCondition(''); setCrHasAccessories(false); setCrAccessories(''); setCrError('')
+    setCrProblem(''); setCrCondition(''); setCrHasAccessories(false); setCrAccessories('')
+    setCrLocationId(''); setCrLocations([]); setCrError('')
     const token = localStorage.getItem('token')
     const data = await fetch('/api/clients?limit=200', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
     setCrClients(Array.isArray(data.clients) ? data.clients : [])
@@ -182,6 +185,18 @@ export default function RepairsPage() {
     }
   }
 
+  const handleCrClientChange = async (clientId: string) => {
+    setCrClientId(clientId)
+    setCrLocationId('')
+    setCrLocations([])
+    if (!clientId) return
+    try {
+      const token = localStorage.getItem('token')
+      const data = await fetch(`/api/clients/${clientId}/locations`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      setCrLocations(Array.isArray(data) ? data : [])
+    } catch { /* ignore */ }
+  }
+
   const handleCreateSubmit = async () => {
     if (!crSelectedItem || !crProblem.trim()) { setCrError('Preencha todos os campos obrigatórios'); return }
     if (crType === 'STOCK' && crSelectedItem.tracksSerialNumbers && !crSnId) { setCrError('Selecione o número de série'); return }
@@ -189,7 +204,8 @@ export default function RepairsPage() {
     try {
       const token = localStorage.getItem('token')
       const body: Record<string, any> = { type: crType, itemId: crSelectedItem.id, problem: crProblem }
-      if (crType === 'CLIENT' && crClientId) body.clientId = crClientId
+      if (crClientId) body.clientId = crClientId
+      if (crLocationId) body.locationId = crLocationId
       if (crType === 'CLIENT' && crClientSn.trim()) body.clientItemSn = crClientSn.trim()
       if (crType === 'STOCK' && crSelectedItem.tracksSerialNumbers) body.serialNumberId = crSnId
       if (crCondition.trim()) body.conditionDescription = crCondition.trim()

@@ -63,7 +63,7 @@ export default function NewClientPage() {
   const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
   const tClients = useTranslations('clients')
-  const tNav = useTranslations('nav')
+
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -151,49 +151,36 @@ export default function NewClientPage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-6">
-        <button
-          onClick={() => router.back()}
-          className="text-blue-600 hover:text-blue-800 mb-4"
-        >
-          {tNav('back')}
+    <div>
+      <div className="mb-6 flex items-center gap-3">
+        <button onClick={() => router.back()} className="text-gray-400 hover:text-gray-600">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{tClients('addClient')}</h1>
-        <p className="text-gray-600">{tClients('createClient')}</p>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">{tClients('addClient')}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{tClients('createClient')}</p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-6 items-start">
         {/* Client fields */}
         <div className="card space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('clientName')} *
-            </label>
-            <input
-              type="text"
-              name="name"
-              className="input text-gray-800"
-              value={formData.name}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('vatNumber')}
-            </label>
-            <input
-              type="text"
-              name="vatNumber"
-              className={`input text-gray-800 ${vatError && formData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
-              value={formData.vatNumber}
-              onChange={handleChange}
-            />
-            {vatError && formData.vatNumber && (
-              <p className="text-xs text-red-600 mt-1">{vatError}</p>
-            )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('clientName')} *</label>
+              <input type="text" name="name" className="input text-gray-800" value={formData.name} onChange={handleChange} required />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('vatNumber')}</label>
+              <input
+                type="text"
+                name="vatNumber"
+                className={`input text-gray-800 ${vatError && formData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
+                value={formData.vatNumber}
+                onChange={handleChange}
+              />
+              {vatError && formData.vatNumber && <p className="text-xs text-red-600 mt-1">{vatError}</p>}
+            </div>
           </div>
 
           <LocationSelector
@@ -205,83 +192,37 @@ export default function NewClientPage() {
             onCityChange={(v) => setFormData({ ...formData, city: v })}
           />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('address')}
-            </label>
-            <input
-              type="text"
-              name="address"
-              className="input text-gray-800"
-              value={formData.address}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('postalCode')}
-            </label>
-            <input
-              type="text"
-              name="postalCode"
-              className="input text-gray-800"
-              value={formData.postalCode}
-              onChange={handleChange}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('address')}</label>
+              <input type="text" name="address" className="input text-gray-800" value={formData.address} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('postalCode')}</label>
+              <input type="text" name="postalCode" className="input text-gray-800" value={formData.postalCode} onChange={handleChange} />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {tClients('phone')}
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                className="input text-gray-800"
-                value={formData.phone}
-                onChange={handleChange}
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('phone')}</label>
+              <input type="tel" name="phone" className="input text-gray-800" value={formData.phone} onChange={handleChange} />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {tAuth('email')}
-              </label>
-              <input
-                type="email"
-                name="email"
-                className="input text-gray-800"
-                value={formData.email}
-                onChange={handleChange}
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tAuth('email')}</label>
+              <input type="email" name="email" className="input text-gray-800" value={formData.email} onChange={handleChange} />
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('contactPerson')}
-            </label>
-            <input
-              type="text"
-              name="contactPerson"
-              className="input text-gray-800"
-              value={formData.contactPerson}
-              onChange={handleChange}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {tClients('notes')}
-            </label>
-            <textarea
-              name="notes"
-              rows={3}
-              className="input text-gray-800"
-              value={formData.notes}
-              onChange={handleChange}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('contactPerson')}</label>
+              <input type="text" name="contactPerson" className="input text-gray-800" value={formData.contactPerson} onChange={handleChange} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('notes')}</label>
+              <textarea name="notes" rows={2} className="input text-gray-800" value={formData.notes} onChange={handleChange} />
+            </div>
           </div>
         </div>
 
@@ -442,28 +383,18 @@ export default function NewClientPage() {
           ))}
         </div>
 
-        {error && (
-          <div className="text-red-600 text-sm bg-red-50 p-3 rounded">
-            {error}
+        <div className="lg:col-span-2 space-y-3">
+          {error && (
+            <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>
+          )}
+          <div className="flex gap-3">
+            <button type="submit" className="btn btn-primary" disabled={loading || !!vatError}>
+              {loading ? tCommon('creating') : tClients('createButton')}
+            </button>
+            <button type="button" onClick={() => router.back()} className="btn btn-secondary" disabled={loading}>
+              {tCommon('cancel')}
+            </button>
           </div>
-        )}
-
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            className="btn btn-primary flex-1"
-            disabled={loading || !!vatError}
-          >
-            {loading ? tCommon('creating') : tClients('createButton')}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn btn-secondary"
-            disabled={loading}
-          >
-            {tCommon('cancel')}
-          </button>
         </div>
       </form>
     </div>

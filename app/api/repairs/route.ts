@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
     const payload = verifyToken(token || '')
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { type, itemId, clientId, problem, serialNumberId, conditionDescription, hasAccessories, accessoriesDescription, clientItemSn } = await request.json()
+    const { type, itemId, clientId, locationId, problem, serialNumberId, conditionDescription, hasAccessories, accessoriesDescription, clientItemSn } = await request.json()
 
     if (!type || !itemId || !problem?.trim()) {
       return NextResponse.json({ error: 'Campos obrigatórios em falta' }, { status: 400 })
@@ -160,6 +160,11 @@ export async function POST(request: NextRequest) {
         VALUES (${movId}, ${itemId}, 'REPAIR_IN', 1, ${`[${repairRef}] ${problem.trim()}`}, ${payload.userId}, ${now}::timestamptz)
       `
 
+      const condDesc = conditionDescription?.trim() || null
+      const hasAcc: boolean = !!hasAccessories
+      const accDesc = accessoriesDescription?.trim() || null
+      const locId = locationId || null
+
       if (item.tracksSerialNumbers && serialNumberId) {
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
@@ -170,22 +175,21 @@ export async function POST(request: NextRequest) {
           INSERT INTO "MovementSerialNumber" (id, "movementId", "serialNumberId")
           VALUES (${crypto.randomUUID()}, ${movId}, ${serialNumberId})
         `
-        const condDesc = conditionDescription?.trim() || null
-        const hasAcc: boolean = !!hasAccessories
-        const accDesc = accessoriesDescription?.trim() || null
         await prisma.$executeRaw`
-          INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "serialNumberId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "sentById", "sentAt", "createdAt", "updatedAt")
-          VALUES (${repairJobId}, ${repairRef}, 'STOCK', ${itemId}, ${serialNumberId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
+          INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "serialNumberId", "locationId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "sentById", "sentAt", "createdAt", "updatedAt")
+          VALUES (${repairJobId}, ${repairRef}, 'STOCK', ${itemId}, ${serialNumberId}, ${locId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
         `
       } else {
-        const condDesc = conditionDescription?.trim() || null
-        const hasAcc: boolean = !!hasAccessories
-        const accDesc = accessoriesDescription?.trim() || null
         await prisma.$executeRaw`
-          INSERT INTO "PartRepairJob" (id, reference, type, "itemId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "sentById", "sentAt", "createdAt", "updatedAt")
-          VALUES (${repairJobId}, ${repairRef}, 'STOCK', ${itemId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
+          INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "locationId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "sentById", "sentAt", "createdAt", "updatedAt")
+          VALUES (${repairJobId}, ${repairRef}, 'STOCK', ${itemId}, ${locId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
         `
       }
+
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${repairJobId}, 'CREATED', ${`Reparação criada — ${item.itemName} (${repairRef})`}, ${payload.userId}, ${now}::timestamptz)
+      `
 
       return NextResponse.json({ ok: true, repairJobId, reference: repairRef })
     } else {
@@ -197,9 +201,15 @@ export async function POST(request: NextRequest) {
       const accDesc = accessoriesDescription?.trim() || null
       const clientSn = clientItemSn?.trim() || null
 
+      const locId = locationId || null
       await prisma.$executeRaw`
-        INSERT INTO "PartRepairJob" (id, reference, type, "itemId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "clientItemSn", "deliveredToClientId", "sentById", "sentAt", "createdAt", "updatedAt")
-        VALUES (${repairJobId}, ${repairRef}, 'CLIENT', ${itemId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${clientSn}, ${resolvedClientId}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
+        INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "locationId", quantity, status, problem, "conditionDescription", "hasAccessories", "accessoriesDescription", "clientItemSn", "deliveredToClientId", "sentById", "sentAt", "createdAt", "updatedAt")
+        VALUES (${repairJobId}, ${repairRef}, 'CLIENT', ${itemId}, ${locId}, 1, 'PENDING', ${problem.trim()}, ${condDesc}, ${hasAcc}, ${accDesc}, ${clientSn}, ${resolvedClientId}, ${payload.userId}, ${now}::timestamptz, ${now}::timestamptz, ${now}::timestamptz)
+      `
+
+      await prisma.$executeRaw`
+        INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+        VALUES (${crypto.randomUUID()}, ${repairJobId}, 'CREATED', ${`Reparação criada — ${item.itemName} (${repairRef})`}, ${payload.userId}, ${now}::timestamptz)
       `
 
       return NextResponse.json({ ok: true, repairJobId, reference: repairRef })

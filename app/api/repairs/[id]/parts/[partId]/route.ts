@@ -14,8 +14,11 @@ export async function DELETE(
     const { id: jobId, partId } = await params
 
     // Fetch the part record
-    const partRows = await prisma.$queryRaw<{ id: string; jobId: string; itemId: string; quantity: number }[]>`
-      SELECT id, "jobId", "itemId", quantity FROM "RepairJobPart" WHERE id = ${partId} AND "jobId" = ${jobId}
+    const partRows = await prisma.$queryRaw<{ id: string; jobId: string; itemId: string; quantity: number; itemName: string }[]>`
+      SELECT p.id, p."jobId", p."itemId", p.quantity, wi."itemName"
+      FROM "RepairJobPart" p
+      JOIN "WarehouseItem" wi ON wi.id = p."itemId"
+      WHERE p.id = ${partId} AND p."jobId" = ${jobId}
     `
     const part = partRows[0]
     if (!part) return NextResponse.json({ error: 'Part not found' }, { status: 404 })
@@ -51,6 +54,11 @@ export async function DELETE(
 
     // Delete the part record
     await prisma.$executeRaw`DELETE FROM "RepairJobPart" WHERE id = ${partId}`
+
+    await prisma.$executeRaw`
+      INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
+      VALUES (${crypto.randomUUID()}, ${jobId}, 'PART_REMOVED', ${`Peça removida: ${part.itemName} ×${part.quantity}`}, ${payload.userId}, ${now}::timestamptz)
+    `
 
     return NextResponse.json({ success: true })
   } catch (error) {

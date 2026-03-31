@@ -151,6 +151,12 @@ export async function POST(request: NextRequest) {
       WHERE id = ${intervention.id}
     `
 
+    const now = new Date()
+    await prisma.$executeRaw`
+      INSERT INTO "InterventionHistory" (id, "interventionId", "eventType", description, "performedById", "performedAt")
+      VALUES (${crypto.randomUUID()}, ${intervention.id}, 'CREATED', ${`Intervenção criada (${reference})`}, ${payload.userId}, ${now}::timestamptz)
+    `
+
     return NextResponse.json({
       ...intervention,
       bill: data.bill ?? false,
