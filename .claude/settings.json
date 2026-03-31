@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls c:/pump-intervention-manager/app/api/interventions/[id]/)"
+      "Bash(ls c:/pump-intervention-manager/app/api/interventions/[id]/)",
+      "Bash(node -e \":*)"
     ]
   }
 }

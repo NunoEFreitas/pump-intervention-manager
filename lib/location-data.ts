@@ -494,3 +494,14 @@ export function getDistricts(country: string): string[] {
 export function getCities(country: string, district: string): string[] {
   return GEO_DATA[country]?.[district] ?? []
 }
+
+/** Given a city name, returns the district it belongs to for that country (case-insensitive). */
+export function getDistrictByCity(country: string, city: string): string | null {
+  const countryData = GEO_DATA[country]
+  if (!countryData) return null
+  const normalized = city.trim().toLowerCase()
+  for (const [district, cities] of Object.entries(countryData)) {
+    if (cities.some(c => c.toLowerCase() === normalized)) return district
+  }
+  return null
+}

@@ -93,6 +93,19 @@ export async function POST(request: NextRequest) {
     }
     const data = parsed.data
 
+    // Reject duplicate VAT numbers
+    if (data.vatNumber) {
+      const existing = await prisma.$queryRaw<{ id: string; name: string; reference: string }[]>`
+        SELECT id, name, reference FROM "Client" WHERE "vatNumber" = ${data.vatNumber} LIMIT 1
+      `
+      if (existing.length > 0) {
+        return NextResponse.json(
+          { error: 'duplicate_vat', existingId: existing[0].id, existingName: existing[0].name, existingReference: existing[0].reference },
+          { status: 409 }
+        )
+      }
+    }
+
     const reference = await generateClientReference()
 
     const client = await prisma.client.create({

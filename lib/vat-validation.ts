@@ -56,6 +56,29 @@ function validateSpanishNIF(vat: string): boolean {
   return false
 }
 
+// Maps EU VAT 2-letter prefixes to full country names (as stored in the app)
+const VIES_PREFIX_TO_COUNTRY: Record<string, string> = {
+  AT: 'Austria', BE: 'Belgium', BG: 'Bulgaria', CY: 'Cyprus',
+  CZ: 'Czech Republic', DE: 'Germany', DK: 'Denmark', EE: 'Estonia',
+  EL: 'Greece', ES: 'Spain', FI: 'Finland', FR: 'France',
+  HR: 'Croatia', HU: 'Hungary', IE: 'Ireland', IT: 'Italy',
+  LT: 'Lithuania', LU: 'Luxembourg', LV: 'Latvia', MT: 'Malta',
+  NL: 'Netherlands', PL: 'Poland', PT: 'Portugal', RO: 'Romania',
+  SE: 'Sweden', SI: 'Slovenia', SK: 'Slovakia',
+}
+
+/**
+ * Detects the country from a EU VAT number prefix (e.g. "PT508276490" → "Portugal").
+ * Returns null if the prefix is not a recognised EU VAT prefix.
+ */
+export function detectCountryFromVAT(vat: string): string | null {
+  const prefix = vat.trim().slice(0, 2).toUpperCase()
+  if (/^[A-Z]{2}$/.test(prefix)) {
+    return VIES_PREFIX_TO_COUNTRY[prefix] ?? null
+  }
+  return null
+}
+
 export function validateVAT(vatNumber: string, country?: string): string | null {
   const vat = vatNumber.trim()
   if (!vat) return null // empty is allowed

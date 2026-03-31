@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import LocationSelector from '@/components/LocationSelector'
 import { validateVAT } from '@/lib/vat-validation'
+import { getDistrictByCity, getCities } from '@/lib/location-data'
 
 interface LocationDraft {
   id: string
@@ -42,6 +43,8 @@ export default function NewClientPage() {
   const locale = params.locale as string
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [viesLoading, setViesLoading] = useState(false)
+  const [viesResult, setViesResult] = useState<{ ok: boolean; msg: string } | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     vatNumber: '',
@@ -73,7 +76,71 @@ export default function NewClientPage() {
 
   const vatError = validateVAT(formData.vatNumber, formData.country)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const lookupVies = async () => {
+    if (!formData.vatNumber.trim() || !formData.country) {
+      setViesResult({ ok: false, msg: 'Preencha o país e o NIF antes de consultar.' })
+      return
+    }
+    setViesLoading(true)
+    setViesResult(null)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `/api/vies?country=${encodeURIComponent(formData.country)}&vat=${encodeURIComponent(formData.vatNumber.trim())}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      const data = await res.json()
+      if (!res.ok) {
+        setViesResult({ ok: false, msg: data.error ?? 'Erro ao consultar VIES' })
+        return
+      }
+      if (!data.isValid || (!data.name && !data.address)) {
+        setViesResult({ ok: false, msg: 'NIF não encontrado ou não registado no VIES para operações intracomunitárias.' })
+        return
+      }
+      // Parse address into separate fields
+      const updates: Partial<typeof formData> = {}
+      if (data.name && !formData.name.trim()) updates.name = data.name
+      if (data.address) {
+        const lines = (data.address as string).split('\n').map((l: string) => l.trim()).filter(Boolean)
+        if (lines[0]) updates.address = lines[0]
+        // Find line with postal code pattern NNNN-NNN
+        const postalRegex = /(\d{4}-\d{3})\s+(.+)/
+        for (const line of lines.slice(1)) {
+          const m = line.match(postalRegex)
+          if (m) {
+            updates.postalCode = m[1]
+            updates.city = m[2].trim()
+            break
+          }
+        }
+        // Fallback: city from "Area - City" on line 2
+        if (!updates.city && lines[1]) {
+          const parts = lines[1].split(' - ')
+          updates.city = parts[parts.length - 1].trim()
+        }
+        // Derive district from city and resolve exact city name casing from GEO_DATA
+        if (updates.city && formData.country) {
+          const district = getDistrictByCity(formData.country, updates.city)
+          if (district) {
+            updates.district = district
+            // Replace city with the exact casing from GEO_DATA so the select matches
+            const canonical = getCities(formData.country, district)
+              .find(c => c.toLowerCase() === updates.city!.toLowerCase())
+            if (canonical) updates.city = canonical
+          }
+        }
+      }
+      if (Object.keys(updates).length) setFormData(prev => ({ ...prev, ...updates }))
+      setViesResult({ ok: true, msg: `NIF válido${data.name ? ` — ${data.name}` : ''}` })
+    } catch {
+      setViesResult({ ok: false, msg: 'Erro de ligação ao serviço VIES.' })
+    } finally {
+      setViesLoading(false)
+    }
+  }
+
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     if (vatError) return
@@ -95,6 +162,12 @@ export default function NewClientPage() {
         body: JSON.stringify(formData),
       })
 
+      if (clientRes.status === 409) {
+        const dup = await clientRes.json()
+        setError(`duplicate_vat:${dup.existingId}:${dup.existingReference}:${dup.existingName}`)
+        setLoading(false)
+        return
+      }
       if (!clientRes.ok) throw new Error('Failed to create client')
       const client = await clientRes.json()
 
@@ -172,14 +245,42 @@ export default function NewClientPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{tClients('vatNumber')}</label>
-              <input
-                type="text"
-                name="vatNumber"
-                className={`input text-gray-800 ${vatError && formData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
-                value={formData.vatNumber}
-                onChange={handleChange}
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="vatNumber"
+                  className={`input text-gray-800 flex-1 ${vatError && formData.vatNumber ? 'border-red-400 focus:ring-red-400' : ''}`}
+                  value={formData.vatNumber}
+                  onChange={handleChange}
+                />
+                <button
+                  type="button"
+                  onClick={lookupVies}
+                  disabled={viesLoading || !formData.vatNumber.trim() || !formData.country}
+                  title="Consultar VIES (base de dados EU de NIF empresariais)"
+                  className="shrink-0 px-3 py-2 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {viesLoading ? '…' : 'VIES'}
+                </button>
+              </div>
               {vatError && formData.vatNumber && <p className="text-xs text-red-600 mt-1">{vatError}</p>}
+              {error.startsWith('duplicate_vat:') && (() => {
+                const [, id, ref, ...nameParts] = error.split(':')
+                const name = nameParts.join(':')
+                return (
+                  <p className="text-xs text-amber-800 mt-1">
+                    ⚠ Já existe um cliente com este NIF:{' '}
+                    <a href={`/${locale}/dashboard/clients/${id}`} className="font-semibold underline hover:text-amber-900">
+                      {ref} — {name}
+                    </a>
+                  </p>
+                )
+              })()}
+              {viesResult && (
+                <p className={`text-xs mt-1 ${viesResult.ok ? 'text-green-700' : 'text-amber-700'}`}>
+                  {viesResult.ok ? '✓' : '⚠'} {viesResult.msg}
+                </p>
+              )}
             </div>
           </div>
 
@@ -384,7 +485,7 @@ export default function NewClientPage() {
         </div>
 
         <div className="lg:col-span-2 space-y-3">
-          {error && (
+          {error && !error.startsWith('duplicate_vat:') && (
             <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>
           )}
           <div className="flex gap-3">
