@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(ls c:/pump-intervention-manager/app/api/interventions/[id]/)",
-      "Bash(node -e \":*)"
+      "Bash(node -e \":*)",
+      "Bash(head -60 echo ---WAREHOUSE--- grep -rn \"client.part\\\\|clientPart\\\\|IN_TRANSIT\\\\|assign.item\\\\|generic\" c:/pump-intervention-manager/app/[locale]/dashboard/warehouse/)"
+    ],
+    "additionalDirectories": [
+      "c:\\pump-intervention-manager\\app\\api\\client-parts\\[id]"
     ]
   }
 }

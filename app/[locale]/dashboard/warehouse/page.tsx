@@ -189,6 +189,24 @@ export default function WarehousePage() {
   const [cpReplacementSnId, setCpReplacementSnId] = useState<string>('')
   const [cpClientSnMode, setCpClientSnMode] = useState<'auto' | 'manual'>('auto')
   const [cpClientSnValue, setCpClientSnValue] = useState('')
+  // Assign item to generic client part
+  const [assignModal, setAssignModal] = useState<ClientPart | null>(null)
+  const [assignMode, setAssignMode] = useState<'existing' | 'new'>('existing')
+  const [assignSearch, setAssignSearch] = useState('')
+  const [assignSearchResults, setAssignSearchResults] = useState<WarehouseItem[]>([])
+  const [assignSearchLoading, setAssignSearchLoading] = useState(false)
+  const [assignItemId, setAssignItemId] = useState('')
+  const [assignNew, setAssignNew] = useState({
+    equipmentTypeId: '', brandId: '', partNumber: '', ean13: '',
+    itemName: '', value: '', mainWarehouse: '0',
+    tracksSerialNumbers: false, autoSn: false, snExample: '',
+  })
+  const [assignItemNameEdited, setAssignItemNameEdited] = useState(false)
+  const [assignEquipmentTypes, setAssignEquipmentTypes] = useState<{ id: string; name: string }[]>([])
+  const [assignEquipmentBrands, setAssignEquipmentBrands] = useState<{ id: string; name: string }[]>([])
+  const [assignSerialNumber, setAssignSerialNumber] = useState('')
+  const [assignSubmitting, setAssignSubmitting] = useState(false)
+  const [assignError, setAssignError] = useState('')
 
   useEffect(() => {
     fetchItems(1, searchTerm)
@@ -300,6 +318,59 @@ export default function WarehousePage() {
       setClientParts(Array.isArray(data) ? data : [])
     } catch { /* ignore */ } finally { setCpLoading(false) }
   }, [])
+
+  const openAssignModal = (part: ClientPart) => {
+    setAssignModal(part); setAssignMode('existing'); setAssignSearch(''); setAssignSearchResults([])
+    setAssignItemId('')
+    setAssignNew({ equipmentTypeId: '', brandId: '', partNumber: '', ean13: '', itemName: '', value: '', mainWarehouse: '0', tracksSerialNumbers: false, autoSn: false, snExample: '' })
+    setAssignItemNameEdited(false)
+    setAssignSerialNumber(part.serialNumber || ''); setAssignError('')
+    // Fetch equipment types and brands if not already loaded
+    if (assignEquipmentTypes.length === 0 || assignEquipmentBrands.length === 0) {
+      const token = localStorage.getItem('token')
+      const headers = { Authorization: `Bearer ${token}` }
+      Promise.all([
+        fetch('/api/admin/equipment-types', { headers }).then(r => r.json()),
+        fetch('/api/admin/equipment-brands', { headers }).then(r => r.json()),
+      ]).then(([types, brands]) => {
+        setAssignEquipmentTypes(Array.isArray(types) ? types : [])
+        setAssignEquipmentBrands(Array.isArray(brands) ? brands : [])
+      }).catch(() => {})
+    }
+  }
+
+  const searchAssignItems = useCallback(async (q: string) => {
+    if (!q.trim()) { setAssignSearchResults([]); return }
+    setAssignSearchLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const data: WarehousePage = await fetch(
+        `/api/warehouse?search=${encodeURIComponent(q)}&limit=20`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json())
+      setAssignSearchResults((data.items ?? []).filter(i => i.partNumber !== '__GENERIC__'))
+    } catch { setAssignSearchResults([]) } finally { setAssignSearchLoading(false) }
+  }, [])
+
+  const handleAssignItem = async () => {
+    if (!assignModal) return
+    setAssignSubmitting(true); setAssignError('')
+    try {
+      const token = localStorage.getItem('token')
+      const body = assignMode === 'existing'
+        ? { existingItemId: assignItemId, serialNumber: assignSerialNumber }
+        : { newItem: assignNew, serialNumber: assignSerialNumber }
+      const res = await fetch(`/api/client-parts/${assignModal.id}/assign-item`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAssignError(data.error || 'Erro ao associar artigo'); return }
+      setAssignModal(null)
+      fetchClientParts()
+    } catch { setAssignError('Erro inesperado') } finally { setAssignSubmitting(false) }
+  }
 
   const openCpModal = async (type: ModalType, part: ClientPart) => {
     setCpSelected(part); setCpModal(type); setCpNotes(''); setCpProblem(type === 'repair' ? (part.faultDescription ?? '') : ''); setCpError('')
@@ -651,7 +722,10 @@ export default function WarehousePage() {
                   </div>
                   {/* Secondary row */}
                   <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
-                    {part.partNumber && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>}
+                    {part.partNumber === '__GENERIC__'
+                      ? <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Genérico</span>
+                      : part.partNumber && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>
+                    }
                     {part.clientName && <span className="font-medium text-gray-700">{part.clientName}</span>}
                     {part.interventionReference && (
                       <button onClick={() => router.push(`/${locale}/dashboard/interventions/${part.interventionId}`)} className="font-mono text-blue-600 hover:underline text-xs">
@@ -664,9 +738,20 @@ export default function WarehousePage() {
                   </div>
                   {/* Actions row */}
                   <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-gray-100">
+                    {/* Assign real item to generic parts */}
+                    {part.partNumber === '__GENERIC__' && (part.clientPartStatus === 'IN_TRANSIT' || part.clientPartStatus === 'PENDING') && (
+                      <button onClick={() => openAssignModal(part)} className="text-xs px-2.5 py-1 bg-amber-500 text-white rounded hover:bg-amber-600 font-medium">
+                        Associar Artigo
+                      </button>
+                    )}
                     {part.clientPartStatus === 'IN_TRANSIT' && (
                       <>
-                        <button onClick={() => handleReceivePart(part.id)} className="text-xs px-2.5 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+                        <button
+                          onClick={() => handleReceivePart(part.id)}
+                          disabled={part.partNumber === '__GENERIC__'}
+                          title={part.partNumber === '__GENERIC__' ? 'Associa um artigo antes de dar entrada' : undefined}
+                          className="text-xs px-2.5 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
                           Dar Entrada
                         </button>
                         <button onClick={() => handleCancelClientPart(part.id)} className="text-xs px-2.5 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
@@ -674,7 +759,7 @@ export default function WarehousePage() {
                         </button>
                       </>
                     )}
-                    {part.clientPartStatus === 'PENDING' && (
+                    {part.clientPartStatus === 'PENDING' && part.partNumber !== '__GENERIC__' && (
                       <>
                         <button
                           onClick={() => openCpModal('swap', part)}
@@ -1024,6 +1109,230 @@ export default function WarehousePage() {
             <div className="flex justify-end gap-3 px-6 pb-6">
               <button onClick={closeCpModal} className="btn btn-secondary" disabled={cpSubmitting}>Cancelar</button>
               <button onClick={handleClientRepair} className="btn btn-primary" disabled={cpSubmitting}>{cpSubmitting ? 'A criar...' : 'Abrir Reparação'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Assign Item to Generic Client Part modal ──────────────────────────── */}
+      {assignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-xl">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Associar Artigo</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Peça genérica recolhida{assignModal.interventionReference ? ` na intervenção #${assignModal.interventionReference}` : ''}.
+              Associa a um artigo existente ou cria um novo.
+            </p>
+
+            {/* Mode toggle */}
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4 text-sm font-medium">
+              <button
+                onClick={() => { setAssignMode('existing'); setAssignError('') }}
+                className={`flex-1 py-2 transition-colors ${assignMode === 'existing' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              >
+                Artigo existente
+              </button>
+              <button
+                onClick={() => { setAssignMode('new'); setAssignError('') }}
+                className={`flex-1 py-2 transition-colors ${assignMode === 'new' ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+              >
+                Criar novo artigo
+              </button>
+            </div>
+
+            {assignMode === 'existing' ? (
+              <div>
+                <input
+                  type="text"
+                  placeholder="Pesquisar por nome ou referência..."
+                  className="input text-gray-800 w-full mb-2"
+                  value={assignSearch}
+                  onChange={e => {
+                    setAssignSearch(e.target.value)
+                    setAssignItemId('')
+                    searchAssignItems(e.target.value)
+                  }}
+                  autoFocus
+                />
+                {assignSearchLoading && <p className="text-sm text-gray-400 py-2">A pesquisar...</p>}
+                {!assignSearchLoading && assignSearch && assignSearchResults.length === 0 && (
+                  <p className="text-sm text-gray-400 py-2">Sem resultados.</p>
+                )}
+                {assignSearchResults.length > 0 && (
+                  <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto divide-y divide-gray-100">
+                    {assignSearchResults.map(item => (
+                      <label key={item.id} className={`flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-blue-50 ${assignItemId === item.id ? 'bg-blue-50' : ''}`}>
+                        <input
+                          type="radio"
+                          name="assignItem"
+                          value={item.id}
+                          checked={assignItemId === item.id}
+                          onChange={() => setAssignItemId(item.id)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-800">{item.itemName}</p>
+                          <p className="text-xs text-gray-400 font-mono">{item.partNumber}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                {/* Type */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de equipamento</label>
+                  <select
+                    className="input text-gray-800 w-full"
+                    value={assignNew.equipmentTypeId}
+                    onChange={e => {
+                      const v = e.target.value
+                      setAssignNew(p => {
+                        const next = { ...p, equipmentTypeId: v }
+                        if (!assignItemNameEdited) {
+                          const tn = assignEquipmentTypes.find(x => x.id === v)?.name || ''
+                          const bn = assignEquipmentBrands.find(x => x.id === next.brandId)?.name || ''
+                          next.itemName = [tn, bn, next.partNumber].filter(Boolean).join(' ')
+                        }
+                        return next
+                      })
+                    }}
+                  >
+                    <option value="">— Selecionar —</option>
+                    {assignEquipmentTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                {/* Brand */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                  <select
+                    className="input text-gray-800 w-full"
+                    value={assignNew.brandId}
+                    onChange={e => {
+                      const v = e.target.value
+                      setAssignNew(p => {
+                        const next = { ...p, brandId: v }
+                        if (!assignItemNameEdited) {
+                          const tn = assignEquipmentTypes.find(x => x.id === next.equipmentTypeId)?.name || ''
+                          const bn = assignEquipmentBrands.find(x => x.id === v)?.name || ''
+                          next.itemName = [tn, bn, next.partNumber].filter(Boolean).join(' ')
+                        }
+                        return next
+                      })
+                    }}
+                  >
+                    <option value="">— Selecionar —</option>
+                    {assignEquipmentBrands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                </div>
+                {/* Part number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Referência (Part Number) *</label>
+                  <input
+                    type="text"
+                    className="input text-gray-800 w-full"
+                    value={assignNew.partNumber}
+                    autoFocus
+                    onChange={e => {
+                      const v = e.target.value
+                      setAssignNew(p => {
+                        const next = { ...p, partNumber: v }
+                        if (!assignItemNameEdited) {
+                          const tn = assignEquipmentTypes.find(x => x.id === next.equipmentTypeId)?.name || ''
+                          const bn = assignEquipmentBrands.find(x => x.id === next.brandId)?.name || ''
+                          next.itemName = [tn, bn, v].filter(Boolean).join(' ')
+                        }
+                        return next
+                      })
+                    }}
+                  />
+                </div>
+                {/* EAN-13 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
+                  <input
+                    type="text"
+                    className="input text-gray-800 w-full font-mono"
+                    value={assignNew.ean13}
+                    maxLength={13}
+                    placeholder="0000000000000"
+                    onChange={e => setAssignNew(p => ({ ...p, ean13: e.target.value }))}
+                  />
+                </div>
+                {/* Item name */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome do artigo *</label>
+                  <input
+                    type="text"
+                    className="input text-gray-800 w-full"
+                    value={assignNew.itemName}
+                    onChange={e => { setAssignNew(p => ({ ...p, itemName: e.target.value })); setAssignItemNameEdited(true) }}
+                  />
+                </div>
+                {/* Tracks SNs */}
+                <div className="border-t pt-3 space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assignNew.tracksSerialNumbers}
+                      onChange={e => setAssignNew(p => ({ ...p, tracksSerialNumbers: e.target.checked, autoSn: false }))}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm font-medium text-gray-700">Rastreia números de série</span>
+                  </label>
+                  {assignNew.tracksSerialNumbers && (
+                    <div className="ml-6 space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={assignNew.autoSn}
+                          onChange={e => setAssignNew(p => ({ ...p, autoSn: e.target.checked }))}
+                          className="w-4 h-4"
+                        />
+                        <span className="text-sm text-gray-700">Geração automática de SN</span>
+                      </label>
+                      {assignNew.autoSn && (
+                        <input
+                          type="text"
+                          className="input text-gray-800 w-full"
+                          value={assignNew.snExample}
+                          placeholder="Prefixo, ex: PUMP-GF"
+                          onChange={e => setAssignNew(p => ({ ...p, snExample: e.target.value }))}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Serial number — common to both modes */}
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Número de série <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: SN-12345"
+                className="input text-gray-800 w-full"
+                value={assignSerialNumber}
+                onChange={e => setAssignSerialNumber(e.target.value)}
+              />
+            </div>
+
+            {assignError && <p className="text-sm text-red-600 bg-red-50 p-2 rounded mt-3">{assignError}</p>}
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={handleAssignItem}
+                disabled={assignSubmitting || (assignMode === 'existing' && !assignItemId) || (assignMode === 'new' && (!assignNew.itemName.trim() || !assignNew.partNumber.trim()))}
+                className="btn btn-primary disabled:opacity-40"
+              >
+                {assignSubmitting ? 'A guardar...' : 'Associar'}
+              </button>
+              <button onClick={() => setAssignModal(null)} className="btn btn-secondary">Cancelar</button>
             </div>
           </div>
         </div>

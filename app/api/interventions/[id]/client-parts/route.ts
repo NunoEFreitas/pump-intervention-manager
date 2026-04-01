@@ -124,13 +124,37 @@ export async function POST(
       return NextResponse.json({ error: 'Nenhum técnico selecionado ou atribuído à intervenção' }, { status: 400 })
     }
 
-    // Verify warehouse item exists
-    const warehouseItem = await prisma.warehouseItem.findUnique({
-      where: { id: warehouseItemId },
-      select: { id: true, itemName: true, partNumber: true, tracksSerialNumbers: true },
-    })
-    if (!warehouseItem) {
-      return NextResponse.json({ error: 'Warehouse item not found' }, { status: 404 })
+    const GENERIC_PN = '__GENERIC__'
+
+    // Resolve item: support special '__GENERIC__' placeholder for uncatalogued parts
+    let resolvedItemId = warehouseItemId
+    let resolvedItemName = ''
+    let resolvedPartNumber = ''
+    if (warehouseItemId === GENERIC_PN) {
+      const existing = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "WarehouseItem" WHERE "partNumber" = ${GENERIC_PN} LIMIT 1
+      `
+      if (existing.length > 0) {
+        resolvedItemId = existing[0].id
+      } else {
+        resolvedItemId = randomUUID()
+        await prisma.$executeRaw`
+          INSERT INTO "WarehouseItem" (id, "itemName", "partNumber", value, "mainWarehouse", "repairStock", "destructionStock", "tracksSerialNumbers", "autoSn", "createdAt", "updatedAt")
+          VALUES (${resolvedItemId}, 'Artigo Genérico', ${GENERIC_PN}, 0, 0, 0, 0, false, false, NOW(), NOW())
+        `
+      }
+      resolvedItemName = 'Artigo Genérico'
+      resolvedPartNumber = GENERIC_PN
+    } else {
+      const warehouseItem = await prisma.warehouseItem.findUnique({
+        where: { id: warehouseItemId },
+        select: { id: true, itemName: true, partNumber: true },
+      })
+      if (!warehouseItem) {
+        return NextResponse.json({ error: 'Warehouse item not found' }, { status: 404 })
+      }
+      resolvedItemName = warehouseItem.itemName
+      resolvedPartNumber = warehouseItem.partNumber
     }
 
     const sn = serialNumber?.trim() || null
@@ -140,7 +164,7 @@ export async function POST(
     // Create SerialNumberStock in CLIENT_WAREHOUSE — no technician stock impact
     await prisma.$executeRaw`
       INSERT INTO "SerialNumberStock" (id, "itemId", "serialNumber", "faultDescription", location, "technicianId", status, "isClientPart", "clientPartStatus", "interventionId", "pickedUpById", "createdAt", "updatedAt")
-      VALUES (${snId}, ${warehouseItemId}, ${sn}, ${fd}, 'CLIENT_WAREHOUSE', ${resolvedTechId}, 'AVAILABLE', true, 'IN_TRANSIT', ${interventionId}, ${payload.userId}, NOW(), NOW())
+      VALUES (${snId}, ${resolvedItemId}, ${sn}, ${fd}, 'CLIENT_WAREHOUSE', ${resolvedTechId}, 'AVAILABLE', true, 'IN_TRANSIT', ${interventionId}, ${payload.userId}, NOW(), NOW())
     `
 
     const creator = await prisma.user.findUnique({ where: { id: payload.userId }, select: { name: true } })
@@ -148,9 +172,9 @@ export async function POST(
       id: snId,
       serialNumber: sn,
       faultDescription: fd,
-      itemId: warehouseItemId,
-      itemName: warehouseItem.itemName,
-      partNumber: warehouseItem.partNumber,
+      itemId: resolvedItemId,
+      itemName: resolvedItemName,
+      partNumber: resolvedPartNumber,
       createdAt: new Date(),
       location: 'CLIENT_WAREHOUSE',
       pickedUpByName: creator?.name ?? null,

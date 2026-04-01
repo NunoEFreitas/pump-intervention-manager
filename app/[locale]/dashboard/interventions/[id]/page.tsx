@@ -1184,7 +1184,9 @@ export default function InterventionDetailPage() {
                       className="input text-gray-800 w-full text-left flex items-center justify-between"
                     >
                       <span className={clientPartItemId ? 'text-gray-800' : 'text-gray-400'}>
-                        {clientPartItemId
+                        {clientPartItemId === '__GENERIC__'
+                          ? <span className="text-amber-700 font-medium">Artigo não catalogado</span>
+                          : clientPartItemId
                           ? (() => {
                               const found = warehouseItems.find((i) => i.id === clientPartItemId)
                               return found ? `${found.itemName} (${found.partNumber})` : t('selectWarehouseItemPlaceholder')
@@ -1208,6 +1210,13 @@ export default function InterventionDetailPage() {
                           />
                         </div>
                         <ul className="overflow-y-auto" style={{ maxHeight: '13rem' }}>
+                          {/* Generic / uncatalogued option */}
+                          <li
+                            onMouseDown={() => { setClientPartItemId('__GENERIC__'); setItemSelectorOpen(false); setItemSearch('') }}
+                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-amber-50 border-b border-gray-100 text-amber-700 font-medium ${clientPartItemId === '__GENERIC__' ? 'bg-amber-100' : ''}`}
+                          >
+                            Artigo não catalogado
+                          </li>
                           {warehouseItems
                             .filter((item) =>
                               `${item.itemName} ${item.partNumber}`.toLowerCase().includes(itemSearch.toLowerCase())
@@ -1335,8 +1344,13 @@ export default function InterventionDetailPage() {
                          'Pendente'}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm">{part.itemName}</p>
-                        <p className="text-xs text-gray-500">{part.partNumber}</p>
+                        <p className="font-medium text-gray-900 text-sm flex items-center gap-1.5">
+                          {part.itemName}
+                          {part.partNumber === '__GENERIC__' && (
+                            <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Genérico</span>
+                          )}
+                        </p>
+                        {part.partNumber !== '__GENERIC__' && <p className="text-xs text-gray-500">{part.partNumber}</p>}
                         {part.faultDescription && (
                           <p className="text-xs text-amber-800 mt-0.5 italic">{part.faultDescription}</p>
                         )}
