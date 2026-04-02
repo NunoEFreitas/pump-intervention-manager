@@ -21,8 +21,10 @@ export async function POST(
 
     const [clientPart] = await prisma.$queryRaw<any[]>`
       SELECT sn.id, sn."itemId", sn."clientPartStatus", sn."clientRepairJobId",
+             wi."tracksSerialNumbers",
              rj.status AS "repairStatus"
       FROM "SerialNumberStock" sn
+      JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
       LEFT JOIN "PartRepairJob" rj ON rj.id = sn."clientRepairJobId"
       WHERE sn.id = ${serialNumberId} AND sn."isClientPart" = true
     `
@@ -46,6 +48,28 @@ export async function POST(
           "updatedAt" = ${now}::timestamptz
       WHERE id = ${serialNumberId}
     `
+
+    if (technicianId) {
+      // For non-SN items, reflect in TechnicianStock so the tech's stock count is correct
+      if (!clientPart.tracksSerialNumbers) {
+        await prisma.$executeRaw`
+          INSERT INTO "TechnicianStock" (id, "itemId", "technicianId", quantity, "createdAt", "updatedAt")
+          VALUES (gen_random_uuid(), ${clientPart.itemId}, ${technicianId}, 1, NOW(), NOW())
+          ON CONFLICT ("itemId", "technicianId") DO UPDATE
+          SET quantity = "TechnicianStock".quantity + 1, "updatedAt" = NOW()
+        `
+      }
+      await prisma.itemMovement.create({
+        data: {
+          itemId: clientPart.itemId,
+          movementType: 'TRANSFER_TO_TECH',
+          quantity: 1,
+          toUserId: technicianId,
+          notes: `Peça reparada/trocada enviada ao técnico para entrega ao cliente`,
+          createdById: payload.userId,
+        },
+      })
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error) {

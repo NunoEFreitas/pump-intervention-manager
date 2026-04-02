@@ -30,6 +30,7 @@ interface ClientPart {
   returnedByName: string | null
   returnedRegisteredByName: string | null
   location: string
+  preSwapped: boolean
   pickedUpByName: string | null
   technicianName: string | null
 }
@@ -144,16 +145,7 @@ export default function InterventionDetailPage() {
   const [showDateForm, setShowDateForm] = useState(false)
   const [dateFormData, setDateFormData] = useState({ scheduledDate: '', scheduledTime: '' })
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
-  const [showClientPartForm, setShowClientPartForm] = useState(false)
-  const [clientPartItemId, setClientPartItemId] = useState('')
-  const [clientPartSn, setClientPartSn] = useState('')
-  const [clientPartFaultDesc, setClientPartFaultDesc] = useState('')
-  const [clientPartTechId, setClientPartTechId] = useState('')
-  const [clientPartLoading, setClientPartLoading] = useState(false)
   const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }[]>([])
-  const [itemSelectorOpen, setItemSelectorOpen] = useState(false)
-  const [itemSearch, setItemSearch] = useState('')
-  const itemSelectorRef = useRef<HTMLDivElement>(null)
   const [editData, setEditData] = useState({
     status: '',
     breakdown: '',
@@ -210,16 +202,6 @@ export default function InterventionDetailPage() {
     }
     setSignatureModalWO(wo)
   }
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (itemSelectorRef.current && !itemSelectorRef.current.contains(e.target as Node)) {
-        setItemSelectorOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   useEffect(() => {
     const userStr = localStorage.getItem('user')
@@ -536,42 +518,6 @@ export default function InterventionDetailPage() {
       setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0 })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
-    }
-  }
-
-  const addClientPart = async () => {
-    if (!clientPartItemId) return
-    setClientPartLoading(true)
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/interventions/${params.id}/client-parts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          warehouseItemId: clientPartItemId,
-          serialNumber: clientPartSn.trim() || null,
-          faultDescription: clientPartFaultDesc.trim() || null,
-          technicianId: clientPartTechId || null,
-        }),
-      })
-      if (response.ok) {
-        setShowClientPartForm(false)
-        setClientPartItemId('')
-        setClientPartSn('')
-        setClientPartFaultDesc('')
-        setClientPartTechId('')
-        fetchClientParts()
-      } else {
-        const data = await response.json()
-        alert(data.error || 'Failed to add client part')
-      }
-    } catch (error) {
-      console.error('Error adding client part:', error)
-    } finally {
-      setClientPartLoading(false)
     }
   }
 
@@ -1157,160 +1103,11 @@ export default function InterventionDetailPage() {
 
           {/* Client Parts */}
           <div className="card mb-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="mb-4">
               <h2 className="text-xl font-bold text-gray-900">{t('clientParts')}</h2>
-              {canEdit && intervention.assignedTo && (
-                <button
-                  onClick={() => setShowClientPartForm(true)}
-                  className="btn btn-primary text-sm"
-                >
-                  {t('addClientPart')}
-                </button>
-              )}
             </div>
 
-            {showClientPartForm && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4 space-y-3">
-                <h3 className="font-semibold text-gray-800">{t('logClientPart')}</h3>
-                <p className="text-sm text-amber-700">{t('logClientPartHint')}</p>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('selectWarehouseItem')}
-                  </label>
-                  <div ref={itemSelectorRef} className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setItemSelectorOpen((o) => !o)}
-                      className="input text-gray-800 w-full text-left flex items-center justify-between"
-                    >
-                      <span className={clientPartItemId ? 'text-gray-800' : 'text-gray-400'}>
-                        {clientPartItemId === '__GENERIC__'
-                          ? <span className="text-amber-700 font-medium">Artigo não catalogado</span>
-                          : clientPartItemId
-                          ? (() => {
-                              const found = warehouseItems.find((i) => i.id === clientPartItemId)
-                              return found ? `${found.itemName} (${found.partNumber})` : t('selectWarehouseItemPlaceholder')
-                            })()
-                          : t('selectWarehouseItemPlaceholder')}
-                      </span>
-                      <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-                    {itemSelectorOpen && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                        <div className="p-2 border-b border-gray-200">
-                          <input
-                            type="text"
-                            autoFocus
-                            placeholder={tCommon('search')}
-                            value={itemSearch}
-                            onChange={(e) => setItemSearch(e.target.value)}
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          />
-                        </div>
-                        <ul className="overflow-y-auto" style={{ maxHeight: '13rem' }}>
-                          {/* Generic / uncatalogued option */}
-                          <li
-                            onMouseDown={() => { setClientPartItemId('__GENERIC__'); setItemSelectorOpen(false); setItemSearch('') }}
-                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-amber-50 border-b border-gray-100 text-amber-700 font-medium ${clientPartItemId === '__GENERIC__' ? 'bg-amber-100' : ''}`}
-                          >
-                            Artigo não catalogado
-                          </li>
-                          {warehouseItems
-                            .filter((item) =>
-                              `${item.itemName} ${item.partNumber}`.toLowerCase().includes(itemSearch.toLowerCase())
-                            )
-                            .map((item) => (
-                              <li
-                                key={item.id}
-                                onMouseDown={() => {
-                                  setClientPartItemId(item.id)
-                                  setItemSelectorOpen(false)
-                                  setItemSearch('')
-                                }}
-                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${
-                                  clientPartItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'
-                                }`}
-                              >
-                                {item.itemName} ({item.partNumber})
-                              </li>
-                            ))}
-                          {warehouseItems.filter((item) =>
-                            `${item.itemName} ${item.partNumber}`.toLowerCase().includes(itemSearch.toLowerCase())
-                          ).length === 0 && (
-                            <li className="px-3 py-2 text-sm text-gray-400">{tCommon('noResults')}</li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Número de série <span className="text-gray-400 font-normal">(opcional)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Ex: SN-12345"
-                    value={clientPartSn}
-                    onChange={e => setClientPartSn(e.target.value)}
-                    className="input text-gray-800 w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Descrição da avaria <span className="text-gray-400 font-normal">(opcional)</span>
-                  </label>
-                  <textarea
-                    rows={2}
-                    placeholder="Ex: Não liga, sensor danificado..."
-                    value={clientPartFaultDesc}
-                    onChange={e => setClientPartFaultDesc(e.target.value)}
-                    className="input text-gray-800 w-full"
-                  />
-                </div>
-                {userRole !== 'TECHNICIAN' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Técnico que recebe a peça
-                      {intervention.assignedTo && <span className="text-gray-400 font-normal"> (omitir = técnico atribuído)</span>}
-                    </label>
-                    <select
-                      value={clientPartTechId}
-                      onChange={e => setClientPartTechId(e.target.value)}
-                      className="input text-gray-800"
-                    >
-                      {intervention.assignedTo
-                        ? <option value="">{intervention.assignedTo.name}</option>
-                        : <option value="">Selecionar técnico...</option>
-                      }
-                      {technicians
-                        .filter(t => t.id !== intervention.assignedTo?.id)
-                        .map(t => <option key={t.id} value={t.id}>{t.name}</option>)
-                      }
-                    </select>
-                  </div>
-                )}
-                <div className="flex gap-2">
-                  <button
-                    onClick={addClientPart}
-                    disabled={clientPartLoading || !clientPartItemId}
-                    className="btn btn-primary text-sm"
-                  >
-                    {clientPartLoading ? tCommon('saving') : tCommon('save')}
-                  </button>
-                  <button
-                    onClick={() => { setShowClientPartForm(false); setClientPartItemId(''); setClientPartSn(''); setClientPartFaultDesc(''); setClientPartTechId('') }}
-                    className="btn btn-secondary text-sm"
-                  >
-                    {tCommon('cancel')}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {clientParts.length === 0 && !showClientPartForm ? (
+            {clientParts.length === 0 ? (
               <p className="text-gray-600">{t('noClientParts')}</p>
             ) : (
               <div className="space-y-2">
@@ -1318,7 +1115,7 @@ export default function InterventionDetailPage() {
                   <div
                     key={part.id}
                     className={`border rounded-lg px-4 py-3 ${
-                      part.clientPartStatus === 'RESOLVED'   ? 'bg-green-50 border-green-200' :
+                      (part.preSwapped || part.clientPartStatus === 'RESOLVED') ? 'bg-green-50 border-green-200' :
                       part.clientPartStatus === 'RETURNING'  ? 'bg-purple-50 border-purple-200' :
                       part.clientPartStatus === 'REPAIR'     ? 'bg-blue-50 border-blue-200' :
                       part.clientPartStatus === 'SWAP'       ? 'bg-purple-50 border-purple-200' :
@@ -1328,14 +1125,15 @@ export default function InterventionDetailPage() {
                   >
                     <div className="flex items-center gap-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${
-                        part.clientPartStatus === 'RESOLVED'   ? 'bg-green-200 text-green-900' :
+                        (part.preSwapped || part.clientPartStatus === 'RESOLVED') ? 'bg-green-200 text-green-900' :
                         part.clientPartStatus === 'RETURNING'  ? 'bg-purple-200 text-purple-900' :
                         part.clientPartStatus === 'REPAIR'     ? 'bg-blue-200 text-blue-900' :
                         part.clientPartStatus === 'SWAP'       ? 'bg-purple-200 text-purple-900' :
                         part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-200 text-yellow-900' :
                         'bg-amber-300 text-amber-900'
                       }`}>
-                        {part.clientPartStatus === 'RESOLVED' && part.repairReference ? 'Reparada' :
+                        {part.preSwapped                        ? 'Resolvida' :
+                         part.clientPartStatus === 'RESOLVED' && part.repairReference ? 'Reparada' :
                          part.clientPartStatus === 'RESOLVED'   ? 'Trocada' :
                          part.clientPartStatus === 'RETURNING'  ? 'A Devolver' :
                          part.clientPartStatus === 'REPAIR'     ? 'Em Reparação' :

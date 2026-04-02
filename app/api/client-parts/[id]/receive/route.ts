@@ -13,10 +13,12 @@ export async function POST(
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id: serialNumberId } = await params
+    const body = await request.json().catch(() => ({}))
+    const clientItemSnConfirmed = (body.clientItemSn ?? '').trim() || null
     const now = new Date()
 
     const [clientPart] = await prisma.$queryRaw<any[]>`
-      SELECT id, "itemId", "clientPartStatus", "technicianId", "interventionId"
+      SELECT id, "itemId", "clientPartStatus", "technicianId", "interventionId", "preSwapped", "serialNumber"
       FROM "SerialNumberStock"
       WHERE id = ${serialNumberId} AND "isClientPart" = true
     `
@@ -25,14 +27,47 @@ export async function POST(
       return NextResponse.json({ error: 'Peça não está em trânsito' }, { status: 400 })
     }
 
-    await prisma.$executeRaw`
-      UPDATE "SerialNumberStock"
-      SET "clientPartStatus" = 'PENDING',
-          "receivedAtWarehouseAt" = ${now}::timestamptz,
-          "receivedAtWarehouseById" = ${payload.userId},
-          "updatedAt" = ${now}::timestamptz
-      WHERE id = ${serialNumberId}
-    `
+    if (clientPart.preSwapped) {
+      // preSwapped: serialNumber = replacement given to client (keep), clientItemSn = broken part received
+      await prisma.$executeRaw`
+        UPDATE "SerialNumberStock"
+        SET "clientPartStatus" = 'PENDING',
+            "receivedAtWarehouseAt" = ${now}::timestamptz,
+            "receivedAtWarehouseById" = ${payload.userId},
+            "clientItemSn" = ${clientItemSnConfirmed},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${serialNumberId}
+      `
+    } else {
+      // non-preSwapped: serialNumber IS the collected part SN — update it directly
+      await prisma.$executeRaw`
+        UPDATE "SerialNumberStock"
+        SET "clientPartStatus" = 'PENDING',
+            "receivedAtWarehouseAt" = ${now}::timestamptz,
+            "receivedAtWarehouseById" = ${payload.userId},
+            "serialNumber" = ${clientItemSnConfirmed},
+            "updatedAt" = ${now}::timestamptz
+        WHERE id = ${serialNumberId}
+      `
+    }
+
+    if (clientPart.technicianId) {
+      const sn = clientPart.serialNumber as string | null
+      const notes = clientPart.preSwapped
+        ? `Sub. imediata — peça avariada recebida no armazém${sn ? ` (SN: ${sn})` : ''}`
+        : `Peça de cliente recebida no armazém${sn ? ` (SN: ${sn})` : ''}`
+      await prisma.itemMovement.create({
+        data: {
+          itemId: clientPart.itemId,
+          movementType: 'ADD_STOCK',
+          quantity: 1,
+          toUserId: null,
+          fromUserId: clientPart.technicianId,
+          notes,
+          createdById: payload.userId,
+        },
+      })
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error) {

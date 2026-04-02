@@ -70,11 +70,6 @@ export default function TechniciansPage() {
                   <span className="text-lg font-semibold text-gray-900">{tech.name}</span>
                   <span className="ml-2 text-sm text-gray-400">{tech.email}</span>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="px-3 py-1.5 bg-blue-50 text-blue-800 rounded text-sm font-medium">
-                    {tech.totalItems} <span className="font-normal text-blue-600">{t('totalItems')}</span>
-                  </span>
-                </div>
               </div>
 
             </div>

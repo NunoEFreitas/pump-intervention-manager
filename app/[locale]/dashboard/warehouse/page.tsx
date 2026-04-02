@@ -60,10 +60,13 @@ interface ClientPart {
   id: string
   itemId: string
   serialNumber: string
+  clientItemSn: string | null
   faultDescription: string | null
   clientPartStatus: string | null
   clientRepairJobId: string | null
   interventionId: string | null
+  workOrderId: string | null
+  preSwapped: boolean
   pickedUpByName: string | null
   technicianId: string | null
   technicianName: string | null
@@ -123,7 +126,24 @@ export default function WarehousePage() {
   const locale = useLocale()
   const t = useTranslations('warehouse')
   const tCommon = useTranslations('common')
-  const [tab, setTab] = useState<'stock' | 'requests' | 'client-parts' | 'inventory'>('stock')
+  const [tab, setTab] = useState<'stock' | 'requests' | 'client-parts' | 'tech-stock' | 'inventory'>('stock')
+
+  // ── Tech stock overview ────────────────────────────────────────────────────
+  const [techStockData, setTechStockData] = useState<{
+    serialized: any[]
+    bulk: any[]
+    returning: any[]
+  }>({ serialized: [], bulk: [], returning: [] })
+  const [techStockLoading, setTechStockLoading] = useState(false)
+
+  const fetchTechStock = useCallback(async () => {
+    setTechStockLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const data = await fetch('/api/warehouse/technician-stock', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
+      setTechStockData(data)
+    } catch { /* ignore */ } finally { setTechStockLoading(false) }
+  }, [])
 
   // ── Inventory ──────────────────────────────────────────────────────────────
   const [inventorySessions, setInventorySessions] = useState<Array<{
@@ -217,6 +237,7 @@ export default function WarehousePage() {
   useEffect(() => {
     if (tab === 'requests') fetchPartRequests()
     if (tab === 'inventory') fetchInventorySessions()
+    if (tab === 'tech-stock') fetchTechStock()
     if (tab === 'client-parts') {
       fetchClientParts()
       if (technicians.length === 0) {
@@ -460,15 +481,28 @@ export default function WarehousePage() {
     fetchClientParts()
   }
 
-  const handleReceivePart = async (partId: string) => {
-    const token = localStorage.getItem('token')
-    const res = await fetch(`/api/client-parts/${partId}/receive`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await res.json()
-    if (!res.ok) { alert(data.error || 'Erro ao dar entrada da peça'); return }
-    fetchClientParts()
+  const [receiveModal, setReceiveModal] = useState<{ part: ClientPart; clientItemSn: string } | null>(null)
+  const [receiveSubmitting, setReceiveSubmitting] = useState(false)
+
+  const openReceiveModal = (part: ClientPart) => {
+    setReceiveModal({ part, clientItemSn: part.clientItemSn ?? part.serialNumber ?? '' })
+  }
+
+  const handleReceivePart = async () => {
+    if (!receiveModal) return
+    setReceiveSubmitting(true)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/client-parts/${receiveModal.part.id}/receive`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ clientItemSn: receiveModal.clientItemSn || null }),
+      })
+      const data = await res.json()
+      if (!res.ok) { alert(data.error || 'Erro ao dar entrada da peça'); return }
+      setReceiveModal(null)
+      fetchClientParts()
+    } finally { setReceiveSubmitting(false) }
   }
 
   const handleSendOut = (part: ClientPart) => {
@@ -555,6 +589,12 @@ export default function WarehousePage() {
           {cpPendingCount > 0 && (
             <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-orange-400 text-white rounded-full">{cpPendingCount}</span>
           )}
+        </button>
+        <button
+          onClick={() => setTab('tech-stock')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'tech-stock' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+        >
+          Peças nos Técnicos
         </button>
         <button
           onClick={() => setTab('inventory')}
@@ -698,7 +738,8 @@ export default function WarehousePage() {
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <span className="text-lg font-semibold text-gray-900 truncate">{part.itemName}</span>
-                      <span className="shrink-0 font-mono text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{part.serialNumber}</span>
+                      {part.serialNumber && <span className="shrink-0 font-mono text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{part.preSwapped ? `Entregue: ${part.serialNumber}` : part.serialNumber}</span>}
+                    {part.preSwapped && part.clientItemSn && <span className="shrink-0 font-mono text-xs bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">Recolhido: {part.clientItemSn}</span>}
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {part.clientPartStatus === 'IN_TRANSIT' && (
@@ -714,6 +755,9 @@ export default function WarehousePage() {
                         <span className={`px-2.5 py-1.5 rounded text-xs font-medium ${REPAIR_STATUS_COLORS[part.repairStatus] ?? 'bg-gray-100 text-gray-600'}`}>
                           {REPAIR_STATUS_LABELS[part.repairStatus] ?? part.repairStatus}
                         </span>
+                      )}
+                      {part.preSwapped && (
+                        <span className="text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded">Sub. Imediata</span>
                       )}
                       {part.repairReference && (
                         <span className="font-mono text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-1 rounded">{part.repairReference}</span>
@@ -747,7 +791,7 @@ export default function WarehousePage() {
                     {part.clientPartStatus === 'IN_TRANSIT' && (
                       <>
                         <button
-                          onClick={() => handleReceivePart(part.id)}
+                          onClick={() => openReceiveModal(part)}
                           disabled={part.partNumber === '__GENERIC__'}
                           title={part.partNumber === '__GENERIC__' ? 'Associa um artigo antes de dar entrada' : undefined}
                           className="text-xs px-2.5 py-1 bg-yellow-500 text-white rounded hover:bg-yellow-600 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -761,17 +805,26 @@ export default function WarehousePage() {
                     )}
                     {part.clientPartStatus === 'PENDING' && part.partNumber !== '__GENERIC__' && (
                       <>
-                        <button
-                          onClick={() => openCpModal('swap', part)}
-                          disabled={part.mainWarehouse < 1}
-                          title={part.mainWarehouse < 1 ? 'Sem stock disponível para substituição' : undefined}
-                          className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          Trocar{part.mainWarehouse < 1 ? ' (sem stock)' : ''}
-                        </button>
-                        <button onClick={() => openCpModal('repair', part)} className="text-xs px-2.5 py-1 bg-orange-500 text-white rounded hover:bg-orange-600">
-                          Reparar
-                        </button>
+                        {/* preSwapped: replacement already issued — only repair for stock */}
+                        {part.preSwapped ? (
+                          <button onClick={() => openCpModal('repair', part)} className="text-xs px-2.5 py-1 bg-orange-500 text-white rounded hover:bg-orange-600">
+                            Reparar para Stock
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => openCpModal('swap', part)}
+                              disabled={part.mainWarehouse < 1}
+                              title={part.mainWarehouse < 1 ? 'Sem stock disponível para substituição' : undefined}
+                              className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              Trocar{part.mainWarehouse < 1 ? ' (sem stock)' : ''}
+                            </button>
+                            <button onClick={() => openCpModal('repair', part)} className="text-xs px-2.5 py-1 bg-orange-500 text-white rounded hover:bg-orange-600">
+                              Reparar
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                     {part.clientPartStatus === 'SWAP' && (
@@ -799,6 +852,46 @@ export default function WarehousePage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Dar Entrada (receive) confirmation modal ────────────────────────── */}
+      {receiveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+            <div className="p-6 space-y-4">
+              <h3 className="text-lg font-bold text-gray-900">Dar Entrada no Armazém</h3>
+              <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                <p className="font-medium text-gray-800">{receiveModal.part.itemName}</p>
+                {receiveModal.part.partNumber !== '__GENERIC__' && <p className="text-xs text-gray-500 font-mono">{receiveModal.part.partNumber}</p>}
+                {receiveModal.part.preSwapped && receiveModal.part.serialNumber && (
+                  <p className="text-xs text-gray-500">SN entregue ao cliente: <span className="font-mono">{receiveModal.part.serialNumber}</span></p>
+                )}
+                {!receiveModal.part.preSwapped && receiveModal.part.serialNumber && (
+                  <p className="text-xs text-gray-500">SN: <span className="font-mono">{receiveModal.part.serialNumber}</span></p>
+                )}
+                {receiveModal.part.faultDescription && <p className="text-xs text-gray-500 italic">{receiveModal.part.faultDescription}</p>}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SN da peça recebida <span className="text-gray-400 font-normal text-xs">(confirmar / corrigir)</span>
+                </label>
+                <input
+                  type="text"
+                  className="input w-full text-sm"
+                  placeholder="Nº de série da peça física recebida..."
+                  value={receiveModal.clientItemSn}
+                  onChange={e => setReceiveModal(m => m ? { ...m, clientItemSn: e.target.value } : m)}
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={handleReceivePart} disabled={receiveSubmitting} className="btn btn-primary flex-1 disabled:opacity-50">
+                  {receiveSubmitting ? 'A guardar...' : 'Confirmar Entrada'}
+                </button>
+                <button onClick={() => setReceiveModal(null)} className="btn btn-secondary">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Transfer to Tech modal ───────────────────────────────────────────── */}
@@ -1016,6 +1109,88 @@ export default function WarehousePage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Tech stock tab ──────────────────────────────────────────────────── */}
+      {tab === 'tech-stock' && (
+        <div>
+          {techStockLoading ? (
+            <div className="flex items-center justify-center h-32"><span className="text-gray-600">{tCommon('loading')}</span></div>
+          ) : techStockData.serialized.length === 0 && techStockData.bulk.length === 0 && techStockData.returning.length === 0 ? (
+            <div className="card text-center py-12 text-gray-500">Nenhuma peça nos técnicos de momento.</div>
+          ) : (() => {
+            // Group all entries by technician
+            const byTech = new Map<string, { name: string; items: any[] }>()
+
+            for (const row of techStockData.serialized) {
+              const key = row.technicianId ?? 'unknown'
+              if (!byTech.has(key)) byTech.set(key, { name: row.technicianName ?? '—', items: [] })
+              byTech.get(key)!.items.push({ ...row, _type: 'serialized' })
+            }
+            for (const row of techStockData.bulk) {
+              const key = row.technicianId ?? 'unknown'
+              if (!byTech.has(key)) byTech.set(key, { name: row.technicianName ?? '—', items: [] })
+              byTech.get(key)!.items.push({ ...row, _type: 'bulk' })
+            }
+            for (const row of techStockData.returning) {
+              const key = row.technicianId ?? 'unknown'
+              if (!byTech.has(key)) byTech.set(key, { name: row.technicianName ?? '—', items: [] })
+              byTech.get(key)!.items.push({ ...row, _type: 'returning' })
+            }
+
+            return (
+              <div className="space-y-4">
+                {Array.from(byTech.entries()).map(([techId, tech]) => (
+                  <div key={techId} className="card">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900">{tech.name}</h3>
+                      <button
+                        onClick={() => router.push(`/${locale}/dashboard/warehouse/technicians/${techId}`)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Ver detalhe →
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {tech.items.map((item: any) => {
+                        const isClientPart = item._type === 'serialized' && item.isClientPart
+                        const isPreSwapped = isClientPart && item.preSwapped
+                        const isInTransit = isClientPart && item.clientPartStatus === 'IN_TRANSIT'
+
+                        let statusLabel = 'Em Stock'
+                        let statusColor = 'bg-purple-100 text-purple-800'
+                        if (item._type === 'returning') { statusLabel = 'A Entregar ao Cliente'; statusColor = 'bg-green-100 text-green-800' }
+                        else if (isPreSwapped) { statusLabel = 'Devolver ao Armazém'; statusColor = 'bg-amber-100 text-amber-800' }
+                        else if (isInTransit) { statusLabel = 'Recolhida'; statusColor = 'bg-blue-100 text-blue-800' }
+                        else if (item._type === 'bulk') { statusLabel = `× ${item.quantity}`; statusColor = 'bg-purple-100 text-purple-800' }
+
+                        return (
+                          <div key={item._type === 'bulk' ? `${item.technicianId}-${item.itemId}` : item.id}
+                            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50 text-sm">
+                            <span className={`px-2 py-0.5 text-xs font-semibold rounded shrink-0 ${statusColor}`}>{statusLabel}</span>
+                            <span className="font-medium text-gray-800 truncate">{item.itemName}</span>
+                            {item.partNumber && item.partNumber !== '__GENERIC__' && (
+                              <span className="text-xs font-mono text-gray-400 shrink-0">{item.partNumber}</span>
+                            )}
+                            {item.serialNumber && (
+                              <span className="font-mono text-xs bg-white border border-gray-200 text-gray-700 px-1.5 py-0.5 rounded shrink-0">{item.serialNumber}</span>
+                            )}
+                            {item.clientName && (
+                              <span className="text-xs text-gray-500 ml-auto shrink-0">{item.clientName}</span>
+                            )}
+                            {item.interventionReference && (
+                              <span className="text-xs font-mono text-gray-400 shrink-0">#{item.interventionReference}</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       )}
 

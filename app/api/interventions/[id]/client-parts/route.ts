@@ -40,6 +40,7 @@ export async function GET(
       sentOutTechnicianName: string | null
     }>>`
       SELECT sn.id, sn."serialNumber", sn."faultDescription", sn."clientPartStatus",
+             sn."preSwapped",
              rj.reference AS "repairReference", rj.status AS "repairStatus",
              sn."itemId", wi."itemName", wi."partNumber",
              sn."createdAt", sn."returnedToClientAt", sn."receivedAtWarehouseAt", sn."sentOutAt", sn.location,

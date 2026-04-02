@@ -75,6 +75,80 @@ export async function GET(
         AND (sn."clientPartStatus" IS NULL OR sn."clientPartStatus" = 'PENDING')
     `
 
+    // Fetch IN_TRANSIT client parts (non-preSwapped) — collected from client, not yet received at warehouse
+    const inTransitRows = await prisma.$queryRaw<Array<{
+      id: string
+      itemId: string
+      itemName: string
+      partNumber: string
+      serialNumber: string | null
+      faultDescription: string | null
+      interventionReference: string | null
+      workOrderId: string | null
+    }>>`
+      SELECT sn.id, sn."itemId", wi."itemName", wi."partNumber",
+             sn."serialNumber", sn."faultDescription",
+             sn."workOrderId",
+             inv.reference AS "interventionReference"
+      FROM "SerialNumberStock" sn
+      JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
+      LEFT JOIN "Intervention" inv ON inv.id = sn."interventionId"
+      WHERE sn."technicianId" = ${id}
+        AND sn."isClientPart" = true
+        AND sn."preSwapped" = false
+        AND sn."clientPartStatus" = 'IN_TRANSIT'
+      ORDER BY sn."createdAt" DESC
+    `
+
+    // Fetch preSwapped items — pieces given to client that are now coming back broken for stock repair
+    // These are locked: must be returned to warehouse, cannot be reused
+    const preSwappedRows = await prisma.$queryRaw<Array<{
+      id: string
+      itemId: string
+      itemName: string
+      partNumber: string
+      serialNumber: string | null
+      faultDescription: string | null
+      clientPartStatus: string | null
+      interventionReference: string | null
+      workOrderId: string | null
+    }>>`
+      SELECT sn.id, sn."itemId", wi."itemName", wi."partNumber",
+             sn."serialNumber", sn."faultDescription", sn."clientPartStatus",
+             sn."workOrderId",
+             inv.reference AS "interventionReference"
+      FROM "SerialNumberStock" sn
+      JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
+      LEFT JOIN "Intervention" inv ON inv.id = sn."interventionId"
+      WHERE sn."technicianId" = ${id}
+        AND sn."preSwapped" = true
+        AND sn."isClientPart" = true
+        AND sn."clientPartStatus" = 'IN_TRANSIT'
+      ORDER BY sn."createdAt" DESC
+    `
+
+    // Fetch RETURNING items — repaired/swapped parts sent out via this tech for client delivery
+    const returningRows = await prisma.$queryRaw<Array<{
+      id: string
+      itemId: string
+      itemName: string
+      partNumber: string
+      serialNumber: string | null
+      clientItemSn: string | null
+      faultDescription: string | null
+      interventionReference: string | null
+    }>>`
+      SELECT sn.id, sn."itemId", wi."itemName", wi."partNumber",
+             sn."serialNumber", sn."clientItemSn", sn."faultDescription",
+             inv.reference AS "interventionReference"
+      FROM "SerialNumberStock" sn
+      JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
+      LEFT JOIN "Intervention" inv ON inv.id = sn."interventionId"
+      WHERE sn."sentOutTechnicianId" = ${id}
+        AND sn."clientPartStatus" = 'RETURNING'
+      ORDER BY sn."sentOutAt" DESC
+    `
+
     // Group client parts by itemId
     const clientPartsByItem: Record<string, typeof clientPartRows> = {}
     for (const cp of clientPartRows) {
@@ -154,6 +228,9 @@ export async function GET(
       totalItems,
       totalValue,
       stocks: stockDetails,
+      preSwappedItems: preSwappedRows,
+      inTransitItems: inTransitRows,
+      returningItems: returningRows,
     })
   } catch (error) {
     console.error('Error fetching technician stock:', error)

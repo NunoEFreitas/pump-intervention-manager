@@ -276,6 +276,9 @@ model SerialNumberStock {
   clientRepairJobId String?                                  // Link to PartRepairJob when CLIENT repair opened
   interventionId    String?
   intervention      Intervention?           @relation("ClientPartSerialNumbers", fields: [interventionId], references: [id])
+  workOrderId       String?                                  // Work order where the part was collected
+  preSwapped        Boolean                 @default(false)  // Replacement already issued at work order time; repair enters our stock
+  clientItemSn      String?                                  // SN of the faulty client part collected (preSwapped only; confirmed at warehouse receipt)
   pickedUpById      String?
   pickedUpBy        User?                   @relation("ClientPartPickedUpBy", fields: [pickedUpById], references: [id])
   faultDescription    String?               // Description of the fault (for client parts)

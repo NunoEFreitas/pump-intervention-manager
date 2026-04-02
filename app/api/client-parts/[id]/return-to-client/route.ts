@@ -46,6 +46,20 @@ export async function POST(
       WHERE id = ${serialNumberId}
     `
 
+    const techId = clientPart.sentOutTechnicianId ?? null
+    if (techId) {
+      await prisma.itemMovement.create({
+        data: {
+          itemId: clientPart.itemId,
+          movementType: 'USE',
+          quantity: 1,
+          fromUserId: techId,
+          notes: `Peça entregue ao cliente`,
+          createdById: registeredById,
+        },
+      })
+    }
+
     return NextResponse.json({ ok: true, returnedToClientAt: now })
   } catch (error) {
     console.error('Error returning part to client:', error)

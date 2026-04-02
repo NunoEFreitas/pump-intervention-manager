@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
-import { generateClientRepairReference } from '@/lib/reference'
+import { generateClientRepairReference, generateRepairReference } from '@/lib/reference'
 
-// POST — open a CLIENT repair job for the client part
-//   1. Generate REC-xxx reference
-//   2. Create PartRepairJob with type=CLIENT linked to this serial number
-//   3. Mark clientPartStatus = REPAIR
+// POST — open a repair job for the client part
+//   preSwapped=false: CLIENT job (REC-xxx) — part goes back to client after repair
+//   preSwapped=true:  STOCK job (REP-xxx)  — part stays in warehouse stock after repair
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -24,7 +23,8 @@ export async function POST(
 
     // Fetch the client part
     const [clientPart] = await prisma.$queryRaw<any[]>`
-      SELECT sn.id, sn."itemId", sn."technicianId", sn."interventionId", sn."clientPartStatus", sn."serialNumber", sn.location,
+      SELECT sn.id, sn."itemId", sn."technicianId", sn."interventionId", sn."clientPartStatus",
+             sn."serialNumber", sn.location, sn."preSwapped",
              wi."itemName", wi."partNumber"
       FROM "SerialNumberStock" sn
       JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
@@ -35,17 +35,21 @@ export async function POST(
       return NextResponse.json({ error: 'Client part already has an active repair or is resolved' }, { status: 400 })
     }
 
-    // Generate REC reference
-    const repairRef = await generateClientRepairReference()
+    // preSwapped parts use STOCK repair (REP-xxx) — repaired part goes to warehouse stock
+    // normal client parts use CLIENT repair (REC-xxx) — repaired part returns to client
+    const isPreSwapped = clientPart.preSwapped === true
+    const repairRef = isPreSwapped
+      ? await generateRepairReference()
+      : await generateClientRepairReference()
+    const repairType = isPreSwapped ? 'STOCK' : 'CLIENT'
 
-    // Create CLIENT repair job
     const repairJobId = crypto.randomUUID()
     await prisma.$executeRaw`
       INSERT INTO "PartRepairJob" (id, reference, type, "itemId", "serialNumberId", "clientPartId", "interventionId", quantity, status, problem, "sentById", "sentAt", "createdAt", "updatedAt")
       VALUES (
         ${repairJobId},
         ${repairRef},
-        'CLIENT',
+        ${repairType}::"RepairJobType",
         ${clientPart.itemId},
         ${serialNumberId},
         ${serialNumberId},

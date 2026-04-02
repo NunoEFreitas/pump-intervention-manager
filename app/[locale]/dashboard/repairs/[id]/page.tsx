@@ -524,21 +524,6 @@ export default function RepairDetailPage() {
                   </dd>
                 </div>
               )}
-              {job.type === 'CLIENT' && (
-                <div className="col-span-2">
-                  <dt className="text-gray-500 text-xs">Nº série do artigo do cliente</dt>
-                  <dd className="font-semibold font-mono text-gray-900">
-                    <input
-                      type="text"
-                      disabled={isTerminal}
-                      defaultValue={job.clientItemSn ?? ''}
-                      onBlur={e => { if (e.target.value !== (job.clientItemSn ?? '')) fetch(`/api/repairs/${jobId}`, { method: 'PUT', headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ clientItemSn: e.target.value }) }) }}
-                      className="input text-gray-900 font-mono w-full mt-0.5 disabled:bg-transparent disabled:border-transparent disabled:px-0 disabled:shadow-none"
-                      placeholder="—"
-                    />
-                  </dd>
-                </div>
-              )}
             </dl>
           </div>
 
