@@ -32,6 +32,8 @@ interface RepairJob {
   locationId: string | null
   locationName: string | null
   locationCity: string | null
+  totalHours: number | null
+  sessions: RepairSession[]
   itemName: string
   partNumber: string
   tracksSerialNumbers: boolean
@@ -53,6 +55,16 @@ interface HistoryEntry {
   performedById: string
   performedByName: string | null
   performedAt: string
+}
+
+interface RepairSession {
+  id: string
+  startDate: string | null
+  startTime: string | null
+  endDate: string | null
+  endTime: string | null
+  duration: number | null
+  createdAt: string
 }
 
 interface Technician { id: string; name: string }
@@ -156,6 +168,12 @@ export default function RepairDetailPage() {
   const [quoteFormError, setQuoteFormError] = useState('')
   const [quoteSubmitting, setQuoteSubmitting] = useState(false)
 
+  // Sessions
+  const [sessions, setSessions] = useState<RepairSession[]>([])
+  const [showSessionForm, setShowSessionForm] = useState(false)
+  const [sessionForm, setSessionForm] = useState({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
+  const [sessionSaving, setSessionSaving] = useState(false)
+
   const token = () => localStorage.getItem('token') || ''
 
   const fetchJob = useCallback(async () => {
@@ -164,6 +182,7 @@ export default function RepairDetailPage() {
       if (!res.ok) throw new Error('Not found')
       const data: RepairJob = await res.json()
       setJob(data)
+      setSessions(data.sessions ?? [])
       setWorkNotes(data.workNotes ?? '')
       setProblem(data.problem ?? '')
       setConditionDesc(data.conditionDescription ?? '')
@@ -392,6 +411,49 @@ export default function RepairDetailPage() {
     window.open(`/api/repairs/${jobId}/quote-pdf?token=${encodeURIComponent(t)}`, '_blank')
   }
 
+  const updateSessionForm = (patch: Partial<typeof sessionForm>) => {
+    const next = { ...sessionForm, ...patch }
+    if (next.startDate && next.startTime && next.endDate && next.endTime) {
+      const start = new Date(`${next.startDate}T${next.startTime}`)
+      const end = new Date(`${next.endDate}T${next.endTime}`)
+      const dur = (end.getTime() - start.getTime()) / 3600000
+      if (dur > 0) next.duration = dur.toFixed(2)
+    }
+    setSessionForm(next)
+  }
+
+  const handleAddSession = async () => {
+    if (!sessionForm.duration) return
+    setSessionSaving(true)
+    try {
+      const res = await fetch(`/api/repairs/${jobId}/sessions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          startDate: sessionForm.startDate || null,
+          startTime: sessionForm.startTime || null,
+          endDate: sessionForm.endDate || null,
+          endTime: sessionForm.endTime || null,
+          duration: parseFloat(sessionForm.duration),
+        }),
+      })
+      if (res.ok) {
+        const session: RepairSession = await res.json()
+        setSessions(prev => [...prev, session])
+        setJob(prev => prev ? { ...prev, totalHours: (prev.totalHours ?? 0) + (session.duration ?? 0) } : prev)
+        setShowSessionForm(false)
+        setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
+      }
+    } finally { setSessionSaving(false) }
+  }
+
+  const handleDeleteSession = async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId)
+    await fetch(`/api/repairs/${jobId}/sessions/${sessionId}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token()}` } })
+    setSessions(prev => prev.filter(s => s.id !== sessionId))
+    setJob(prev => prev ? { ...prev, totalHours: Math.max(0, (prev.totalHours ?? 0) - (session?.duration ?? 0)) || null } : prev)
+  }
+
   const handleAddPart = async () => {
     if (!selectedItemId || partQty < 1) return
     setPartAdding(true); setPartError('')
@@ -488,6 +550,7 @@ export default function RepairDetailPage() {
               {job.sentByName && <div><dt className="text-gray-500 text-xs">Criada por</dt><dd className="font-medium text-gray-900">{job.sentByName}</dd></div>}
               {job.completedAt && <div><dt className="text-gray-500 text-xs">Concluída em</dt><dd className="font-medium text-gray-900">{new Date(job.completedAt).toLocaleDateString('pt-PT')}</dd></div>}
               {job.completedByName && <div><dt className="text-gray-500 text-xs">Concluída por</dt><dd className="font-medium text-gray-900">{job.completedByName}</dd></div>}
+              {job.totalHours != null && <div><dt className="text-gray-500 text-xs">Horas totais</dt><dd className="font-semibold text-blue-700">{job.totalHours.toFixed(2)}h</dd></div>}
               <div>
                 <dt className="text-gray-500 text-xs">Técnico responsável</dt>
                 <dd>
@@ -590,6 +653,77 @@ export default function RepairDetailPage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Notas de Trabalho</h2>
             <textarea rows={6} disabled={isTerminal} value={workNotes} onChange={e => { setWorkNotes(e.target.value); scheduleSave('workNotes', e.target.value) }} className="input text-gray-800 w-full resize-none disabled:bg-gray-50 disabled:text-gray-500" placeholder="Registo do trabalho realizado, peças substituídas, observações..." />
+          </div>
+
+          {/* Sessions */}
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                Horas de Trabalho {sessions.length > 0 && <span className="ml-1 text-gray-400 font-normal">({sessions.length})</span>}
+              </h2>
+            </div>
+            {sessions.length === 0 && !showSessionForm && (
+              <p className="text-sm text-gray-400 text-center py-4">Nenhuma sessão registada.</p>
+            )}
+            <div className="space-y-2">
+              {sessions.map(s => (
+                <div key={s.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                  <div className="flex-1 text-sm text-gray-700 flex items-center gap-2 flex-wrap">
+                    <span>▶ {s.startDate ?? '—'}{s.startTime ? ` ${s.startTime}` : ''}</span>
+                    <span className="text-gray-400">→</span>
+                    <span>■ {s.endDate ?? '—'}{s.endTime ? ` ${s.endTime}` : ''}</span>
+                  </div>
+                  {s.duration != null && <span className="font-semibold text-blue-700 shrink-0">{s.duration}h</span>}
+                  {!isTerminal && (
+                    <button onClick={() => handleDeleteSession(s.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">Eliminar</button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {showSessionForm ? (
+              <div className="border border-blue-200 rounded-lg p-4 bg-blue-50 space-y-3 mt-3">
+                <h4 className="font-medium text-gray-800">Nova Sessão</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Data início</label>
+                    <input type="date" className="input text-gray-800" value={sessionForm.startDate} onChange={e => updateSessionForm({ startDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Hora início</label>
+                    <input type="time" className="input text-gray-800" value={sessionForm.startTime} onChange={e => updateSessionForm({ startTime: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Data fim</label>
+                    <input type="date" className="input text-gray-800" value={sessionForm.endDate} onChange={e => updateSessionForm({ endDate: e.target.value })} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Hora fim</label>
+                    <input type="time" className="input text-gray-800" value={sessionForm.endTime} onChange={e => updateSessionForm({ endTime: e.target.value })} />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Duração (horas) <span className="text-red-500">*</span></label>
+                  <input type="number" step="0.01" min="0" className="input text-gray-800 w-32" placeholder="Auto-calculado ou manual" value={sessionForm.duration} onChange={e => setSessionForm(f => ({ ...f, duration: e.target.value }))} />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleAddSession} disabled={sessionSaving || !sessionForm.duration} className="btn btn-primary text-sm disabled:opacity-50">
+                    {sessionSaving ? 'A guardar...' : 'Adicionar'}
+                  </button>
+                  <button onClick={() => { setShowSessionForm(false); setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' }) }} className="btn btn-secondary text-sm">Cancelar</button>
+                </div>
+              </div>
+            ) : !isTerminal && (
+              <button onClick={() => setShowSessionForm(true)} className="w-full mt-3 py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                + Adicionar Sessão
+              </button>
+            )}
+
+            {sessions.length > 0 && (
+              <div className="border-t pt-3 mt-3 text-right">
+                <span className="font-semibold text-gray-700">Total: {sessions.reduce((s, x) => s + (x.duration ?? 0), 0).toFixed(2)}h</span>
+              </div>
+            )}
           </div>
 
           {/* Parts used */}

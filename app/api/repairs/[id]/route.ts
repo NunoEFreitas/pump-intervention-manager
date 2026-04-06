@@ -22,7 +22,7 @@ export async function GET(
         j."quoteAmount", j."quoteNotes", j."quoteStatus", j."quotedAt",
         j."sentAt", j."completedAt", j."deliveredToClientId",
         j."sentById", j."completedById", j."createdAt", j."updatedAt",
-        j."locationId",
+        j."locationId", j."totalHours",
         wi."itemName", wi."partNumber", wi."tracksSerialNumbers", wi."snExample",
         wi."mainWarehouse", wi."repairStock", wi."destructionStock",
         sn."serialNumber" AS "snNumber",
@@ -51,7 +51,15 @@ export async function GET(
     `
 
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    return NextResponse.json(job)
+
+    const sessions = await prisma.$queryRaw<any[]>`
+      SELECT id, "startDate", "startTime", "endDate", "endTime", duration, "createdAt"
+      FROM "RepairSession"
+      WHERE "jobId" = ${id}
+      ORDER BY "createdAt" ASC
+    `
+
+    return NextResponse.json({ ...job, sessions })
   } catch (error) {
     console.error('Error fetching repair job:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

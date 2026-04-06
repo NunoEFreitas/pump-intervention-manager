@@ -43,11 +43,12 @@ export async function GET(
         ORDER BY m."createdAt" DESC
       `,
       prisma.$queryRaw<any[]>`
-        SELECT wi."equipmentTypeId", wi."brandId",
-               et.name AS "typeName", eb.name AS "brandName"
+        SELECT wi."equipmentTypeId", wi."brandId", wi."categoryId",
+               et.name AS "typeName", eb.name AS "brandName", ic.name AS "categoryName"
         FROM "WarehouseItem" wi
         LEFT JOIN "EquipmentType" et ON et.id = wi."equipmentTypeId"
         LEFT JOIN "EquipmentBrand" eb ON eb.id = wi."brandId"
+        LEFT JOIN "ItemCategory" ic ON ic.id = wi."categoryId"
         WHERE wi.id = ${id}
       `,
       prisma.$queryRaw<Array<{ count: bigint }>>`
@@ -99,6 +100,8 @@ export async function GET(
       movements,
       typeName: extra.typeName ?? null,
       brandName: extra.brandName ?? null,
+      categoryId: extra.categoryId ?? null,
+      categoryName: extra.categoryName ?? null,
       stockRepairCount: Number(stockRepairRows[0]?.count ?? 0),
     })
   } catch (error) {
@@ -137,6 +140,7 @@ export async function PUT(
 
     const equipmentTypeId: string | null = data.equipmentTypeId || null
     const brandId: string | null = data.brandId || null
+    const categoryId: string | null = data.categoryId || null
 
     let typeName = ''
     let brandName = ''
@@ -171,11 +175,11 @@ export async function PUT(
       SET "autoSn" = ${newAutoSn}, "snExample" = ${newSnExample},
           "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId},
           "tracksSerialNumbers" = ${newTracksSerialNumbers},
-          "ean13" = ${ean13}
+          "ean13" = ${ean13}, "categoryId" = ${categoryId}
       WHERE id = ${id}
     `
 
-    return NextResponse.json({ ...item, autoSn: newAutoSn, snExample: newSnExample, equipmentTypeId, brandId, typeName, brandName })
+    return NextResponse.json({ ...item, autoSn: newAutoSn, snExample: newSnExample, equipmentTypeId, brandId, categoryId, typeName, brandName })
   } catch (error) {
     console.error('Error updating warehouse item:', error)
     return NextResponse.json(

@@ -19,6 +19,7 @@ interface WarehouseItem {
   totalStock: number
   equipmentTypeName: string | null
   brandName: string | null
+  categoryName: string | null
   technicianStocks: Array<{
     technician: { id: string; name: string }
     quantity: number
@@ -168,6 +169,8 @@ export default function WarehousePage() {
   const [items, setItems] = useState<WarehouseItem[]>([])
   const [stockLoading, setStockLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalItems, setTotalItems] = useState(0)
@@ -229,9 +232,13 @@ export default function WarehousePage() {
   const [assignError, setAssignError] = useState('')
 
   useEffect(() => {
-    fetchItems(1, searchTerm)
+    fetchItems(1, searchTerm, categoryFilter)
     fetchPartRequests()
     fetchClientParts()
+    const token = localStorage.getItem('token')
+    fetch('/api/admin/item-categories', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => setCategories(Array.isArray(d) ? d : []))
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -251,11 +258,13 @@ export default function WarehousePage() {
   }, [tab])
 
   // ── Stock fns ──────────────────────────────────────────────────────────────
-  const fetchItems = async (page: number, search: string) => {
+  const fetchItems = async (page: number, search: string, catId?: string) => {
     setStockLoading(true)
     try {
       const token = localStorage.getItem('token')
       const params = new URLSearchParams({ page: String(page), search })
+      const resolvedCat = catId !== undefined ? catId : categoryFilter
+      if (resolvedCat) params.set('categoryId', resolvedCat)
       const data: WarehousePage = await fetch(`/api/warehouse?${params}`, { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json())
       setItems(data.items ?? []); setTotalPages(data.pages ?? 1); setTotalItems(data.total ?? 0); setCurrentPage(data.page ?? 1)
     } catch { /* ignore */ } finally { setStockLoading(false) }
@@ -264,7 +273,12 @@ export default function WarehousePage() {
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
     if (searchDebounce.current) clearTimeout(searchDebounce.current)
-    searchDebounce.current = setTimeout(() => fetchItems(1, value), 350)
+    searchDebounce.current = setTimeout(() => fetchItems(1, value, categoryFilter), 350)
+  }
+
+  const handleCategoryChange = (catId: string) => {
+    setCategoryFilter(catId)
+    fetchItems(1, searchTerm, catId)
   }
 
   const goToPage = (page: number) => fetchItems(page, searchTerm)
@@ -607,8 +621,18 @@ export default function WarehousePage() {
       {/* ── Stock tab ───────────────────────────────────────────────────────── */}
       {tab === 'stock' && (
         <>
-          <div className="card mb-6">
-            <input type="text" className="input" placeholder={`${tCommon('search')}...`} value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} />
+          <div className="card mb-6 flex gap-3">
+            <input type="text" className="input flex-1" placeholder={`${tCommon('search')}...`} value={searchTerm} onChange={(e) => handleSearchChange(e.target.value)} />
+            {categories.length > 0 && (
+              <select
+                className="input w-auto min-w-[160px] text-gray-800"
+                value={categoryFilter}
+                onChange={e => handleCategoryChange(e.target.value)}
+              >
+                <option value="">Todas as categorias</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            )}
           </div>
 
           {stockLoading ? (
@@ -637,6 +661,7 @@ export default function WarehousePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                    {item.categoryName && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded">{item.categoryName}</span>}
                     {item.equipmentTypeName && <span><span className="text-gray-400">Tipo:</span> {item.equipmentTypeName}</span>}
                     {item.brandName && <span><span className="text-gray-400">Marca:</span> {item.brandName}</span>}
                     {item.partNumber && <span><span className="text-gray-400">{t('partNumber')}:</span> {item.partNumber}</span>}

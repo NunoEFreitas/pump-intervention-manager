@@ -18,15 +18,18 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '50')))
     const offset = (page - 1) * limit
     const minStock = parseInt(searchParams.get('minStock') || '0')
+    const categoryId = searchParams.get('categoryId')?.trim() || null
 
     const searchLike = `%${search.toLowerCase()}%`
     const stockFilter = minStock > 0 ? Prisma.sql`AND w."mainWarehouse" >= ${minStock}` : Prisma.sql``
+    const categoryFilter = categoryId ? Prisma.sql`AND w."categoryId" = ${categoryId}` : Prisma.sql``
 
     const [countRows, items, extraFields, clientPartsCounts] = await Promise.all([
       prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*)::bigint AS count FROM "WarehouseItem" w
         WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
         ${stockFilter}
+        ${categoryFilter}
       `,
       prisma.$queryRaw<Array<{
         id: string
@@ -49,12 +52,15 @@ export async function GET(request: NextRequest) {
         SELECT w.id, w."itemName", w."partNumber", w.value, w."mainWarehouse", w."repairStock", w."destructionStock",
                w."tracksSerialNumbers", w."autoSn", w."snExample", w."equipmentTypeId", w."brandId",
                w."ean13", w."createdAt", w."updatedAt",
-               et.name AS "equipmentTypeName", eb.name AS "brandName"
+               et.name AS "equipmentTypeName", eb.name AS "brandName",
+               w."categoryId", ic.name AS "categoryName"
         FROM "WarehouseItem" w
         LEFT JOIN "EquipmentType" et ON et.id = w."equipmentTypeId"
         LEFT JOIN "EquipmentBrand" eb ON eb.id = w."brandId"
+        LEFT JOIN "ItemCategory" ic ON ic.id = w."categoryId"
         WHERE (LOWER(w."itemName") LIKE ${searchLike} OR LOWER(w."partNumber") LIKE ${searchLike} OR LOWER(COALESCE(w."ean13", '')) LIKE ${searchLike})
         ${stockFilter}
+        ${categoryFilter}
         ORDER BY w."createdAt" DESC
         LIMIT ${limit} OFFSET ${offset}
       `,
@@ -68,8 +74,9 @@ export async function GET(request: NextRequest) {
         FROM "TechnicianStock" ts
         JOIN "User" u ON u.id = ts."technicianId"
         WHERE ts."itemId" IN (
-          SELECT id FROM "WarehouseItem"
-          WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike}
+          SELECT id FROM "WarehouseItem" w
+          WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
+          ${categoryFilter}
           ORDER BY "createdAt" DESC
           LIMIT ${limit} OFFSET ${offset}
         )
@@ -80,8 +87,9 @@ export async function GET(request: NextRequest) {
         WHERE "isClientPart" = true
           AND ("clientPartStatus" IS NULL OR "clientPartStatus" NOT IN ('RESOLVED'))
           AND "itemId" IN (
-            SELECT id FROM "WarehouseItem"
-            WHERE LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike}
+            SELECT id FROM "WarehouseItem" w
+            WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
+            ${categoryFilter}
             ORDER BY "createdAt" DESC
             LIMIT ${limit} OFFSET ${offset}
           )
@@ -154,6 +162,7 @@ export async function POST(request: NextRequest) {
 
     const equipmentTypeId: string | null = data.equipmentTypeId || null
     const brandId: string | null = data.brandId || null
+    const categoryId: string | null = data.categoryId || null
 
     let typeName = ''
     let brandName = ''
@@ -188,7 +197,7 @@ export async function POST(request: NextRequest) {
       UPDATE "WarehouseItem"
       SET "autoSn" = ${autoSn}, "snExample" = ${snExample},
           "equipmentTypeId" = ${equipmentTypeId}, "brandId" = ${brandId},
-          "ean13" = ${ean13}
+          "ean13" = ${ean13}, "categoryId" = ${categoryId}
       WHERE id = ${item.id}
     `
 

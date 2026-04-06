@@ -193,6 +193,14 @@ enum InterventionStatus {
   CANCELED
 }
 
+model ItemCategory {
+  id        String          @id @default(uuid())
+  name      String          @unique
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  items     WarehouseItem[]
+}
+
 model WarehouseItem {
   id                  String              @id @default(uuid())
   itemName            String
@@ -206,6 +214,8 @@ model WarehouseItem {
   mainWarehouse       Int                 @default(0)  // Count for non-serialized items
   repairStock         Int                 @default(0)  // Count of items currently in repair
   destructionStock    Int                 @default(0)  // Count of items in destruction
+  categoryId          String?
+  category            ItemCategory?       @relation(fields: [categoryId], references: [id])
   tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
   autoSn              Boolean             @default(false) // Auto-generate serial numbers on add stock
   snExample           String?             // Prefix for auto-generated SNs (e.g. "PTT" → "PTT-1", "PTT-2")
@@ -572,9 +582,11 @@ model PartRepairJob {
   locationId       String?
   location         CompanyLocation? @relation(fields: [locationId], references: [id])
 
+  totalHours       Float?
   photos           RepairJobPhoto[]
   parts            RepairJobPart[]
   history          RepairHistory[]
+  sessions         RepairSession[]
 
   @@index([itemId])
   @@index([status])
@@ -622,4 +634,19 @@ model RepairHistory {
 
   @@index([jobId])
   @@index([performedAt])
+}
+
+model RepairSession {
+  id        String        @id @default(uuid())
+  jobId     String
+  job       PartRepairJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  startDate String?
+  startTime String?
+  endDate   String?
+  endTime   String?
+  duration  Float?        // hours for this session
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([jobId])
 }

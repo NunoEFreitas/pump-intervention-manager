@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from 'next-intl'
 
 interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
+interface ItemCategory { id: string; name: string }
 
 export default function NewWarehouseItemPage() {
   const router = useRouter()
@@ -20,10 +21,12 @@ export default function NewWarehouseItemPage() {
   const [error, setError] = useState('')
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
+  const [itemCategories, setItemCategories] = useState<ItemCategory[]>([])
   const [itemNameEdited, setItemNameEdited] = useState(false)
   const [formData, setFormData] = useState({
     equipmentTypeId: '',
     brandId: '',
+    categoryId: '',
     partNumber: '',
     ean13: '',
     itemName: '',
@@ -40,9 +43,11 @@ export default function NewWarehouseItemPage() {
     Promise.all([
       fetch('/api/admin/equipment-types', { headers }).then(r => r.json()),
       fetch('/api/admin/equipment-brands', { headers }).then(r => r.json()),
-    ]).then(([types, brands]) => {
+      fetch('/api/admin/item-categories', { headers }).then(r => r.json()),
+    ]).then(([types, brands, cats]) => {
       setEquipmentTypes(types)
       setEquipmentBrands(brands)
+      setItemCategories(Array.isArray(cats) ? cats : [])
     })
   }, [])
 
@@ -131,6 +136,20 @@ export default function NewWarehouseItemPage() {
             <option value="">{t('selectType')}</option>
             {equipmentTypes.map(type => (
               <option key={type.id} value={type.id}>{type.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+          <select
+            className="input text-gray-800"
+            value={formData.categoryId}
+            onChange={(e) => setFormData(f => ({ ...f, categoryId: e.target.value }))}
+          >
+            <option value="">— Sem categoria —</option>
+            {itemCategories.map(cat => (
+              <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
           </select>
         </div>

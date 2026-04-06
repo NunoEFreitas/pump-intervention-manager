@@ -39,6 +39,7 @@ interface SerialNumber {
 
 interface EquipmentType { id: string; name: string }
 interface EquipmentBrand { id: string; name: string }
+interface ItemCategory { id: string; name: string }
 
 interface Item {
   id: string
@@ -47,8 +48,10 @@ interface Item {
   ean13: string | null
   equipmentTypeId: string | null
   brandId: string | null
+  categoryId: string | null
   typeName: string | null
   brandName: string | null
+  categoryName: string | null
   value: number
   mainWarehouse: number
   repairStock: number
@@ -90,10 +93,12 @@ export default function WarehouseItemDetailPage() {
   const [pendingEditData, setPendingEditData] = useState<typeof editData | null>(null)
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
+  const [itemCategories, setItemCategories] = useState<ItemCategory[]>([])
   const [itemNameEdited, setItemNameEdited] = useState(false)
   const [editData, setEditData] = useState({
     equipmentTypeId: '',
     brandId: '',
+    categoryId: '',
     partNumber: '',
     ean13: '',
     itemName: '',
@@ -113,9 +118,11 @@ export default function WarehouseItemDetailPage() {
     Promise.all([
       fetch('/api/admin/equipment-types', { headers }).then(r => r.json()),
       fetch('/api/admin/equipment-brands', { headers }).then(r => r.json()),
-    ]).then(([types, brands]) => {
+      fetch('/api/admin/item-categories', { headers }).then(r => r.json()),
+    ]).then(([types, brands, cats]) => {
       setEquipmentTypes(types)
       setEquipmentBrands(brands)
+      setItemCategories(Array.isArray(cats) ? cats : [])
     })
   }, [params.id])
 
@@ -130,6 +137,7 @@ export default function WarehouseItemDetailPage() {
       setEditData({
         equipmentTypeId: data.equipmentTypeId || '',
         brandId: data.brandId || '',
+        categoryId: data.categoryId || '',
         partNumber: data.partNumber,
         ean13: data.ean13 || '',
         itemName: data.itemName || '',
@@ -398,6 +406,12 @@ export default function WarehouseItemDetailPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
+              {item.categoryName && (
+                <div>
+                  <p className="text-sm text-gray-600">Categoria</p>
+                  <p className="text-lg font-semibold text-gray-900">{item.categoryName}</p>
+                </div>
+              )}
               {item.typeName && (
                 <div>
                   <p className="text-sm text-gray-600">{t('equipmentType')}</p>
@@ -746,6 +760,20 @@ export default function WarehouseItemDetailPage() {
               <option value="">{t('selectType')}</option>
               {equipmentTypes.map(type => (
                 <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+            <select
+              className="input text-gray-800"
+              value={editData.categoryId}
+              onChange={(e) => setEditData(f => ({ ...f, categoryId: e.target.value }))}
+            >
+              <option value="">— Sem categoria —</option>
+              {itemCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
               ))}
             </select>
           </div>
