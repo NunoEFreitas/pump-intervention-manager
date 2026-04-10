@@ -39,18 +39,18 @@ export default function Navigation() {
 
   const navItems = [
     { name: t('dashboard'), path: `/${locale}/dashboard` },
-    { name: t('interventions'), path: `/${locale}/dashboard/interventions` },
+    { name: t('interventions'), path: `/${locale}/interventions` },
   ]
 
   if (user?.role === 'ADMIN' || user?.role === 'SUPERVISOR') {
-    navItems.splice(1, 0, { name: t('clients'), path: `/${locale}/dashboard/clients` })
-    navItems.push({ name: t('warehouse'), path: `/${locale}/dashboard/warehouse` })
-    navItems.push({ name: t('technicians'), path: `/${locale}/dashboard/warehouse/technicians` })
-    navItems.push({ name: t('repairs'), path: `/${locale}/dashboard/repairs` })
+    navItems.splice(1, 0, { name: t('clients'), path: `/${locale}/clients` })
+    navItems.push({ name: t('warehouse'), path: `/${locale}/warehouse` })
+    navItems.push({ name: t('technicians'), path: `/${locale}/warehouse/technicians` })
+    navItems.push({ name: t('repairs'), path: `/${locale}/repairs` })
   }
 
   if (user?.role === 'ADMIN') {
-    navItems.push({ name: t('admin'), path: `/${locale}/dashboard/admin` })
+    navItems.push({ name: t('admin'), path: `/${locale}/admin` })
   }
 
   return (
@@ -65,7 +65,7 @@ export default function Navigation() {
                 key={item.path}
                 href={item.path}
                 className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                  pathname === item.path
+                  pathname === item.path || (item.path !== `/${locale}/dashboard` && item.path !== `/${locale}/warehouse` && pathname.startsWith(item.path))
                     ? 'border-blue-500 text-gray-900'
                     : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }`}
@@ -117,7 +117,7 @@ export default function Navigation() {
                 key={item.path}
                 href={item.path}
                 className={`block px-4 py-3 text-sm font-medium border-l-4 ${
-                  pathname === item.path
+                  pathname === item.path || (item.path !== `/${locale}/dashboard` && item.path !== `/${locale}/warehouse` && pathname.startsWith(item.path))
                     ? 'border-blue-500 bg-blue-50 text-blue-700'
                     : 'border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}

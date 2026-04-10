@@ -1,4 +1,4 @@
-import type { OVMData } from '@/app/[locale]/dashboard/interventions/[id]/OVMForm'
+import type { OVMData } from '@/app/[locale]/(app)/interventions/[id]/OVMForm'
 
 interface PrintCompany {
   name: string

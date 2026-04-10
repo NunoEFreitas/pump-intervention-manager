@@ -1,22 +1,27 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import Image from 'next/image'
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations('auth')
   const tErrors = useTranslations('errors')
+  const searchParams = useSearchParams()
 
   const [needsSetup, setNeedsSetup] = useState(false)
   const [formData, setFormData] = useState({ email: '', password: '', name: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
 
-  useEffect(() => { checkSetupStatus() }, [])
+  useEffect(() => {
+    if (searchParams.get('reason') === 'expired') setSessionExpired(true)
+    checkSetupStatus()
+  }, [])
 
   const checkSetupStatus = async () => {
     try {
@@ -48,7 +53,7 @@ export default function LoginPage() {
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       if (data.user.role === 'CLIENT') {
-        router.push(`/${locale}/dashboard/portal`)
+        router.push(`/${locale}/portal`)
       } else {
         router.push(`/${locale}/dashboard`)
       }
@@ -113,6 +118,13 @@ export default function LoginPage() {
         </div>
 
         <div className="max-w-sm w-full mx-auto">
+          {sessionExpired && (
+            <div className="mb-5 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-start gap-2">
+              <svg className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+              <p className="text-sm text-amber-800">A tua sessão expirou. Por favor inicia sessão novamente.</p>
+            </div>
+          )}
+
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-gray-900">
               {needsSetup ? 'Configuração inicial' : 'Bem-vindo'}
@@ -188,5 +200,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   )
 }
