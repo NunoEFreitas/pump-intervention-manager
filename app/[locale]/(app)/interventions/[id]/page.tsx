@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
-import WorkOrderModal, { type WorkOrder } from './WorkOrderModal'
+import WorkOrderPanel, { type WorkOrder } from './WorkOrderPanel'
 import WorkOrderSignatureModal from './WorkOrderSignatureModal'
 import OVMForm, { type OVMData, migrateOVMData } from './OVMForm'
 import { printWorkOrderPDF } from '@/lib/workOrderPrint'
@@ -1242,23 +1242,42 @@ export default function InterventionDetailPage() {
           <div className="card mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-bold text-gray-900">{t('workOrders')}</h2>
-              {canEdit && (
+              {canEdit && activeWOId !== 'new' && (
                 <button onClick={() => setActiveWOId('new')} className="btn btn-primary text-sm">
                   {t('addWorkOrder')}
                 </button>
               )}
             </div>
 
-            {workOrders.length === 0 ? (
+            {/* New WO inline form */}
+            {activeWOId === 'new' && (
+              <WorkOrderPanel
+                wo={null}
+                interventionId={intervention.id}
+                assignedTechnicianId={intervention.assignedTo?.id ?? null}
+                canEdit={canEdit}
+                equipment={intervention.location?.equipment ?? []}
+                technicians={technicians}
+                vehicles={vehicles}
+                warehouseItems={warehouseItems}
+                savedPdfs={[]}
+                printCompany={printCompany}
+                onClose={() => setActiveWOId(null)}
+                onRefresh={() => { fetchWorkOrders(); fetchIntervention(); setActiveWOId(null) }}
+                onDelete={() => setActiveWOId(null)}
+                onPrint={handlePrintWorkOrder}
+              />
+            )}
+
+            {workOrders.length === 0 && activeWOId !== 'new' ? (
               <p className="text-gray-600">{t('noWorkOrders')}</p>
-            ) : (
-              <div className="space-y-2">
-                {workOrders.map((wo) => {
-                  return (
+            ) : workOrders.length > 0 && (
+              <div className="space-y-2 mt-2">
+                {workOrders.map((wo) => (
+                  <div key={wo.id}>
                     <button
-                      key={wo.id}
-                      onClick={() => setActiveWOId(wo.id)}
-                      className="w-full text-left border rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors group"
+                      onClick={() => setActiveWOId(activeWOId === wo.id ? null : wo.id)}
+                      className={`w-full text-left border rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors group ${activeWOId === wo.id ? 'border-blue-300 bg-blue-50' : ''}`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2 min-w-0">
@@ -1271,18 +1290,112 @@ export default function InterventionDetailPage() {
                         <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
                           {wo.timeSpent ? <span className="text-blue-700 font-medium">{wo.timeSpent}h</span> : null}
                           {wo.parts.length > 0 && <span>{wo.parts.length} pç</span>}
-                          <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          <svg className={`w-4 h-4 transition-transform ${activeWOId === wo.id ? 'rotate-90 text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                         </div>
                       </div>
                     </button>
-                  )
-                })}
+
+                    {activeWOId === wo.id && (
+                      <WorkOrderPanel
+                        wo={wo}
+                        interventionId={intervention.id}
+                        assignedTechnicianId={intervention.assignedTo?.id ?? null}
+                        canEdit={canEdit}
+                        equipment={intervention.location?.equipment ?? []}
+                        technicians={technicians}
+                        vehicles={vehicles}
+                        warehouseItems={warehouseItems}
+                        savedPdfs={savedPdfs[wo.id] ?? []}
+                        printCompany={printCompany}
+                        onClose={() => setActiveWOId(null)}
+                        onRefresh={() => { fetchWorkOrders(); fetchIntervention() }}
+                        onDelete={() => { deleteWorkOrder(wo.id); setActiveWOId(null) }}
+                        onPrint={handlePrintWorkOrder}
+                      />
+                    )}
+                  </div>
+                ))}
                 <div className="border-t pt-3">
                   <span className="font-semibold text-gray-700">{t('totalHours')}: {totalHours}</span>
                 </div>
               </div>
             )}
           </div>
+
+        {/* OVM section */}
+        <div className="card mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-gray-900">OVM</h2>
+            {!showOVMForm && !editingOVMId && (
+              <button
+                onClick={() => setShowOVMForm(true)}
+                className="btn btn-primary text-sm px-3 py-1.5"
+              >
+                + Novo OVM
+              </button>
+            )}
+          </div>
+
+          {/* New OVM form */}
+          {showOVMForm && (
+            <OVMForm
+              saving={ovmSaving}
+              onSave={saveOVM}
+              onCancel={() => setShowOVMForm(false)}
+              onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+              equipment={intervention?.location?.equipment ?? []}
+              locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
+            />
+          )}
+
+          {/* OVM list */}
+          {ovms.length === 0 && !showOVMForm && (
+            <p className="text-sm text-gray-400 text-center py-4">Nenhum OVM criado.</p>
+          )}
+
+          {ovms.map((ovm, idx) => (
+            <div key={ovm.id} className="border border-gray-200 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-sm font-semibold text-gray-700">
+                  OVM #{ovms.length - idx} — {new Date(ovm.createdAt).toLocaleString()}
+                </span>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => intervention && printOVMPDF(ovm.data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
+                  >
+                    PDF
+                  </button>
+                  <button
+                    onClick={() => setEditingOVMId(editingOVMId === ovm.id ? null : ovm.id)}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    {editingOVMId === ovm.id ? 'Fechar' : 'Editar'}
+                  </button>
+                  <button
+                    onClick={() => deleteOVM(ovm.id)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+
+              {editingOVMId === ovm.id && (
+                <OVMForm
+                  initial={ovm.data}
+                  saving={ovmSaving}
+                  onSave={saveOVM}
+                  onCancel={() => setEditingOVMId(null)}
+                  onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                  equipment={intervention?.location?.equipment ?? []}
+                  locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
         {/* Part Requests section */}
         <div className="card mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -1534,80 +1647,6 @@ export default function InterventionDetailPage() {
           </div>
         )}
 
-        {/* OVM section */}
-        <div className="card mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-gray-900">OVM</h2>
-            {!showOVMForm && !editingOVMId && (
-              <button
-                onClick={() => setShowOVMForm(true)}
-                className="btn btn-primary text-sm px-3 py-1.5"
-              >
-                + Novo OVM
-              </button>
-            )}
-          </div>
-
-          {/* New OVM form */}
-          {showOVMForm && (
-            <OVMForm
-              saving={ovmSaving}
-              onSave={saveOVM}
-              onCancel={() => setShowOVMForm(false)}
-              onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
-              equipment={intervention?.location?.equipment ?? []}
-              locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
-            />
-          )}
-
-          {/* OVM list */}
-          {ovms.length === 0 && !showOVMForm && (
-            <p className="text-sm text-gray-400 text-center py-4">Nenhum OVM criado.</p>
-          )}
-
-          {ovms.map((ovm, idx) => (
-            <div key={ovm.id} className="border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-gray-700">
-                  OVM #{ovms.length - idx} — {new Date(ovm.createdAt).toLocaleString()}
-                </span>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => intervention && printOVMPDF(ovm.data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
-                    className="text-xs text-gray-500 hover:text-gray-700 font-medium"
-                  >
-                    PDF
-                  </button>
-                  <button
-                    onClick={() => setEditingOVMId(editingOVMId === ovm.id ? null : ovm.id)}
-                    className="text-xs text-blue-600 hover:text-blue-800"
-                  >
-                    {editingOVMId === ovm.id ? 'Fechar' : 'Editar'}
-                  </button>
-                  <button
-                    onClick={() => deleteOVM(ovm.id)}
-                    className="text-xs text-red-600 hover:text-red-800"
-                  >
-                    Eliminar
-                  </button>
-                </div>
-              </div>
-
-              {editingOVMId === ovm.id && (
-                <OVMForm
-                  initial={ovm.data}
-                  saving={ovmSaving}
-                  onSave={saveOVM}
-                  onCancel={() => setEditingOVMId(null)}
-                  onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
-                  equipment={intervention?.location?.equipment ?? []}
-                  locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
         </>
       ) : (
         <form onSubmit={handleUpdate} className="card space-y-4">
@@ -1739,27 +1778,6 @@ export default function InterventionDetailPage() {
         />
       )}
 
-      {activeWOId !== null && (
-        <WorkOrderModal
-          wo={activeWOId === 'new' ? null : workOrders.find(w => w.id === activeWOId) ?? null}
-          interventionId={intervention.id}
-          assignedTechnicianId={intervention.assignedTo?.id ?? null}
-          canEdit={canEdit}
-          equipment={intervention.location?.equipment ?? []}
-          technicians={technicians}
-          vehicles={vehicles}
-          warehouseItems={warehouseItems}
-          savedPdfs={activeWOId !== 'new' ? (savedPdfs[activeWOId] ?? []) : []}
-          printCompany={printCompany}
-          onClose={() => setActiveWOId(null)}
-          onRefresh={() => { fetchWorkOrders(); fetchIntervention() }}
-          onDelete={() => {
-            if (activeWOId !== 'new') deleteWorkOrder(activeWOId)
-            setActiveWOId(null)
-          }}
-          onPrint={handlePrintWorkOrder}
-        />
-      )}
 
     </div>
   )

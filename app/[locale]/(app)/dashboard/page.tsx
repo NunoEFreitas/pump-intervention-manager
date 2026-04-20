@@ -495,36 +495,8 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Main layout: today list (left) + calendar (right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5 items-start">
-
-        {/* Left: Today's interventions */}
-        <div className="card p-0 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">Hoje</h2>
-            <span className="text-xs text-gray-400">{data.todayList.length} interv.</span>
-          </div>
-          {data.todayList.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-gray-400">Nenhuma intervenção para hoje.</div>
-          ) : (
-            <div className="p-2 space-y-0.5 max-h-[520px] overflow-y-auto">
-              {data.todayList.map(iv => (
-                <InterventionRow key={iv.id} iv={iv} onClick={() => goTo(iv.id)} />
-              ))}
-            </div>
-          )}
-          {(data.unassignedOpen?.length ?? 0) > 0 && (
-            <div
-              onClick={() => router.push(`/${locale}/interventions?status=OPEN`)}
-              className="px-4 py-2.5 border-t border-amber-100 bg-amber-50 flex items-center gap-2 cursor-pointer hover:bg-amber-100 transition-colors"
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-              <span className="text-xs text-amber-700 font-medium">{data.unassignedOpen.length} sem atribuição</span>
-            </div>
-          )}
-        </div>
-
-        {/* Right: Weekly calendar */}
+      {/* Weekly calendar — full width */}
+      <div className="space-y-5">
         <div className="card p-0 overflow-hidden">
           {/* Calendar header with navigation */}
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
@@ -607,6 +579,32 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Today's interventions — below calendar */}
+        <div className="card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">Hoje</h2>
+            <span className="text-xs text-gray-400">{data.todayList.length} interv.</span>
+          </div>
+          {data.todayList.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-gray-400">Nenhuma intervenção para hoje.</div>
+          ) : (
+            <div className="p-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-0.5">
+              {data.todayList.map(iv => (
+                <InterventionRow key={iv.id} iv={iv} onClick={() => goTo(iv.id)} />
+              ))}
+            </div>
+          )}
+          {(data.unassignedOpen?.length ?? 0) > 0 && (
+            <div
+              onClick={() => router.push(`/${locale}/interventions?status=OPEN`)}
+              className="px-4 py-2.5 border-t border-amber-100 bg-amber-50 flex items-center gap-2 cursor-pointer hover:bg-amber-100 transition-colors"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <span className="text-xs text-amber-700 font-medium">{data.unassignedOpen.length} sem atribuição</span>
+            </div>
+          )}
         </div>
 
       </div>
