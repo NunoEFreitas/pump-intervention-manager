@@ -119,12 +119,35 @@ function sizeStyle(key: LabelSizeKey) {
 
 function labelCSS(sizeKey: LabelSizeKey): string {
   const sz = sizeStyle(sizeKey)
-  const w = LABEL_SIZES[sizeKey].w
+  const { w, h } = LABEL_SIZES[sizeKey]
   return `
   @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: ${sz.pageSize}; margin: ${sz.margin}; }
-  html, body { width: ${w}mm; font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000; }
+
+  /* Force exact label size + portrait — strongest hint available in CSS */
+  @page {
+    size: ${w}mm ${h}mm portrait;
+    margin: 0;
+  }
+
+  /* Hard-constrain html/body to label dimensions — browser cannot rotate or scale */
+  html {
+    width: ${w}mm;
+    height: ${h}mm;
+    overflow: hidden;
+  }
+  body {
+    width: ${w}mm;
+    height: ${h}mm;
+    overflow: hidden;
+    padding: ${sz.margin};
+    font-family: Arial, sans-serif;
+    font-size: ${sz.bodyPt}pt;
+    color: #000;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
   .label { page-break-after: always; display: flex; flex-direction: column; min-height: ${sz.usableH}; }
   .label:last-child { page-break-after: avoid; }
   .wrap  { display: flex; flex-direction: column; width: 100%; flex: 1; overflow: hidden; }
@@ -219,8 +242,14 @@ function buildMultiLabelHTML(
 </html>`
 }
 
-function openPrint(html: string) {
-  const win = window.open('', '_blank', 'width=600,height=500')
+const MM_TO_PX = 3.7795275591  // 1mm at 96 dpi
+
+function openPrint(html: string, sizeKey: LabelSizeKey) {
+  const { w, h } = LABEL_SIZES[sizeKey]
+  // Open window at exact label pixel size — browser uses this to pre-select paper size + portrait
+  const pw = Math.ceil(w * MM_TO_PX)
+  const ph = Math.ceil(h * MM_TO_PX) + 80  // +80 for browser chrome (toolbar etc.)
+  const win = window.open('', '_blank', `width=${pw},height=${ph},left=80,top=80,menubar=no,toolbar=no,scrollbars=no`)
   if (!win) { alert('Por favor permita popups para imprimir etiquetas.'); return }
   win.document.write(html)
   win.document.close()
@@ -282,7 +311,7 @@ export function printRepairLabel(
   companyName = ''
 ): void {
   const rows = repairRows(template.fields, data)
-  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName))
+  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName), template.size)
 }
 
 export function printReceptionLabels(
@@ -291,7 +320,7 @@ export function printReceptionLabels(
   companyName = ''
 ): void {
   const allRows = items.map(d => receptionRows(template.fields, d))
-  openPrint(buildMultiLabelHTML(template.size, allRows, template.customText, companyName))
+  openPrint(buildMultiLabelHTML(template.size, allRows, template.customText, companyName), template.size)
 }
 
 export function printProductLabel(
@@ -300,5 +329,5 @@ export function printProductLabel(
   companyName = ''
 ): void {
   const rows = productRows(template.fields, data)
-  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName))
+  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName), template.size)
 }
