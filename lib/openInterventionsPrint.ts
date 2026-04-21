@@ -44,10 +44,45 @@ function fmtDate(d: string | null): string {
   return new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+interface PrintCompany {
+  name: string
+  email: string
+  address: string
+  phones: string[]
+  faxes: string[]
+  logo: string
+}
+
+function companyHeader(company: PrintCompany, filterLabel: string, count: number): string {
+  const logoHtml = company.logo
+    ? `<img src="${esc(company.logo)}" alt="" style="height:44px;object-fit:contain;display:block;">`
+    : ''
+  const info = [
+    company.address ? esc(company.address) : '',
+    company.phones.length ? `Tel: ${company.phones.map(esc).join(' / ')}` : '',
+    company.email ? esc(company.email) : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ')
+  const date = new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #1e3a5f;padding-bottom:12px;margin-bottom:16px">
+    <div>
+      ${logoHtml}
+      ${!company.logo && company.name ? `<div style="font-size:17px;font-weight:700;color:#1e3a5f">${esc(company.name)}</div>` : ''}
+      ${info ? `<div style="font-size:10px;color:#6b7280;margin-top:3px">${info}</div>` : ''}
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:17px;font-weight:700;color:#1e3a5f">Intervenções</div>
+      <div style="font-size:11px;color:#6b7280;margin-top:2px">Filtro: <strong>${esc(filterLabel)}</strong></div>
+      <div style="font-size:10px;color:#9ca3af;margin-top:2px">${count} intervenç${count === 1 ? 'ão' : 'ões'} &nbsp;·&nbsp; ${date}</div>
+    </div>
+  </div>`
+}
+
 export function printOpenInterventionsPDF(
   interventions: OpenIntervention[],
   filterLabel: string,
-  companyName: string
+  companyName: string,
+  company?: PrintCompany
 ) {
   const now = new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
@@ -111,9 +146,10 @@ export function printOpenInterventionsPDF(
   </style>
 </head>
 <body>
+  ${company ? companyHeader(company, filterLabel, interventions.length) : `
   <h1>${esc(companyName) || 'Intervenções'}</h1>
   <div class="meta">Filtro: <strong>${esc(filterLabel)}</strong> &nbsp;·&nbsp; Gerado em ${now}</div>
-  <div class="count">${interventions.length} intervenç${interventions.length === 1 ? 'ão' : 'ões'}</div>
+  <div class="count">${interventions.length} intervenç${interventions.length === 1 ? 'ão' : 'ões'}</div>`}
   <table>
     <colgroup>
       <col class="c-client">

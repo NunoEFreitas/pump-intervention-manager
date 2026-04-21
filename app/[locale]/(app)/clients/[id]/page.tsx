@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import LocationSelector from '@/components/LocationSelector'
 import { validateVAT } from '@/lib/vat-validation'
+import { printClientDetail } from '@/lib/clientsPrint'
 
 interface LocationEquipment {
   id: string
@@ -111,6 +112,7 @@ export default function ClientDetailPage() {
   const [expandedEquipmentLocations, setExpandedEquipmentLocations] = useState<Set<string>>(new Set())
   const [equipmentForm, setEquipmentForm] = useState(emptyEquipmentForm)
   const [equipmentLoading, setEquipmentLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
@@ -195,6 +197,25 @@ export default function ClientDetailPage() {
     } catch (error) {
       console.error('Error fetching equipment metadata:', error)
     }
+  }
+
+  const handlePrintDetail = async () => {
+    if (!client) return
+    setPdfLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const companyRes = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+      const companyData = await companyRes.json()
+      const company = {
+        name: companyData.name || '',
+        email: companyData.email || '',
+        address: companyData.address || '',
+        phones: Array.isArray(companyData.phones) ? companyData.phones : [],
+        faxes: Array.isArray(companyData.faxes) ? companyData.faxes : [],
+        logo: companyData.logo || '',
+      }
+      printClientDetail(client, company)
+    } catch { /* ignore */ } finally { setPdfLoading(false) }
   }
 
   const getStatusColor = (status: string) => {
@@ -380,7 +401,14 @@ export default function ClientDetailPage() {
             )}
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 break-words">{client.name}</h1>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex gap-2 flex-shrink-0 flex-wrap justify-end">
+            <button
+              onClick={handlePrintDetail}
+              disabled={pdfLoading}
+              className="btn btn-secondary disabled:opacity-60"
+            >
+              {pdfLoading ? 'A gerar...' : 'PDF'}
+            </button>
             <button
               onClick={openEditClient}
               className="btn btn-secondary"

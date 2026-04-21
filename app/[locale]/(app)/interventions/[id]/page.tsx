@@ -9,6 +9,7 @@ import WorkOrderSignatureModal from './WorkOrderSignatureModal'
 import OVMForm, { type OVMData, migrateOVMData } from './OVMForm'
 import { printWorkOrderPDF } from '@/lib/workOrderPrint'
 import { printOVMPDF } from '@/lib/ovmPrint'
+import { printInterventionDetail } from '@/lib/interventionDetailPrint'
 
 interface ClientPart {
   id: string
@@ -166,6 +167,7 @@ export default function InterventionDetailPage() {
   const [commentsEditing, setCommentsEditing] = useState(false)
   const [commentsDraft, setCommentsDraft] = useState('')
   const [commentsSaving, setCommentsSaving] = useState(false)
+  const [ivPdfLoading, setIvPdfLoading] = useState(false)
 
   // History
   type HistoryEntry = { id: string; eventType: string; description: string; performedById: string; performedByName: string | null; performedAt: string }
@@ -187,6 +189,22 @@ export default function InterventionDetailPage() {
   const [photoError, setPhotoError] = useState('')
   const [lightboxPhoto, setLightboxPhoto] = useState<{ id: string; filename: string; mimeType: string; data: string } | null>(null)
   const [lightboxLoading, setLightboxLoading] = useState(false)
+
+  const handlePrintIntervention = async () => {
+    if (!intervention) return
+    setIvPdfLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      let company = printCompany
+      if (!company) {
+        const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+        const d = await res.json()
+        company = { name: d.name || '', email: d.email || '', address: d.address || '', phones: Array.isArray(d.phones) ? d.phones : [], faxes: Array.isArray(d.faxes) ? d.faxes : [], logo: d.logo || '' }
+        setPrintCompany(company)
+      }
+      printInterventionDetail(intervention, workOrders, company, clientParts, ovms)
+    } catch { /* ignore */ } finally { setIvPdfLoading(false) }
+  }
 
   const handlePrintWorkOrder = async (wo: WorkOrder) => {
     if (!intervention) return
@@ -776,14 +794,23 @@ export default function InterventionDetailPage() {
                   )}
                 </div>
               </div>
-              {canEdit && (
+              <div className="flex gap-2 shrink-0">
                 <button
-                  onClick={() => setIsEditing(true)}
-                  className="btn btn-secondary shrink-0"
+                  onClick={handlePrintIntervention}
+                  disabled={ivPdfLoading}
+                  className="btn btn-secondary disabled:opacity-60"
                 >
-                  {tCommon('edit')}
+                  {ivPdfLoading ? 'A gerar...' : 'PDF'}
                 </button>
-              )}
+                {canEdit && (
+                  <button
+                    onClick={() => setIsEditing(true)}
+                    className="btn btn-secondary"
+                  >
+                    {tCommon('edit')}
+                  </button>
+                )}
+              </div>
             </div>
 
             {(intervention.status === 'COMPLETED' || intervention.status === 'CANCELED') && userRole !== 'ADMIN' && (

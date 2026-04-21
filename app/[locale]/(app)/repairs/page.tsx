@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { printRepairList } from '@/lib/repairsPrint'
 
 interface RepairJob {
   id: string
@@ -99,6 +100,7 @@ export default function RepairsPage() {
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState('ACTIVE')
   const [search, setSearch] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   // ── Create Repair Modal ──────────────────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false)
@@ -219,6 +221,25 @@ export default function RepairsPage() {
     } finally { setCrSubmitting(false) }
   }
 
+  const handlePrintList = async () => {
+    setPdfLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const companyRes = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+      const companyData = await companyRes.json()
+      const company = {
+        name: companyData.name || '',
+        email: companyData.email || '',
+        address: companyData.address || '',
+        phones: Array.isArray(companyData.phones) ? companyData.phones : [],
+        faxes: Array.isArray(companyData.faxes) ? companyData.faxes : [],
+        logo: companyData.logo || '',
+      }
+      const filterLabel = FILTER_OPTIONS.find(o => o.value === statusFilter)?.label ?? statusFilter
+      printRepairList(filtered, company, filterLabel)
+    } catch { /* ignore */ } finally { setPdfLoading(false) }
+  }
+
   const filtered = jobs.filter(j => {
     if (!search) return true
     const s = search.toLowerCase()
@@ -237,9 +258,14 @@ export default function RepairsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Reparações</h1>
           <p className="text-sm text-gray-500 mt-1">Peças enviadas para reparação</p>
         </div>
-        <button onClick={openCreateModal} className="btn btn-primary shrink-0">
-          + Criar Reparação
-        </button>
+        <div className="flex gap-2 shrink-0">
+          <button onClick={handlePrintList} disabled={pdfLoading || loading} className="btn btn-secondary disabled:opacity-60">
+            {pdfLoading ? 'A gerar...' : 'PDF'}
+          </button>
+          <button onClick={openCreateModal} className="btn btn-primary">
+            + Criar Reparação
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

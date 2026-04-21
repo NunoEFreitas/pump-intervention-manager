@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
+import { printRepairDetail } from '@/lib/repairsPrint'
 
 interface RepairJob {
   id: string
@@ -133,6 +134,7 @@ export default function RepairDetailPage() {
 
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   const [history, setHistory] = useState<HistoryEntry[]>([])
 
@@ -471,6 +473,24 @@ export default function RepairDetailPage() {
     await Promise.all([fetchParts(), fetchHistory()])
   }
 
+  const handlePrintDetail = async () => {
+    if (!job) return
+    setPdfLoading(true)
+    try {
+      const companyRes = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token()}` } })
+      const companyData = await companyRes.json()
+      const company = {
+        name: companyData.name || '',
+        email: companyData.email || '',
+        address: companyData.address || '',
+        phones: Array.isArray(companyData.phones) ? companyData.phones : [],
+        faxes: Array.isArray(companyData.faxes) ? companyData.faxes : [],
+        logo: companyData.logo || '',
+      }
+      printRepairDetail({ ...job, sessions, parts, workNotes: workNotes || null }, company)
+    } catch { /* ignore */ } finally { setPdfLoading(false) }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
   if (error || !job) return <div className="px-4 sm:px-0"><div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">{error || 'Não encontrado'}</div></div>
 
@@ -516,6 +536,13 @@ export default function RepairDetailPage() {
             {saving && <span className="text-xs text-gray-400">A guardar...</span>}
           </div>
         </div>
+        <button
+          onClick={handlePrintDetail}
+          disabled={pdfLoading}
+          className="btn btn-secondary text-sm shrink-0 disabled:opacity-60"
+        >
+          {pdfLoading ? 'A gerar...' : 'PDF'}
+        </button>
       </div>
 
       {actionError && <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">{actionError}</div>}

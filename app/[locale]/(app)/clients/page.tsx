@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { printClientList } from '@/lib/clientsPrint'
 
 interface Client {
   id: string
@@ -26,6 +27,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalClients, setTotalClients] = useState(0)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const tClients = useTranslations('clients')
@@ -62,6 +64,30 @@ export default function ClientsPage() {
 
   const goToPage = (page: number) => fetchClients(page, searchTerm)
 
+  const handlePrintList = async () => {
+    setPdfLoading(true)
+    try {
+      const token = localStorage.getItem('token')
+      const [clientsRes, companyRes] = await Promise.all([
+        fetch(`/api/clients?page=1&limit=1000&search=${encodeURIComponent(searchTerm)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      const clientsData = await clientsRes.json()
+      const companyData = await companyRes.json()
+      const company = {
+        name: companyData.name || '',
+        email: companyData.email || '',
+        address: companyData.address || '',
+        phones: Array.isArray(companyData.phones) ? companyData.phones : [],
+        faxes: Array.isArray(companyData.faxes) ? companyData.faxes : [],
+        logo: companyData.logo || '',
+      }
+      printClientList(clientsData.clients ?? [], company)
+    } catch { /* ignore */ } finally { setPdfLoading(false) }
+  }
+
   return (
     <div>
       <div className="px-4 sm:px-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
@@ -69,12 +95,21 @@ export default function ClientsPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">{tClients('title')}</h1>
           <p className="text-gray-600">{tClients('subtitle')}</p>
         </div>
-        <button
-          onClick={() => router.push(`/${locale}/clients/new`)}
-          className="btn btn-primary w-full sm:w-auto"
-        >
-          {tClients('addClient')}
-        </button>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            onClick={handlePrintList}
+            disabled={pdfLoading}
+            className="btn btn-secondary w-full sm:w-auto disabled:opacity-60"
+          >
+            {pdfLoading ? 'A gerar...' : 'PDF'}
+          </button>
+          <button
+            onClick={() => router.push(`/${locale}/clients/new`)}
+            className="btn btn-primary w-full sm:w-auto"
+          >
+            {tClients('addClient')}
+          </button>
+        </div>
       </div>
 
       <div className="card mb-6">

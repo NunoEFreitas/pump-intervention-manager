@@ -134,14 +134,22 @@ function InterventionsContent() {
         </div>
         <div className="flex gap-2 w-full sm:w-auto">
           <button
-            onClick={() => {
+            onClick={async () => {
               const label = statusFilter === 'ALL' ? 'Todas' : getTranslatedStatusLabel(statusFilter)
-              printOpenInterventionsPDF(filteredInterventions, label, '')
+              try {
+                const token = localStorage.getItem('token')
+                const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+                const d = await res.json()
+                const company = { name: d.name || '', email: d.email || '', address: d.address || '', phones: Array.isArray(d.phones) ? d.phones : [], faxes: Array.isArray(d.faxes) ? d.faxes : [], logo: d.logo || '' }
+                printOpenInterventionsPDF(filteredInterventions, label, '', company)
+              } catch {
+                printOpenInterventionsPDF(filteredInterventions, label, '')
+              }
             }}
             className="btn btn-secondary flex-1 sm:flex-none"
             title="Imprimir lista filtrada"
           >
-            🖨 Imprimir
+            PDF
           </button>
           <button onClick={() => router.push(`/${locale}/interventions/new`)} className="btn btn-primary flex-1 sm:flex-none">{t('newIntervention')}</button>
         </div>
