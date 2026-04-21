@@ -100,16 +100,44 @@ function esc(s?: string | null): string {
 function sizeStyle(key: LabelSizeKey) {
   const s = LABEL_SIZES[key]
   const narrow = s.w < 40
+  const orientation = s.h >= s.w ? 'portrait' : 'landscape'
+  // Usable height after 2mm margin each side
+  const usableH = `${s.h - 4}mm`
   return {
-    pageSize: `${s.w}mm ${s.h}mm`,
-    titlePt:  narrow ? 8  : 11,
-    bodyPt:   narrow ? 6  : 8,
-    refPt:    narrow ? 9  : 13,
-    snPt:     narrow ? 8  : 10,
-    barcodePt: narrow ? 22 : (s.h < 50 ? 26 : 36),
-    companyPt: narrow ? 5  : 6,
-    margin:   '1.5mm',
+    pageSize:  `${s.w}mm ${s.h}mm ${orientation}`,
+    usableH,
+    titlePt:   narrow ? 12 : 18,
+    bodyPt:    narrow ? 9  : 13,
+    refPt:     narrow ? 14 : 22,
+    snPt:      narrow ? 12 : 16,
+    barcodePt: narrow ? 30 : (s.h < 50 ? 38 : 52),
+    companyPt: narrow ? 7  : 10,
+    fieldGap:  narrow ? '3pt' : '5pt',
+    margin:    '2mm',
   }
+}
+
+function labelCSS(sizeKey: LabelSizeKey): string {
+  const sz = sizeStyle(sizeKey)
+  const w = LABEL_SIZES[sizeKey].w
+  return `
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: ${sz.pageSize}; margin: ${sz.margin}; }
+  html, body { width: ${w}mm; font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000; }
+  .label { page-break-after: always; display: flex; flex-direction: column; min-height: ${sz.usableH}; }
+  .label:last-child { page-break-after: avoid; }
+  .wrap  { display: flex; flex-direction: column; width: 100%; flex: 1; overflow: hidden; }
+  .company { font-size: ${sz.companyPt}pt; color: #777; border-bottom: 0.5pt solid #ccc; padding-bottom: 2pt; margin-bottom: ${sz.fieldGap}; }
+  .f-title { font-size: ${sz.titlePt}pt; font-weight: 700; line-height: 1.25; word-break: break-word; margin-bottom: ${sz.fieldGap}; }
+  .f-ref   { font-size: ${sz.refPt}pt; font-weight: 700; font-family: monospace; letter-spacing: -0.5pt; margin-bottom: ${sz.fieldGap}; }
+  .f-sn    { font-size: ${sz.snPt}pt; font-family: monospace; margin-bottom: ${sz.fieldGap}; }
+  .f-small { font-size: ${sz.bodyPt}pt; color: #222; margin-bottom: ${sz.fieldGap}; }
+  .f-dim   { font-size: ${Math.max(sz.bodyPt - 2, 7)}pt; color: #555; font-style: italic; margin-bottom: ${sz.fieldGap}; }
+  .bc      { font-family: 'Libre Barcode 128 Text', monospace; font-size: ${sz.barcodePt}pt; line-height: 1; display: block; margin-bottom: 2pt; }
+  .bc-val  { font-size: ${Math.max(sz.bodyPt - 2, 7)}pt; color: #444; margin-bottom: ${sz.fieldGap}; }
+  .footer  { font-size: ${sz.companyPt}pt; color: #555; border-top: 0.5pt solid #ccc; padding-top: 2pt; margin-top: auto; }
+  `
 }
 
 function buildLabelHTML(
@@ -118,7 +146,6 @@ function buildLabelHTML(
   customText: string,
   companyName: string
 ): string {
-  const sz = sizeStyle(sizeKey)
   const rows = labels.map(({ key, value, type }) => {
     if (!value) return ''
     const t = type ?? 'small'
@@ -146,24 +173,7 @@ function buildLabelHTML(
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: ${sz.pageSize}; margin: ${sz.margin}; }
-  html, body { width: 100%; font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000; }
-  .wrap { display: flex; flex-direction: column; width: 100%; overflow: hidden; }
-  .company { font-size: ${sz.companyPt}pt; color: #777; border-bottom: 0.3pt solid #ccc; padding-bottom: 1pt; margin-bottom: 2pt; }
-  .f-title { font-size: ${sz.titlePt}pt; font-weight: 700; line-height: 1.2; word-break: break-word; margin-bottom: 1pt; }
-  .f-ref   { font-size: ${sz.refPt}pt; font-weight: 700; font-family: monospace; letter-spacing: -0.3pt; margin-bottom: 1pt; }
-  .f-sn    { font-size: ${sz.snPt}pt; font-family: monospace; margin-bottom: 1pt; }
-  .f-small { font-size: ${sz.bodyPt}pt; color: #333; margin-bottom: 0.5pt; }
-  .f-dim   { font-size: ${sz.bodyPt - 1}pt; color: #555; font-style: italic; margin-bottom: 0.5pt; }
-  .bc      { font-family: 'Libre Barcode 128 Text', monospace; font-size: ${sz.barcodePt}pt; line-height: 1; display: block; }
-  .bc-val  { font-size: ${sz.bodyPt - 1}pt; color: #444; margin-top: -1pt; margin-bottom: 1pt; }
-  .footer  { font-size: ${sz.companyPt}pt; color: #555; border-top: 0.3pt solid #ccc; padding-top: 1pt; margin-top: auto; }
-  .label   { page-break-after: always; display: flex; flex-direction: column; }
-  .label:last-child { page-break-after: avoid; }
-</style>
+<style>${labelCSS(sizeKey)}</style>
 </head>
 <body>
 <div class="label">
@@ -183,8 +193,6 @@ function buildMultiLabelHTML(
   customText: string,
   companyName: string
 ): string {
-  const sz = sizeStyle(sizeKey)
-
   const labelBlocks = allLabels.map(labels => {
     const rows = labels.map(({ value, type }) => {
       if (!value) return ''
@@ -205,24 +213,7 @@ function buildMultiLabelHTML(
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: ${sz.pageSize}; margin: ${sz.margin}; }
-  html, body { width: 100%; font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000; }
-  .wrap { display: flex; flex-direction: column; width: 100%; overflow: hidden; }
-  .company { font-size: ${sz.companyPt}pt; color: #777; border-bottom: 0.3pt solid #ccc; padding-bottom: 1pt; margin-bottom: 2pt; }
-  .f-title { font-size: ${sz.titlePt}pt; font-weight: 700; line-height: 1.2; word-break: break-word; margin-bottom: 1pt; }
-  .f-ref   { font-size: ${sz.refPt}pt; font-weight: 700; font-family: monospace; letter-spacing: -0.3pt; margin-bottom: 1pt; }
-  .f-sn    { font-size: ${sz.snPt}pt; font-family: monospace; margin-bottom: 1pt; }
-  .f-small { font-size: ${sz.bodyPt}pt; color: #333; margin-bottom: 0.5pt; }
-  .f-dim   { font-size: ${sz.bodyPt - 1}pt; color: #555; font-style: italic; margin-bottom: 0.5pt; }
-  .bc      { font-family: 'Libre Barcode 128 Text', monospace; font-size: ${sz.barcodePt}pt; line-height: 1; display: block; }
-  .bc-val  { font-size: ${sz.bodyPt - 1}pt; color: #444; margin-top: -1pt; margin-bottom: 1pt; }
-  .footer  { font-size: ${sz.companyPt}pt; color: #555; border-top: 0.3pt solid #ccc; padding-top: 1pt; margin-top: auto; }
-  .label   { page-break-after: always; display: flex; flex-direction: column; }
-  .label:last-child { page-break-after: avoid; }
-</style>
+<style>${labelCSS(sizeKey)}</style>
 </head>
 <body>${labelBlocks}</body>
 </html>`
