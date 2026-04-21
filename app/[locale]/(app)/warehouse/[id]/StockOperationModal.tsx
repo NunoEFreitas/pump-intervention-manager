@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTranslations } from 'next-intl'
-import LabelPrintModal from '@/components/LabelPrintModal'
+import { printReceptionLabels, DEFAULT_TEMPLATES, type LabelTemplates } from '@/lib/labelPrint'
 
 interface SerialNumber {
   id: string
@@ -56,8 +56,8 @@ export default function StockOperationModal({
   const [loading, setLoading] = useState(false)
   const [autoSnQuantity, setAutoSnQuantity] = useState('')
 
-  // Print step — set after a successful ADD_STOCK with serial numbers
-  const [printSerialNumbers, setPrintSerialNumbers] = useState<string[] | null>(null)
+  // Reception label offer — shown after successful ADD_STOCK
+  const [postAddSNs, setPostAddSNs] = useState<string[] | null>(null)
 
   // Ordered part requests for this item
   type OrderedRequest = { id: string; quantity: number; interventionReference: string | null; clientName: string; requesterName: string }
@@ -234,8 +234,11 @@ export default function StockOperationModal({
           }
 
           await markRequestsReceived()
-          // Show label print modal — onSuccess called when label modal closes
-          setPrintSerialNumbers(addedSNs)
+          if (addedSNs.length > 0) {
+            setPostAddSNs(addedSNs)
+          } else {
+            onSuccess()
+          }
         } else {
           if (selectedSerialNumbers.length === 0) {
             alert(t('selectAtLeastOneSn'))
@@ -310,6 +313,7 @@ export default function StockOperationModal({
 
         if (response.ok) {
           await markRequestsReceived()
+          // Non-SN add stock — no labels to offer
           onSuccess()
         } else {
           const data = await response.json()
@@ -324,24 +328,56 @@ export default function StockOperationModal({
     }
   }
 
-  // Show label print modal after successful ADD_STOCK
-  if (printSerialNumbers) {
-    return (
-      <LabelPrintModal
-        itemName={itemName}
-        partNumber={partNumber}
-        serialNumbers={printSerialNumbers}
-        onClose={onSuccess}
-      />
-    )
-  }
-
   // For USE / REPAIR_IN / REPAIR_OUT / REMOVE_STOCK / MOVE_TO_DESTRUCTION: show the serial picker immediately
   // For TRANSFER ops: wait until a technician is selected
   const showSerialPicker = tracksSerialNumbers && operation !== 'ADD_STOCK' && (
     operation === 'USE' || operation === 'REPAIR_IN' || operation === 'REPAIR_OUT' ||
     operation === 'REMOVE_STOCK' || operation === 'MOVE_TO_DESTRUCTION' || !!formData.technicianId
   )
+
+  // Reception label offer screen
+  if (postAddSNs) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl p-6 max-w-sm w-full mx-4 shadow-xl">
+          <div className="text-center mb-5">
+            <div className="text-3xl mb-2">📦</div>
+            <h3 className="text-lg font-bold text-gray-900">Stock adicionado</h3>
+            <p className="text-sm text-gray-500 mt-1">
+              {postAddSNs.length} unidade{postAddSNs.length !== 1 ? 's' : ''} recebida{postAddSNs.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <p className="text-sm text-gray-700 text-center mb-5">
+            Deseja imprimir etiquetas de receção?
+          </p>
+          <div className="flex flex-col gap-2">
+            <button
+              onClick={async () => {
+                const token = localStorage.getItem('token')
+                let tpl: LabelTemplates = DEFAULT_TEMPLATES
+                try {
+                  const r = await fetch('/api/admin/label-templates', { headers: { Authorization: `Bearer ${token}` } })
+                  tpl = await r.json()
+                } catch { /* use defaults */ }
+                const date = new Date().toLocaleDateString('pt-PT')
+                printReceptionLabels(
+                  postAddSNs.map(s => ({ itemName, partNumber, serialNumber: s, date })),
+                  tpl.reception
+                )
+                onSuccess()
+              }}
+              className="btn btn-primary w-full"
+            >
+              Imprimir etiquetas
+            </button>
+            <button onClick={onSuccess} className="btn btn-secondary w-full">
+              Saltar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import StockOperationModal from './StockOperationModal'
+import { printProductLabel, printReceptionLabels, DEFAULT_TEMPLATES, type LabelTemplates } from '@/lib/labelPrint'
 
 interface Movement {
   id: string
@@ -91,6 +92,7 @@ export default function WarehouseItemDetailPage() {
   const [snMigrationInput, setSnMigrationInput] = useState('')
   const [snMigrating, setSnMigrating] = useState(false)
   const [pendingEditData, setPendingEditData] = useState<typeof editData | null>(null)
+  const [labelTemplates, setLabelTemplates] = useState<LabelTemplates | null>(null)
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [itemCategories, setItemCategories] = useState<ItemCategory[]>([])
@@ -155,6 +157,40 @@ export default function WarehouseItemDetailPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchLabelTemplates = async (): Promise<LabelTemplates> => {
+    if (labelTemplates) return labelTemplates
+    try {
+      const token = localStorage.getItem('token')
+      const r = await fetch('/api/admin/label-templates', { headers: { Authorization: `Bearer ${token}` } })
+      const tpl = await r.json()
+      setLabelTemplates(tpl)
+      return tpl
+    } catch {
+      return DEFAULT_TEMPLATES
+    }
+  }
+
+  const handlePrintProductLabel = async (sn: SerialNumber) => {
+    if (!item) return
+    const tpl = await fetchLabelTemplates()
+    printProductLabel({
+      itemName:     item.itemName,
+      partNumber:   item.partNumber,
+      serialNumber: sn.serialNumber,
+      barcode:      item.ean13,
+    }, tpl.product)
+  }
+
+  const handlePrintReceptionLabels = async (snNumbers: string[]) => {
+    if (!item) return
+    const tpl = await fetchLabelTemplates()
+    const date = new Date().toLocaleDateString('pt-PT')
+    printReceptionLabels(
+      snNumbers.map(s => ({ itemName: item.itemName, partNumber: item.partNumber, serialNumber: s, date })),
+      tpl.reception
+    )
   }
 
   const fetchSerialNumbers = async () => {
@@ -565,24 +601,33 @@ export default function WarehouseItemDetailPage() {
                       {expanded && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {visible.map(sn => (
-                            <button
-                              key={sn.id}
-                              type="button"
-                              onClick={() => {
-                                const next = movSnFilter === sn.serialNumber ? null : sn.serialNumber
-                                setMovSnFilter(next)
-                                setMovPage(1)
-                                fetchMovements(1, next)
-                                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
-                              }}
-                              className={`px-2 py-0.5 rounded text-xs font-mono transition-colors ${
-                                movSnFilter === sn.serialNumber
-                                  ? 'bg-blue-600 text-white ring-2 ring-blue-400'
-                                  : `${pillMap[color]} hover:opacity-75`
-                              }`}
-                            >
-                              {sn.serialNumber}
-                            </button>
+                            <div key={sn.id} className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = movSnFilter === sn.serialNumber ? null : sn.serialNumber
+                                  setMovSnFilter(next)
+                                  setMovPage(1)
+                                  fetchMovements(1, next)
+                                  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+                                }}
+                                className={`px-2 py-0.5 rounded-l text-xs font-mono transition-colors ${
+                                  movSnFilter === sn.serialNumber
+                                    ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+                                    : `${pillMap[color]} hover:opacity-75`
+                                }`}
+                              >
+                                {sn.serialNumber}
+                              </button>
+                              <button
+                                type="button"
+                                title="Imprimir etiqueta"
+                                onClick={() => handlePrintProductLabel(sn)}
+                                className={`px-1 py-0.5 rounded-r text-xs transition-colors border-l border-white/40 ${pillMap[color]} hover:opacity-75`}
+                              >
+                                🏷
+                              </button>
+                            </div>
                           ))}
                         </div>
                       )}

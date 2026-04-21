@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { printRepairDetail } from '@/lib/repairsPrint'
+import { printRepairLabel, DEFAULT_TEMPLATES, type LabelTemplates } from '@/lib/labelPrint'
 
 interface RepairJob {
   id: string
@@ -135,6 +136,8 @@ export default function RepairDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [actionError, setActionError] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [labelLoading, setLabelLoading] = useState(false)
+  const [labelTemplates, setLabelTemplates] = useState<LabelTemplates | null>(null)
 
   const [history, setHistory] = useState<HistoryEntry[]>([])
 
@@ -491,6 +494,30 @@ export default function RepairDetailPage() {
     } catch { /* ignore */ } finally { setPdfLoading(false) }
   }
 
+  const handlePrintLabel = async () => {
+    if (!job) return
+    setLabelLoading(true)
+    try {
+      let tpl = labelTemplates
+      if (!tpl) {
+        const token = localStorage.getItem('token')
+        const r = await fetch('/api/admin/label-templates', { headers: { Authorization: `Bearer ${token}` } })
+        tpl = await r.json()
+        setLabelTemplates(tpl!)
+      }
+      const template = tpl?.repair ?? DEFAULT_TEMPLATES.repair
+      printRepairLabel({
+        reference:    job.reference,
+        itemName:     job.itemName,
+        partNumber:   job.partNumber,
+        serialNumber: job.snNumber,
+        clientName:   job.clientName,
+        date:         new Date(job.sentAt).toLocaleDateString('pt-PT'),
+        status:       (({ PENDING: 'Criada', IN_REPAIR: 'Em Progresso', QUOTE: 'Orçamento', OVM: 'Sujeito a OVM', REPAIRED: 'Dev. ao Stock', NOT_REPAIRED: 'Não Reparado', WRITTEN_OFF: 'Abate', RETURNED_TO_CLIENT: 'Reparado' } as Record<string, string>)[job.status] ?? job.status),
+      }, template)
+    } catch { /* ignore */ } finally { setLabelLoading(false) }
+  }
+
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
   if (error || !job) return <div className="px-4 sm:px-0"><div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">{error || 'Não encontrado'}</div></div>
 
@@ -536,6 +563,14 @@ export default function RepairDetailPage() {
             {saving && <span className="text-xs text-gray-400">A guardar...</span>}
           </div>
         </div>
+        <button
+          onClick={handlePrintLabel}
+          disabled={labelLoading}
+          className="btn btn-secondary text-sm shrink-0 disabled:opacity-60"
+          title="Imprimir etiqueta"
+        >
+          {labelLoading ? '...' : 'Etiqueta'}
+        </button>
         <button
           onClick={handlePrintDetail}
           disabled={pdfLoading}
