@@ -93,6 +93,9 @@ export default function WarehouseItemDetailPage() {
   const [snMigrating, setSnMigrating] = useState(false)
   const [pendingEditData, setPendingEditData] = useState<typeof editData | null>(null)
   const [labelTemplates, setLabelTemplates] = useState<LabelTemplates | null>(null)
+  const [showLabelModal, setShowLabelModal] = useState(false)
+  const [selectedSnIds, setSelectedSnIds] = useState<Set<string>>(new Set())
+  const [labelPrinting, setLabelPrinting] = useState(false)
   const [equipmentTypes, setEquipmentTypes] = useState<EquipmentType[]>([])
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [itemCategories, setItemCategories] = useState<ItemCategory[]>([])
@@ -169,6 +172,33 @@ export default function WarehouseItemDetailPage() {
       return tpl
     } catch {
       return DEFAULT_TEMPLATES
+    }
+  }
+
+  const handlePrintLabelButton = async () => {
+    if (!item) return
+    if (!item.tracksSerialNumbers) {
+      const tpl = await fetchLabelTemplates()
+      printProductLabel({ itemName: item.itemName, partNumber: item.partNumber, serialNumber: null, barcode: item.ean13 }, tpl.product)
+    } else {
+      setSelectedSnIds(new Set(serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').map(sn => sn.id)))
+      setShowLabelModal(true)
+    }
+  }
+
+  const handlePrintSelectedLabels = async () => {
+    if (!item || selectedSnIds.size === 0) return
+    setLabelPrinting(true)
+    try {
+      const tpl = await fetchLabelTemplates()
+      const snsToPrint = serialNumbers.filter(sn => selectedSnIds.has(sn.id))
+      for (const sn of snsToPrint) {
+        printProductLabel({ itemName: item.itemName, partNumber: item.partNumber, serialNumber: sn.serialNumber, barcode: item.ean13 }, tpl.product)
+        await new Promise(r => setTimeout(r, 300))
+      }
+      setShowLabelModal(false)
+    } finally {
+      setLabelPrinting(false)
     }
   }
 
@@ -426,6 +456,12 @@ export default function WarehouseItemDetailPage() {
                 <p className="text-gray-600">{t('subtitle')}</p>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={handlePrintLabelButton}
+                  className="btn btn-secondary"
+                >
+                  Etiqueta
+                </button>
                 <button
                   onClick={() => setIsEditing(true)}
                   className="btn btn-secondary"
@@ -1009,6 +1045,79 @@ export default function WarehouseItemDetailPage() {
                 className="btn btn-secondary"
               >
                 {tCommon('cancel')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showLabelModal && item && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] flex flex-col">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Imprimir Etiquetas</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Seleciona os números de série para imprimir etiquetas.
+            </p>
+
+            {/* Select all / none */}
+            <div className="flex gap-3 mb-3">
+              <button type="button" className="text-xs text-blue-600 hover:underline"
+                onClick={() => setSelectedSnIds(new Set(serialNumbers.map(s => s.id)))}>
+                Selecionar todos
+              </button>
+              <button type="button" className="text-xs text-gray-500 hover:underline"
+                onClick={() => setSelectedSnIds(new Set())}>
+                Limpar
+              </button>
+              <span className="text-xs text-gray-400 ml-auto">{selectedSnIds.size} selecionado(s)</span>
+            </div>
+
+            {/* SN list grouped by location */}
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+              {[
+                { loc: 'MAIN_WAREHOUSE', label: 'Armazém Principal' },
+                { loc: 'TECHNICIAN',     label: 'Técnico' },
+                { loc: 'REPAIR',         label: 'Em Reparação' },
+              ].map(({ loc, label }) => {
+                const sns = serialNumbers.filter(sn => sn.location === loc && !sn.isClientPart)
+                if (sns.length === 0) return null
+                return (
+                  <div key={loc}>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">{label}</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {sns.map(sn => (
+                        <label key={sn.id} className="flex items-center gap-1 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedSnIds.has(sn.id)}
+                            onChange={e => {
+                              setSelectedSnIds(prev => {
+                                const next = new Set(prev)
+                                e.target.checked ? next.add(sn.id) : next.delete(sn.id)
+                                return next
+                              })
+                            }}
+                            className="w-3.5 h-3.5"
+                          />
+                          <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded">{sn.serialNumber}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="flex gap-3 mt-4 pt-4 border-t">
+              <button
+                onClick={handlePrintSelectedLabels}
+                disabled={selectedSnIds.size === 0 || labelPrinting}
+                className="btn btn-primary flex-1 disabled:opacity-50"
+              >
+                {labelPrinting ? 'A imprimir...' : `Imprimir ${selectedSnIds.size > 0 ? `(${selectedSnIds.size})` : ''}`}
+              </button>
+              <button onClick={() => setShowLabelModal(false)} className="btn btn-secondary">
+                Cancelar
               </button>
             </div>
           </div>
