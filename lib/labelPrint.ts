@@ -22,7 +22,7 @@ export interface LabelTemplates {
 
 export const DEFAULT_TEMPLATES: LabelTemplates = {
   repair: {
-    size: '62x100',
+    size: '62x62',
     fields: ['reference', 'itemName', 'partNumber', 'serialNumber', 'clientName', 'date', 'status'],
     customText: '',
   },
@@ -112,7 +112,7 @@ function labelCSS(sizeKey: LabelSizeKey): string {
   @page { size: ${w}mm ${h}mm; margin: 0; }
   html, body { width: ${w}mm; height: ${h}mm; overflow: hidden; }
   body {
-    padding: 2mm;
+    padding: 3mm 4mm;
     font-family: Arial, sans-serif; font-size: ${bodyPt}pt; color: #000;
     print-color-adjust: exact; -webkit-print-color-adjust: exact;
   }
