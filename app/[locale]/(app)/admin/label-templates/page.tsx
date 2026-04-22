@@ -31,12 +31,13 @@ const FIELD_DEFS: Record<TabKey, { key: string; label: string }[]> = {
 }
 
 function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey }) {
-  const sz = LABEL_SIZES[template.size]
+  const sz = LABEL_SIZES[template.size] ?? LABEL_SIZES['62x100']
   const allDefs = FIELD_DEFS[tab]
   const enabledDefs = template.fields
     .map(k => allDefs.find(d => d.key === k))
     .filter(Boolean) as { key: string; label: string }[]
 
+  // Always show preview with label reading orientation: w is horizontal, h is vertical
   const scale = 180 / Math.max(sz.w, sz.h)
   const boxW = sz.w * scale
   const boxH = sz.h * scale
@@ -44,32 +45,24 @@ function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey 
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="text-xs text-gray-500 font-medium">Pré-visualização</p>
-      <div
-        style={{
-          width: boxW, height: boxH,
-          border: '1.5px solid #94a3b8', borderRadius: 3,
-          background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
-          overflow: 'hidden', padding: 4 * scale / 3,
-          display: 'flex', flexDirection: 'column', gap: 2,
-        }}
-      >
+      <div style={{ width: boxW, height: boxH, border: '1.5px solid #94a3b8', borderRadius: 3,
+                    background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+                    overflow: 'hidden', padding: 4 * scale / 3,
+                    display: 'flex', flexDirection: 'column', gap: 2 }}>
         {enabledDefs.map(d => (
-          <div
-            key={d.key}
-            style={{
-              fontSize: d.key === 'barcode'   ? 7  * scale / 2
-                      : d.key === 'itemName'  ? 3.5 * scale / 2
-                      : d.key === 'reference' ? 4   * scale / 2
-                      : 2.5 * scale / 2,
-              fontWeight: ['itemName', 'reference'].includes(d.key) ? 700 : 400,
-              fontFamily: d.key === 'barcode' ? "'Libre Barcode 128 Text', monospace"
-                        : ['partNumber', 'serialNumber'].includes(d.key) ? 'monospace'
-                        : 'Arial, sans-serif',
-              lineHeight: d.key === 'barcode' ? 1 : 1.3,
-              color: ['partNumber', 'date'].includes(d.key) ? '#555' : '#000',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}
-          >
+          <div key={d.key} style={{
+            fontSize: d.key === 'barcode'   ? 7   * scale / 2
+                    : d.key === 'itemName'  ? 3.5 * scale / 2
+                    : d.key === 'reference' ? 4   * scale / 2
+                    : 2.5 * scale / 2,
+            fontWeight: ['itemName', 'reference'].includes(d.key) ? 700 : 400,
+            fontFamily: d.key === 'barcode' ? "'Libre Barcode 128 Text', monospace"
+                      : ['partNumber', 'serialNumber'].includes(d.key) ? 'monospace'
+                      : 'Arial, sans-serif',
+            lineHeight: d.key === 'barcode' ? 1 : 1.3,
+            color: ['partNumber', 'date'].includes(d.key) ? '#555' : '#000',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
             {d.key === 'barcode'       ? '|||||||||||||||||||||||||||||'
             : d.key === 'itemName'     ? 'Nome do Artigo'
             : d.key === 'partNumber'   ? 'REF-0000'
@@ -81,11 +74,6 @@ function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey 
             : d.label}
           </div>
         ))}
-        {template.customText && (
-          <div style={{ marginTop: 'auto', fontSize: 2 * scale / 2, color: '#888', borderTop: '0.5px solid #ccc', paddingTop: 1 }}>
-            {template.customText}
-          </div>
-        )}
       </div>
       <p className="text-xs text-gray-400">{sz.w} × {sz.h} mm</p>
     </div>
@@ -187,21 +175,6 @@ function TemplateEditor({
             </div>
           ))}
         </div>
-      </div>
-
-      {/* Custom text */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Texto personalizado <span className="text-gray-400 font-normal">(rodapé opcional)</span>
-        </label>
-        <input
-          type="text"
-          className="input text-gray-800 w-full"
-          placeholder="Ex: www.empresa.pt · Tel: 21 000 0000"
-          value={template.customText}
-          onChange={e => onChange({ ...template, customText: e.target.value })}
-          maxLength={80}
-        />
       </div>
 
     </div>
