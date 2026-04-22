@@ -32,119 +32,62 @@ const FIELD_DEFS: Record<TabKey, { key: string; label: string }[]> = {
 
 function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey }) {
   const sz = LABEL_SIZES[template.size]
-  const rotate = template.rotate ?? false
-
   const allDefs = FIELD_DEFS[tab]
   const enabledDefs = template.fields
     .map(k => allDefs.find(d => d.key === k))
     .filter(Boolean) as { key: string; label: string }[]
 
-  // Portrait content dimensions; when rotated the outer box is landscape (h×w)
-  const maxDim = Math.max(sz.w, sz.h)
-  const scale = 180 / maxDim
-  const portW = sz.w * scale
-  const portH = sz.h * scale
-  // Outer box: landscape when rotated
-  const boxW = rotate ? portH : portW
-  const boxH = rotate ? portW : portH
-
-  const fieldNodes = (
-    <>
-      {enabledDefs.map(d => (
-        <div
-          key={d.key}
-          style={{
-            fontSize: d.key === 'barcode'   ? 7 * scale / 2
-                    : d.key === 'itemName'  ? 3.5 * scale / 2
-                    : d.key === 'reference' ? 4   * scale / 2
-                    : 2.5 * scale / 2,
-            fontWeight: ['itemName', 'reference'].includes(d.key) ? 700 : 400,
-            fontFamily: d.key === 'barcode' ? "'Libre Barcode 128 Text', monospace"
-                      : ['partNumber', 'serialNumber'].includes(d.key) ? 'monospace'
-                      : 'Arial, sans-serif',
-            lineHeight: d.key === 'barcode' ? 1 : 1.3,
-            color: d.key === 'barcode' ? '#000' : ['partNumber', 'date'].includes(d.key) ? '#555' : '#000',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {d.key === 'barcode'      ? '|||||||||||||||||||||||||||||'
-          : d.key === 'itemName'    ? 'Nome do Artigo'
-          : d.key === 'partNumber'  ? 'REF-0000'
-          : d.key === 'serialNumber'? 'SN: 000000'
-          : d.key === 'reference'   ? 'REP-0001'
-          : d.key === 'clientName'  ? 'Cliente Exemplo'
-          : d.key === 'date'        ? '01/01/2025'
-          : d.key === 'status'      ? 'Em Progresso'
-          : d.label}
-        </div>
-      ))}
-      {template.customText && (
-        <div style={{
-          marginTop: 'auto',
-          fontSize: 2 * scale / 2,
-          color: '#888',
-          borderTop: '0.5px solid #ccc',
-          paddingTop: 1,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-        }}>
-          {template.customText}
-        </div>
-      )}
-    </>
-  )
+  const scale = 180 / Math.max(sz.w, sz.h)
+  const boxW = sz.w * scale
+  const boxH = sz.h * scale
 
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="text-xs text-gray-500 font-medium">Pré-visualização</p>
       <div
         style={{
-          width: boxW,
-          height: boxH,
-          border: '1.5px solid #94a3b8',
-          borderRadius: 3,
-          background: '#fff',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
-          // clipPath clips painted output after transforms; overflow:hidden clips layout bounds (pre-transform)
-          clipPath: 'inset(0 round 3px)',
-          position: 'relative',
+          width: boxW, height: boxH,
+          border: '1.5px solid #94a3b8', borderRadius: 3,
+          background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
+          overflow: 'hidden', padding: 4 * scale / 3,
+          display: 'flex', flexDirection: 'column', gap: 2,
         }}
       >
-        {rotate ? (
-          // Rotated 90° CW: portrait div at (left=0, top=portW), rotate around top-left → fills landscape box
-          <div style={{
-            position: 'absolute',
-            top: portW,
-            left: 0,
-            width: portW,
-            height: portH,
-            transform: 'rotate(90deg)',
-            transformOrigin: 'top left',
-            padding: 4 * scale / 3,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}>
-            {fieldNodes}
+        {enabledDefs.map(d => (
+          <div
+            key={d.key}
+            style={{
+              fontSize: d.key === 'barcode'   ? 7  * scale / 2
+                      : d.key === 'itemName'  ? 3.5 * scale / 2
+                      : d.key === 'reference' ? 4   * scale / 2
+                      : 2.5 * scale / 2,
+              fontWeight: ['itemName', 'reference'].includes(d.key) ? 700 : 400,
+              fontFamily: d.key === 'barcode' ? "'Libre Barcode 128 Text', monospace"
+                        : ['partNumber', 'serialNumber'].includes(d.key) ? 'monospace'
+                        : 'Arial, sans-serif',
+              lineHeight: d.key === 'barcode' ? 1 : 1.3,
+              color: ['partNumber', 'date'].includes(d.key) ? '#555' : '#000',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+          >
+            {d.key === 'barcode'       ? '|||||||||||||||||||||||||||||'
+            : d.key === 'itemName'     ? 'Nome do Artigo'
+            : d.key === 'partNumber'   ? 'REF-0000'
+            : d.key === 'serialNumber' ? 'SN: 000000'
+            : d.key === 'reference'    ? 'REP-0001'
+            : d.key === 'clientName'   ? 'Cliente Exemplo'
+            : d.key === 'date'         ? '01/01/2025'
+            : d.key === 'status'       ? 'Em Progresso'
+            : d.label}
           </div>
-        ) : (
-          <div style={{
-            width: '100%',
-            height: '100%',
-            padding: 4 * scale / 3,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}>
-            {fieldNodes}
+        ))}
+        {template.customText && (
+          <div style={{ marginTop: 'auto', fontSize: 2 * scale / 2, color: '#888', borderTop: '0.5px solid #ccc', paddingTop: 1 }}>
+            {template.customText}
           </div>
         )}
       </div>
-      <p className="text-xs text-gray-400">
-        {rotate ? `${sz.h} × ${sz.w} mm (rotado)` : `${sz.w} × ${sz.h} mm`}
-      </p>
+      <p className="text-xs text-gray-400">{sz.w} × {sz.h} mm</p>
     </div>
   )
 }
@@ -261,25 +204,6 @@ function TemplateEditor({
         />
       </div>
 
-      {/* Rotate */}
-      <div>
-        <label className="flex items-start gap-3 cursor-pointer group">
-          <input
-            type="checkbox"
-            checked={template.rotate ?? false}
-            onChange={e => onChange({ ...template, rotate: e.target.checked })}
-            className="w-4 h-4 mt-0.5 text-blue-600 rounded"
-          />
-          <span>
-            <span className="block text-sm font-medium text-gray-700 group-hover:text-blue-700">
-              Rodar conteúdo 90°
-            </span>
-            <span className="block text-xs text-gray-400 mt-0.5">
-              Ativar se a impressora forçar impressão horizontal (e.g. Brother QL-800 sem opção de orientação)
-            </span>
-          </span>
-        </label>
-      </div>
     </div>
   )
 }
