@@ -114,20 +114,22 @@ function labelCSS(sizeKey: LabelSizeKey): string {
   .bc-val  { font-size: ${Math.max(bodyPt - 2, 7)}pt; color: #444; margin-bottom: ${gap}; }`
 
   if (rotate) {
-    // @page swapped to portrait (h×w) — driver prints without rotation
-    // .inner is placed at top:w (= page height), left:0, sized w×h, then rotated 90°CW
-    // After rotation it fills the full page (0..h wide, 0..w tall)
-    // clip-path on body clips painted output (post-transform) to page bounds
+    // @page stays as w×h (62×30) — driver cuts tape at h=30mm ✓
+    // Driver rotates landscape pages 90° CW, so we pre-rotate content 90° CW as well.
+    // After driver-CW + our-CW = 180°? No — wait: driver rotates the RENDERED page.
+    // .inner placed at top=h, left=0, width=h, height=w, rotate(90deg) origin top-left:
+    //   TL→(0,h), TR→(0,0), BL→(w,h), BR→(w,0) — fills 0..w × 0..h exactly ✓
+    // clip-path: inset(0) clips painted output (post-transform) to body bounds.
     return `
   @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  @page { size: ${h}mm ${w}mm; margin: 0; }
-  html, body { width: ${h}mm; height: ${w}mm; }
+  @page { size: ${w}mm ${h}mm; margin: 0; }
+  html, body { width: ${w}mm; height: ${h}mm; }
   body { clip-path: inset(0); font-family: Arial, sans-serif; font-size: ${bodyPt}pt; color: #000;
          print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .label { width: ${h}mm; height: ${w}mm; position: relative; page-break-after: always; }
+  .label { width: ${w}mm; height: ${h}mm; position: relative; page-break-after: always; }
   .label:last-child { page-break-after: avoid; }
-  .inner { position: absolute; top: ${w}mm; left: 0; width: ${w}mm; height: ${h}mm;
+  .inner { position: absolute; top: ${h}mm; left: 0; width: ${h}mm; height: ${w}mm;
            transform: rotate(90deg); transform-origin: top left;
            padding: 3mm 4mm; display: flex; flex-direction: column; overflow: hidden; }
   .wrap  { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
@@ -179,10 +181,8 @@ const MM_TO_PX = 3.7795275591
 
 function openPrint(html: string, sizeKey: LabelSizeKey) {
   const { w, h } = LABEL_SIZES[sizeKey] ?? LABEL_SIZES['62x100']
-  const rotate = isRotated(sizeKey)
-  // Window matches the @page dimensions
-  const pw = Math.ceil((rotate ? h : w) * MM_TO_PX)
-  const ph = Math.ceil((rotate ? w : h) * MM_TO_PX) + 80
+  const pw = Math.ceil(w * MM_TO_PX)
+  const ph = Math.ceil(h * MM_TO_PX) + 80
   const win = window.open('', '_blank', `width=${pw},height=${ph},left=80,top=80,menubar=no,toolbar=no,scrollbars=no`)
   if (!win) { alert('Por favor permita popups para imprimir etiquetas.'); return }
   win.document.write(html)
