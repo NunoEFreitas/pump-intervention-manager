@@ -15,6 +15,11 @@ import {
   type LabelTemplate,
   type LabelSizeKey,
 } from '@/lib/labelPrint'
+import {
+  downloadRepairLbx,
+  downloadReceptionLbx,
+  downloadProductLbx,
+} from '@/lib/labelLbx'
 
 type TabKey = 'repair' | 'reception' | 'product'
 
@@ -227,33 +232,28 @@ export default function LabelTemplatesPage() {
     } catch { /* ignore */ } finally { setSaving(false) }
   }
 
+  const TEST_DATA = {
+    repair: {
+      reference: 'REP-0001', itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345',
+      serialNumber: 'SN20240001', clientName: 'Cliente Exemplo Lda',
+      date: new Date().toLocaleDateString('pt-PT'), status: 'Em Progresso',
+    },
+    reception: { itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345', serialNumber: 'SN20240001', date: new Date().toLocaleDateString('pt-PT') },
+    product:   { itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345', serialNumber: 'SN20240001', barcode: '4006381333931' },
+  }
+
   const handleTestPrint = () => {
     const companyName = ''
-    if (activeTab === 'repair') {
-      printRepairLabel({
-        reference: 'REP-0001',
-        itemName: 'Bomba Hidráulica XL',
-        partNumber: 'BH-12345',
-        serialNumber: 'SN20240001',
-        clientName: 'Cliente Exemplo Lda',
-        date: new Date().toLocaleDateString('pt-PT'),
-        status: 'Em Progresso',
-      }, templates.repair, companyName)
-    } else if (activeTab === 'reception') {
-      printReceptionLabels([{
-        itemName: 'Bomba Hidráulica XL',
-        partNumber: 'BH-12345',
-        serialNumber: 'SN20240001',
-        date: new Date().toLocaleDateString('pt-PT'),
-      }], templates.reception, companyName)
-    } else {
-      printProductLabel({
-        itemName: 'Bomba Hidráulica XL',
-        partNumber: 'BH-12345',
-        serialNumber: 'SN20240001',
-        barcode: '4006381333931',
-      }, templates.product, companyName)
-    }
+    if (activeTab === 'repair')     printRepairLabel(TEST_DATA.repair, templates.repair, companyName)
+    else if (activeTab === 'reception') printReceptionLabels([TEST_DATA.reception], templates.reception, companyName)
+    else                            printProductLabel(TEST_DATA.product, templates.product, companyName)
+  }
+
+  const handleDownloadLbx = () => {
+    const companyName = ''
+    if (activeTab === 'repair')         downloadRepairLbx(TEST_DATA.repair, templates.repair, companyName)
+    else if (activeTab === 'reception') downloadReceptionLbx([TEST_DATA.reception], templates.reception, companyName)
+    else                                downloadProductLbx(TEST_DATA.product, templates.product, companyName)
   }
 
   if (!authorized) return null
@@ -310,6 +310,13 @@ export default function LabelTemplatesPage() {
             className="btn btn-secondary w-full text-sm"
           >
             Imprimir teste
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadLbx}
+            className="btn btn-secondary w-full text-sm"
+          >
+            Descarregar .lbx (P-touch)
           </button>
         </div>
       </div>

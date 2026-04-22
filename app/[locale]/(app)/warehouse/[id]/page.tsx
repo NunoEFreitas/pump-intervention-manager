@@ -6,6 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import StockOperationModal from './StockOperationModal'
 import { printProductLabel, printReceptionLabels, DEFAULT_TEMPLATES, type LabelTemplates } from '@/lib/labelPrint'
+import { downloadProductLbx, downloadReceptionLbx } from '@/lib/labelLbx'
 
 interface Movement {
   id: string
@@ -211,6 +212,34 @@ export default function WarehouseItemDetailPage() {
       serialNumber: sn.serialNumber,
       barcode:      item.ean13,
     }, tpl.product)
+  }
+
+  const handleDownloadLbxButton = async () => {
+    if (!item) return
+    const tpl = await fetchLabelTemplates()
+    if (!item.tracksSerialNumbers) {
+      downloadProductLbx({ itemName: item.itemName, partNumber: item.partNumber, serialNumber: null, barcode: item.ean13 }, tpl.product)
+    } else {
+      setSelectedSnIds(new Set(serialNumbers.filter(sn => sn.location === 'MAIN_WAREHOUSE').map(sn => sn.id)))
+      setShowLabelModal(true)
+    }
+  }
+
+  const handleDownloadSelectedLbx = async () => {
+    if (!item || selectedSnIds.size === 0) return
+    setLabelPrinting(true)
+    try {
+      const tpl = await fetchLabelTemplates()
+      const snsToPrint = serialNumbers.filter(sn => selectedSnIds.has(sn.id))
+      for (let i = 0; i < snsToPrint.length; i++) {
+        const sn = snsToPrint[i]
+        downloadProductLbx({ itemName: item.itemName, partNumber: item.partNumber, serialNumber: sn.serialNumber, barcode: item.ean13 }, tpl.product)
+        await new Promise(r => setTimeout(r, 300))
+      }
+      setShowLabelModal(false)
+    } finally {
+      setLabelPrinting(false)
+    }
   }
 
   const handlePrintReceptionLabels = async (snNumbers: string[]) => {
@@ -461,6 +490,12 @@ export default function WarehouseItemDetailPage() {
                   className="btn btn-secondary"
                 >
                   Etiqueta
+                </button>
+                <button
+                  onClick={handleDownloadLbxButton}
+                  className="btn btn-secondary"
+                >
+                  .lbx
                 </button>
                 <button
                   onClick={() => setIsEditing(true)}
@@ -1108,13 +1143,20 @@ export default function WarehouseItemDetailPage() {
               })}
             </div>
 
-            <div className="flex gap-3 mt-4 pt-4 border-t">
+            <div className="flex gap-3 mt-4 pt-4 border-t flex-wrap">
               <button
                 onClick={handlePrintSelectedLabels}
                 disabled={selectedSnIds.size === 0 || labelPrinting}
                 className="btn btn-primary flex-1 disabled:opacity-50"
               >
-                {labelPrinting ? 'A imprimir...' : `Imprimir ${selectedSnIds.size > 0 ? `(${selectedSnIds.size})` : ''}`}
+                {labelPrinting ? 'A processar...' : `Imprimir ${selectedSnIds.size > 0 ? `(${selectedSnIds.size})` : ''}`}
+              </button>
+              <button
+                onClick={handleDownloadSelectedLbx}
+                disabled={selectedSnIds.size === 0 || labelPrinting}
+                className="btn btn-secondary flex-1 disabled:opacity-50"
+              >
+                {labelPrinting ? 'A processar...' : `.lbx ${selectedSnIds.size > 0 ? `(${selectedSnIds.size})` : ''}`}
               </button>
               <button onClick={() => setShowLabelModal(false)} className="btn btn-secondary">
                 Cancelar
