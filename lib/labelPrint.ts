@@ -13,6 +13,7 @@ export interface LabelTemplate {
   size: LabelSizeKey
   fields: string[]
   customText: string
+  rotate?: boolean
 }
 
 export interface LabelTemplates {
@@ -26,16 +27,19 @@ export const DEFAULT_TEMPLATES: LabelTemplates = {
     size: '62x100',
     fields: ['reference', 'itemName', 'partNumber', 'serialNumber', 'clientName', 'date', 'status'],
     customText: '',
+    rotate: false,
   },
   reception: {
     size: '62x62',
     fields: ['itemName', 'partNumber', 'serialNumber', 'date'],
     customText: '',
+    rotate: false,
   },
   product: {
     size: '62x62',
     fields: ['itemName', 'partNumber', 'serialNumber', 'barcode'],
     customText: '',
+    rotate: false,
   },
 }
 
@@ -117,40 +121,13 @@ function sizeStyle(key: LabelSizeKey) {
   }
 }
 
-function labelCSS(sizeKey: LabelSizeKey): string {
+function labelCSS(sizeKey: LabelSizeKey, rotate = false): string {
   const sz = sizeStyle(sizeKey)
   const { w, h } = LABEL_SIZES[sizeKey]
-  return `
-  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  /* Force exact label size + portrait — strongest hint available in CSS */
-  @page {
-    size: ${w}mm ${h}mm portrait;
-    margin: 0;
-  }
-
-  /* Hard-constrain html/body to label dimensions — browser cannot rotate or scale */
-  html {
-    width: ${w}mm;
-    height: ${h}mm;
-    overflow: hidden;
-  }
-  body {
-    width: ${w}mm;
-    height: ${h}mm;
-    overflow: hidden;
-    padding: ${sz.margin};
-    font-family: Arial, sans-serif;
-    font-size: ${sz.bodyPt}pt;
-    color: #000;
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
-  }
-
-  .label { page-break-after: always; display: flex; flex-direction: column; min-height: ${sz.usableH}; }
-  .label:last-child { page-break-after: avoid; }
-  .wrap  { display: flex; flex-direction: column; width: 100%; flex: 1; overflow: hidden; }
+  // When rotate=true the driver prints landscape (H×W), content is pre-rotated 90° CW
+  const pageW = rotate ? h : w
+  const pageH = rotate ? w : h
+  const fieldStyles = `
   .company { font-size: ${sz.companyPt}pt; color: #777; border-bottom: 0.5pt solid #ccc; padding-bottom: 2pt; margin-bottom: ${sz.fieldGap}; }
   .f-title { font-size: ${sz.titlePt}pt; font-weight: 700; line-height: 1.25; word-break: break-word; margin-bottom: ${sz.fieldGap}; }
   .f-ref   { font-size: ${sz.refPt}pt; font-weight: 700; font-family: monospace; letter-spacing: -0.5pt; margin-bottom: ${sz.fieldGap}; }
@@ -159,15 +136,52 @@ function labelCSS(sizeKey: LabelSizeKey): string {
   .f-dim   { font-size: ${Math.max(sz.bodyPt - 2, 7)}pt; color: #555; font-style: italic; margin-bottom: ${sz.fieldGap}; }
   .bc      { font-family: 'Libre Barcode 128 Text', monospace; font-size: ${sz.barcodePt}pt; line-height: 1; display: block; margin-bottom: 2pt; }
   .bc-val  { font-size: ${Math.max(sz.bodyPt - 2, 7)}pt; color: #444; margin-bottom: ${sz.fieldGap}; }
-  .footer  { font-size: ${sz.companyPt}pt; color: #555; border-top: 0.5pt solid #ccc; padding-top: 2pt; margin-top: auto; }
-  `
+  .footer  { font-size: ${sz.companyPt}pt; color: #555; border-top: 0.5pt solid #ccc; padding-top: 2pt; margin-top: auto; }`
+
+  if (rotate) {
+    return `
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: ${pageW}mm ${pageH}mm; margin: 0; }
+  html { width: ${pageW}mm; height: ${pageH}mm; overflow: hidden; }
+  body {
+    width: ${pageW}mm; height: ${pageH}mm; overflow: hidden; padding: 0;
+    font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000;
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+  /* Each label occupies one landscape page (H×W); content is rotated CW inside */
+  .label { width: ${pageW}mm; height: ${pageH}mm; position: relative; overflow: hidden; page-break-after: always; }
+  .label:last-child { page-break-after: avoid; }
+  /* Rotated portrait content: placed at (left=0, top=W), sized W×H, rotated 90° CW around top-left */
+  .inner { position: absolute; top: ${w}mm; left: 0; width: ${w}mm; height: ${h}mm;
+           transform: rotate(90deg); transform-origin: top left;
+           padding: ${sz.margin}; display: flex; flex-direction: column; overflow: hidden; }
+  .wrap  { display: flex; flex-direction: column; width: 100%; flex: 1; overflow: hidden; }
+  ${fieldStyles}`
+  }
+
+  return `
+  @import url('https://fonts.googleapis.com/css2?family=Libre+Barcode+128+Text&display=swap');
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  @page { size: ${w}mm ${h}mm portrait; margin: 0; }
+  html { width: ${w}mm; height: ${h}mm; overflow: hidden; }
+  body {
+    width: ${w}mm; height: ${h}mm; overflow: hidden; padding: ${sz.margin};
+    font-family: Arial, sans-serif; font-size: ${sz.bodyPt}pt; color: #000;
+    print-color-adjust: exact; -webkit-print-color-adjust: exact;
+  }
+  .label { page-break-after: always; display: flex; flex-direction: column; min-height: ${sz.usableH}; }
+  .label:last-child { page-break-after: avoid; }
+  .wrap  { display: flex; flex-direction: column; width: 100%; flex: 1; overflow: hidden; }
+  ${fieldStyles}`
 }
 
 function buildLabelHTML(
   sizeKey: LabelSizeKey,
   labels: Array<{ key: string; value: string; type?: 'title' | 'ref' | 'small' | 'sn' | 'barcode' | 'dim' }>,
   customText: string,
-  companyName: string
+  companyName: string,
+  rotate = false
 ): string {
   const rows = labels.map(({ key, value, type }) => {
     if (!value) return ''
@@ -185,27 +199,20 @@ function buildLabelHTML(
     return `<div class="${cls}">${esc(value)}</div>`
   }).join('')
 
-  const footer = customText
-    ? `<div class="footer">${esc(customText)}</div>`
-    : ''
-  const company = companyName
-    ? `<div class="company">${esc(companyName)}</div>`
-    : ''
+  const footer = customText ? `<div class="footer">${esc(customText)}</div>` : ''
+  const company = companyName ? `<div class="company">${esc(companyName)}</div>` : ''
+  const inner = rotate
+    ? `<div class="inner"><div class="wrap">${company}${rows}${footer}</div></div>`
+    : `<div class="wrap">${company}${rows}${footer}</div>`
 
   return `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<style>${labelCSS(sizeKey)}</style>
+<style>${labelCSS(sizeKey, rotate)}</style>
 </head>
 <body>
-<div class="label">
-  <div class="wrap">
-    ${company}
-    ${rows}
-    ${footer}
-  </div>
-</div>
+<div class="label">${inner}</div>
 </body>
 </html>`
 }
@@ -214,7 +221,8 @@ function buildMultiLabelHTML(
   sizeKey: LabelSizeKey,
   allLabels: Array<Array<{ key: string; value: string; type?: 'title' | 'ref' | 'small' | 'sn' | 'barcode' | 'dim' }>>,
   customText: string,
-  companyName: string
+  companyName: string,
+  rotate = false
 ): string {
   const labelBlocks = allLabels.map(labels => {
     const rows = labels.map(({ value, type }) => {
@@ -229,14 +237,17 @@ function buildMultiLabelHTML(
 
     const company = companyName ? `<div class="company">${esc(companyName)}</div>` : ''
     const footer  = customText  ? `<div class="footer">${esc(customText)}</div>`  : ''
-    return `<div class="label"><div class="wrap">${company}${rows}${footer}</div></div>`
+    const inner = rotate
+      ? `<div class="inner"><div class="wrap">${company}${rows}${footer}</div></div>`
+      : `<div class="wrap">${company}${rows}${footer}</div>`
+    return `<div class="label">${inner}</div>`
   }).join('\n')
 
   return `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<style>${labelCSS(sizeKey)}</style>
+<style>${labelCSS(sizeKey, rotate)}</style>
 </head>
 <body>${labelBlocks}</body>
 </html>`
@@ -244,11 +255,11 @@ function buildMultiLabelHTML(
 
 const MM_TO_PX = 3.7795275591  // 1mm at 96 dpi
 
-function openPrint(html: string, sizeKey: LabelSizeKey) {
+function openPrint(html: string, sizeKey: LabelSizeKey, rotate = false) {
   const { w, h } = LABEL_SIZES[sizeKey]
-  // Open window at exact label pixel size — browser uses this to pre-select paper size + portrait
-  const pw = Math.ceil(w * MM_TO_PX)
-  const ph = Math.ceil(h * MM_TO_PX) + 80  // +80 for browser chrome (toolbar etc.)
+  // When rotate=true the page is landscape (H×W), so swap dimensions for the window
+  const pw = Math.ceil((rotate ? h : w) * MM_TO_PX)
+  const ph = Math.ceil((rotate ? w : h) * MM_TO_PX) + 80  // +80 for browser chrome
   const win = window.open('', '_blank', `width=${pw},height=${ph},left=80,top=80,menubar=no,toolbar=no,scrollbars=no`)
   if (!win) { alert('Por favor permita popups para imprimir etiquetas.'); return }
   win.document.write(html)
@@ -310,8 +321,9 @@ export function printRepairLabel(
   template: LabelTemplate,
   companyName = ''
 ): void {
+  const rotate = template.rotate ?? false
   const rows = repairRows(template.fields, data)
-  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName), template.size)
+  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName, rotate), template.size, rotate)
 }
 
 export function printReceptionLabels(
@@ -319,8 +331,9 @@ export function printReceptionLabels(
   template: LabelTemplate,
   companyName = ''
 ): void {
+  const rotate = template.rotate ?? false
   const allRows = items.map(d => receptionRows(template.fields, d))
-  openPrint(buildMultiLabelHTML(template.size, allRows, template.customText, companyName), template.size)
+  openPrint(buildMultiLabelHTML(template.size, allRows, template.customText, companyName, rotate), template.size, rotate)
 }
 
 export function printProductLabel(
@@ -328,6 +341,7 @@ export function printProductLabel(
   template: LabelTemplate,
   companyName = ''
 ): void {
+  const rotate = template.rotate ?? false
   const rows = productRows(template.fields, data)
-  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName), template.size)
+  openPrint(buildLabelHTML(template.size, rows, template.customText, companyName, rotate), template.size, rotate)
 }
