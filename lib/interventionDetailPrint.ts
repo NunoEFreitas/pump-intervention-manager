@@ -216,7 +216,7 @@ function renderOVMBlock(ovm: PrintOVMEntry, idx: number, equipment: NonNullable<
 
   const ensaioTables = d.ensaios.map((ensaio, ei) => {
     const dataRows = OVM_ROWS.map(row => {
-      const cells = activeCols.map(c => `<td>${esc(ensaio[row][c.idx]) || '—'}</td>`).join('')
+      const cells = activeCols.map(c => { const v = ensaio[row][c.idx]; return `<td>${v != null && v !== '' ? esc(String(v)) : '0'}</td>` }).join('')
       return `<tr><td class="row-lbl">${row}</td>${cells}</tr>`
     }).join('')
     return `
