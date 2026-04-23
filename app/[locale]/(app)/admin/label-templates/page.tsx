@@ -247,7 +247,7 @@ export default function LabelTemplatesPage() {
         <button onClick={() => router.push(`/${locale}/admin`)} className="text-blue-600 hover:text-blue-800 text-sm mb-3 block">
           ← Voltar ao Admin
         </button>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Etiquetas</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Etiquetas <span className="text-sm font-normal text-gray-400">v1</span></h1>
         <p className="text-gray-600 text-sm">Configura o conteúdo de cada tipo de etiqueta (Brother QL-800 · 62 × 29 mm)</p>
       </div>
 
