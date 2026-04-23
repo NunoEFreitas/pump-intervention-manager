@@ -81,7 +81,7 @@ function labelCSS(): string {
   html, body { width: 62mm; height: 29mm; overflow: hidden; }
   body { padding: 2mm 3mm; font-family: Arial, sans-serif; font-size: 7pt; color: #000;
          print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .label { display: flex; flex-direction: column; min-height: 25mm; page-break-after: always; }
+  .label { display: flex; flex-direction: column; width: 56mm; height: 25mm; overflow: hidden; page-break-after: always; }
   .label:last-child { page-break-after: avoid; }
   .company { font-size: 6pt; color: #777; border-bottom: 0.3pt solid #ccc; padding-bottom: 1pt; margin-bottom: 2pt; }
   .f-title { font-size: 9pt; font-weight: 700; line-height: 1.2; word-break: break-word; margin-bottom: 1pt; }
