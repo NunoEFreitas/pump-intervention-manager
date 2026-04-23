@@ -49,6 +49,9 @@ export default function Navigation() {
     navItems.push({ name: t('repairs'), path: `/${locale}/repairs` })
   }
 
+  navItems.push({ name: t('manuals'), path: `/${locale}/manuals` })
+  navItems.push({ name: t('forum'), path: `/${locale}/forum` })
+
   if (user?.role === 'ADMIN') {
     navItems.push({ name: t('admin'), path: `/${locale}/admin` })
   }

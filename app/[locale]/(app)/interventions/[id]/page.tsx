@@ -1290,9 +1290,10 @@ export default function InterventionDetailPage() {
                 savedPdfs={[]}
                 printCompany={printCompany}
                 onClose={() => setActiveWOId(null)}
-                onRefresh={() => { fetchWorkOrders(); fetchIntervention(); setActiveWOId(null) }}
+                onRefresh={() => { fetchWorkOrders(); fetchIntervention() }}
                 onDelete={() => setActiveWOId(null)}
                 onPrint={handlePrintWorkOrder}
+                onCreated={(newId) => { setActiveWOId(newId); fetchWorkOrders(); fetchIntervention() }}
               />
             )}
 

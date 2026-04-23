@@ -650,3 +650,43 @@ model RepairSession {
 
   @@index([jobId])
 }
+
+model Manual {
+  id           String   @id @default(uuid())
+  title        String
+  filename     String
+  data         String   @db.Text
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  @@index([uploadedById])
+}
+
+model ForumPost {
+  id         String       @id @default(uuid())
+  title      String
+  content    String       @db.Text
+  authorId   String
+  authorName String
+  solved     Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  replies    ForumReply[]
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model ForumReply {
+  id         String    @id @default(uuid())
+  postId     String
+  post       ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  content    String    @db.Text
+  authorId   String
+  authorName String
+  isSolution Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([postId])
+}

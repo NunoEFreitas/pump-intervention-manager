@@ -97,7 +97,8 @@ export default function WorkOrderModal({
   savedPdfs, printCompany,
   onClose, onRefresh, onDelete, onPrint,
 }: Props) {
-  const isEdit = wo !== null
+  const [currentWo, setCurrentWo] = useState<WorkOrder | null>(wo)
+  const isEdit = currentWo !== null
   const [tab, setTab] = useState<Tab>('details')
 
   // Details form
@@ -114,10 +115,6 @@ export default function WorkOrderModal({
     helperIds: wo?.helpers?.map(h => h.userId) ?? [],
   })
   const [saving, setSaving] = useState(false)
-  const [vehicleOpen, setVehicleOpen] = useState(false)
-  const [helperOpen, setHelperOpen] = useState(false)
-  const vehicleRef = useRef<HTMLDivElement>(null)
-  const helperRef = useRef<HTMLDivElement>(null)
 
   // Hours
   const [showSessionForm, setShowSessionForm] = useState(false)
@@ -145,12 +142,12 @@ export default function WorkOrderModal({
   const [technicianStockLoading, setTechnicianStockLoading] = useState(false)
 
   const fetchCollectedParts = async () => {
-    if (!wo) return
+    if (!currentWo) return
     setCollectedLoading(true)
     try {
       const token = localStorage.getItem('token')
       const data = await fetch(
-        `/api/interventions/${interventionId}/work-orders/${wo.id}/client-parts`,
+        `/api/interventions/${interventionId}/work-orders/${currentWo.id}/client-parts`,
         { headers: { Authorization: `Bearer ${token}` } }
       ).then(r => r.json())
       setCollectedParts(Array.isArray(data) ? data : [])
@@ -158,11 +155,11 @@ export default function WorkOrderModal({
   }
 
   useEffect(() => {
-    if (tab === 'collected' && wo) fetchCollectedParts()
+    if (tab === 'collected' && currentWo) fetchCollectedParts()
   }, [tab])
 
   const handleCollect = async () => {
-    if (!wo || !collectForm.warehouseItemId) return
+    if (!currentWo || !collectForm.warehouseItemId) return
     if (collectForm.preSwapped) {
       const techItem = technicianStock.find(i => i.itemId === collectForm.warehouseItemId)
       if (techItem?.tracksSerialNumbers && (techItem.serialNumbers?.length ?? 0) > 0 && !collectForm.serialNumber) return
@@ -171,7 +168,7 @@ export default function WorkOrderModal({
     try {
       const token = localStorage.getItem('token')
       const res = await fetch(
-        `/api/interventions/${interventionId}/work-orders/${wo.id}/client-parts`,
+        `/api/interventions/${interventionId}/work-orders/${currentWo.id}/client-parts`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -195,8 +192,6 @@ export default function WorkOrderModal({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (vehicleRef.current && !vehicleRef.current.contains(e.target as Node)) setVehicleOpen(false)
-      if (helperRef.current && !helperRef.current.contains(e.target as Node)) setHelperOpen(false)
       if (collectItemRef.current && !collectItemRef.current.contains(e.target as Node)) setCollectItemOpen(false)
     }
     document.addEventListener('mousedown', handler)
@@ -209,7 +204,7 @@ export default function WorkOrderModal({
     try {
       const token = localStorage.getItem('token')
       const url = isEdit
-        ? `/api/interventions/${interventionId}/work-orders/${wo!.id}`
+        ? `/api/interventions/${interventionId}/work-orders/${currentWo!.id}`
         : `/api/interventions/${interventionId}/work-orders`
       const res = await fetch(url, {
         method: isEdit ? 'PUT' : 'POST',
@@ -227,16 +222,39 @@ export default function WorkOrderModal({
           helperIds: form.helperIds,
         }),
       })
-      if (res.ok) { onRefresh(); if (!isEdit) onClose() }
+      if (res.ok) {
+        onRefresh()
+        if (!isEdit) {
+          const data = await res.json()
+          setCurrentWo({
+            id:                data.id ?? data.workOrderId,
+            reference:         data.reference ?? null,
+            description:       form.description,
+            timeSpent:         null,
+            km:                null,
+            locationEquipmentId: form.equipmentId || null,
+            interventionType:  form.interventionType || null,
+            transportGuide:    form.transportGuide || null,
+            fromAddress:       form.fromAddress || null,
+            internal:          form.internal,
+            sessions:          [],
+            vehicles:          [],
+            helpers:           [],
+            createdAt:         new Date().toISOString(),
+            createdBy:         { id: '', name: '' },
+            parts:             [],
+          })
+        }
+      }
     } finally { setSaving(false) }
   }
 
   const handleAddSession = async () => {
-    if (!wo || !sessionForm.duration) return
+    if (!currentWo || !sessionForm.duration) return
     setSessionSaving(true)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/interventions/${interventionId}/work-orders/${wo.id}/sessions`, {
+      const res = await fetch(`/api/interventions/${interventionId}/work-orders/${currentWo.id}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
@@ -256,9 +274,9 @@ export default function WorkOrderModal({
   }
 
   const handleDeleteSession = async (sessionId: string) => {
-    if (!wo) return
+    if (!currentWo) return
     const token = localStorage.getItem('token')
-    await fetch(`/api/interventions/${interventionId}/work-orders/${wo.id}/sessions/${sessionId}`, {
+    await fetch(`/api/interventions/${interventionId}/work-orders/${currentWo.id}/sessions/${sessionId}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
     })
     onRefresh()
@@ -271,7 +289,7 @@ export default function WorkOrderModal({
   }
 
   const otherTechs = technicians.filter(t => t.id !== assignedTechnicianId)
-  const totalSessionHours = (wo?.sessions ?? []).reduce((s, x) => s + (x.duration ?? 0), 0)
+  const totalSessionHours = (currentWo?.sessions ?? []).reduce((s, x) => s + (x.duration ?? 0), 0)
 
   return (
     <>
@@ -281,11 +299,11 @@ export default function WorkOrderModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
           <div className="flex items-center gap-3 min-w-0">
-            {wo?.reference && <span className="font-mono font-bold text-gray-800 shrink-0">{wo.reference}</span>}
+            {currentWo?.reference && <span className="font-mono font-bold text-gray-800 shrink-0">{currentWo.reference}</span>}
             <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${form.internal ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
               {form.internal ? 'Interno' : 'Externo'}
             </span>
-            {wo && <span className="text-xs text-gray-400 truncate">{new Date(wo.createdAt).toLocaleDateString()} · {wo.createdBy.name}</span>}
+            {currentWo && <span className="text-xs text-gray-400 truncate">{new Date(currentWo.createdAt).toLocaleDateString()} · {currentWo.createdBy.name}</span>}
             {!isEdit && <span className="text-sm font-semibold text-gray-700">Nova Ordem de Trabalho</span>}
           </div>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg ml-2 shrink-0">
@@ -293,23 +311,21 @@ export default function WorkOrderModal({
           </button>
         </div>
 
-        {/* Tabs */}
-        {isEdit && (
-          <div className="flex border-b px-4 shrink-0">
-            <button onClick={() => setTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Detalhes
-            </button>
-            <button onClick={() => setTab('hours')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'hours' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Horas{(wo!.sessions?.length ?? 0) > 0 ? ` (${wo!.sessions.length})` : ''}
-            </button>
-            <button onClick={() => setTab('parts')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'parts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Peças{wo!.parts.length > 0 ? ` (${wo!.parts.length})` : ''}
-            </button>
-            <button onClick={() => setTab('collected')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'collected' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Recolhas{collectedParts.length > 0 ? ` (${collectedParts.length})` : ''}
-            </button>
-          </div>
-        )}
+        {/* Tabs — always shown */}
+        <div className="flex border-b px-4 shrink-0">
+          <button onClick={() => setTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Detalhes
+          </button>
+          <button onClick={() => setTab('hours')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'hours' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Horas{(currentWo?.sessions?.length ?? 0) > 0 ? ` (${currentWo!.sessions.length})` : ''}
+          </button>
+          <button onClick={() => setTab('parts')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'parts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Peças{(currentWo?.parts.length ?? 0) > 0 ? ` (${currentWo!.parts.length})` : ''}
+          </button>
+          <button onClick={() => setTab('collected')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'collected' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            Recolhas{collectedParts.length > 0 ? ` (${collectedParts.length})` : ''}
+          </button>
+        </div>
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -347,24 +363,16 @@ export default function WorkOrderModal({
                   </div>
 
                   {vehicles.length > 0 && (
-                    <div ref={vehicleRef} className="relative">
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Viatura</label>
-                      <button type="button" onClick={() => setVehicleOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
-                        <span className={form.vehicleIds.length ? 'text-gray-800' : 'text-gray-400'}>
-                          {form.vehicleIds.length ? vehicles.filter(v => form.vehicleIds.includes(v.id)).map(v => v.plateNumber).join(', ') : 'Selecionar viatura...'}
-                        </span>
-                        <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                      </button>
-                      {vehicleOpen && (
-                        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                          {vehicles.map(v => (
-                            <div key={v.id} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setForm(f => ({ ...f, vehicleIds: f.vehicleIds.includes(v.id) ? f.vehicleIds.filter(id => id !== v.id) : [...f.vehicleIds, v.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${form.vehicleIds.includes(v.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
-                              <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{form.vehicleIds.includes(v.id) ? '✓' : ''}</span>
-                              <span className="text-sm">{v.plateNumber}{(v.brand || v.model) ? ` — ${[v.brand, v.model].filter(Boolean).join(' ')}` : ''}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="border border-gray-300 rounded-lg overflow-hidden">
+                        {vehicles.map(v => (
+                          <label key={v.id} className={`flex items-center gap-2 px-3 py-2 cursor-pointer border-b last:border-0 hover:bg-gray-50 ${form.vehicleIds.includes(v.id) ? 'bg-blue-50' : ''}`}>
+                            <input type="checkbox" checked={form.vehicleIds.includes(v.id)} onChange={() => setForm(f => ({ ...f, vehicleIds: f.vehicleIds.includes(v.id) ? f.vehicleIds.filter(id => id !== v.id) : [...f.vehicleIds, v.id] }))} className="w-4 h-4 text-blue-600 rounded" />
+                            <span className="text-sm text-gray-800">{v.plateNumber}{(v.brand || v.model) ? ` — ${[v.brand, v.model].filter(Boolean).join(' ')}` : ''}</span>
+                          </label>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -398,35 +406,27 @@ export default function WorkOrderModal({
               </div>
 
               {otherTechs.length > 0 && (
-                <div ref={helperRef} className="relative">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Ajudantes</label>
-                  <button type="button" onClick={() => setHelperOpen(o => !o)} className="input text-gray-800 text-sm w-full text-left flex items-center justify-between">
-                    <span className={form.helperIds.length ? 'text-gray-800' : 'text-gray-400'}>
-                      {form.helperIds.length ? technicians.filter(t => form.helperIds.includes(t.id)).map(t => t.name).join(', ') : '—'}
-                    </span>
-                    <svg className="w-4 h-4 text-gray-500 ml-2 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                  </button>
-                  {helperOpen && (
-                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
-                      {otherTechs.map(tech => (
-                        <div key={tech.id} onMouseDown={e => { e.preventDefault(); e.stopPropagation(); setForm(f => ({ ...f, helperIds: f.helperIds.includes(tech.id) ? f.helperIds.filter(id => id !== tech.id) : [...f.helperIds, tech.id] })) }} className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-blue-50 select-none ${form.helperIds.includes(tech.id) ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
-                          <span className="w-4 h-4 border rounded flex items-center justify-center shrink-0 text-xs">{form.helperIds.includes(tech.id) ? '✓' : ''}</span>
-                          <span className="text-sm">{tech.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="border border-gray-300 rounded-lg overflow-hidden">
+                    {otherTechs.map(tech => (
+                      <label key={tech.id} className={`flex items-center gap-2 px-3 py-2 cursor-pointer border-b last:border-0 hover:bg-gray-50 ${form.helperIds.includes(tech.id) ? 'bg-blue-50' : ''}`}>
+                        <input type="checkbox" checked={form.helperIds.includes(tech.id)} onChange={() => setForm(f => ({ ...f, helperIds: f.helperIds.includes(tech.id) ? f.helperIds.filter(id => id !== tech.id) : [...f.helperIds, tech.id] }))} className="w-4 h-4 text-blue-600 rounded" />
+                        <span className="text-sm text-gray-800">{tech.name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {isEdit && savedPdfs.length > 0 && (
+              {currentWo && savedPdfs.length > 0 && (
                 <div className="border-t pt-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">PDFs Guardados</p>
                   <div className="space-y-1">
                     {savedPdfs.map((pdf, idx) => (
                       <div key={pdf.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
                         <span className="text-xs text-gray-600">#{savedPdfs.length - idx} — {new Date(pdf.createdAt).toLocaleString()}</span>
-                        <button onClick={() => wo && onPrint(wo)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-imprimir</button>
+                        <button onClick={() => currentWo && onPrint(currentWo)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-imprimir</button>
                       </div>
                     ))}
                   </div>
@@ -436,77 +436,81 @@ export default function WorkOrderModal({
           )}
 
           {/* ── Hours tab ── */}
-          {isEdit && tab === 'hours' && (
-            <>
-              {(wo!.sessions ?? []).length === 0 && !showSessionForm && (
-                <p className="text-sm text-gray-400 text-center py-4">Nenhuma sessão registada.</p>
-              )}
-              <div className="space-y-2">
-                {(wo!.sessions ?? []).map(s => (
-                  <div key={s.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-                    <div className="flex-1 text-sm text-gray-700 flex items-center gap-2 flex-wrap">
-                      <span>▶ {s.startDate ?? '—'}{s.startTime ? ` ${s.startTime}` : ''}</span>
-                      <span className="text-gray-400">→</span>
-                      <span>■ {s.endDate ?? '—'}{s.endTime ? ` ${s.endTime}` : ''}</span>
-                    </div>
-                    {s.duration != null && <span className="font-semibold text-blue-700 shrink-0">{s.duration}h</span>}
-                    {canEdit && <button onClick={() => handleDeleteSession(s.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">Eliminar</button>}
+          {tab === 'hours' && (
+            <div className="space-y-3">
+              {!currentWo && <p className="text-sm text-gray-400 text-center py-8">Guarda os detalhes primeiro para adicionar horas.</p>}
+              {currentWo && (
+                <>
+                  {(currentWo.sessions ?? []).length === 0 && !showSessionForm && (
+                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma sessão registada.</p>
+                  )}
+                  <div className="space-y-2">
+                    {(currentWo.sessions ?? []).map(s => (
+                      <div key={s.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+                        <div className="flex-1 text-sm text-gray-700 flex items-center gap-2 flex-wrap">
+                          <span>▶ {s.startDate ?? '—'}{s.startTime ? ` ${s.startTime}` : ''}</span>
+                          <span className="text-gray-400">→</span>
+                          <span>■ {s.endDate ?? '—'}{s.endTime ? ` ${s.endTime}` : ''}</span>
+                        </div>
+                        {s.duration != null && <span className="font-semibold text-blue-700 shrink-0">{s.duration}h</span>}
+                        {canEdit && <button onClick={() => handleDeleteSession(s.id)} className="text-red-400 hover:text-red-600 text-xs shrink-0">Eliminar</button>}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-
-              {showSessionForm ? (
-                <div className="border border-blue-200 rounded-lg p-4 bg-blue-50 space-y-3">
-                  <h4 className="font-medium text-gray-800">Nova Sessão</h4>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Data início</label>
-                      <input type="date" className="input text-gray-800" value={sessionForm.startDate} onChange={e => updateSessionForm({ startDate: e.target.value })} />
+                  {showSessionForm ? (
+                    <div className="border border-blue-200 rounded-lg p-4 bg-blue-50 space-y-3">
+                      <h4 className="font-medium text-gray-800">Nova Sessão</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Data início</label>
+                          <input type="date" className="input text-gray-800" value={sessionForm.startDate} onChange={e => updateSessionForm({ startDate: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Hora início</label>
+                          <input type="time" className="input text-gray-800" value={sessionForm.startTime} onChange={e => updateSessionForm({ startTime: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Data fim</label>
+                          <input type="date" className="input text-gray-800" value={sessionForm.endDate} onChange={e => updateSessionForm({ endDate: e.target.value })} />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Hora fim</label>
+                          <input type="time" className="input text-gray-800" value={sessionForm.endTime} onChange={e => updateSessionForm({ endTime: e.target.value })} />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Duração (horas) <span className="text-red-500">*</span></label>
+                        <input type="number" step="0.01" min="0" className="input text-gray-800 w-32" placeholder="Auto-calculado ou manual" value={sessionForm.duration} onChange={e => setSessionForm(f => ({ ...f, duration: e.target.value }))} />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleAddSession} disabled={sessionSaving || !sessionForm.duration} className="btn btn-primary text-sm disabled:opacity-50">
+                          {sessionSaving ? 'A guardar...' : 'Adicionar'}
+                        </button>
+                        <button onClick={() => { setShowSessionForm(false); setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' }) }} className="btn btn-secondary text-sm">Cancelar</button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Hora início</label>
-                      <input type="time" className="input text-gray-800" value={sessionForm.startTime} onChange={e => updateSessionForm({ startTime: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Data fim</label>
-                      <input type="date" className="input text-gray-800" value={sessionForm.endDate} onChange={e => updateSessionForm({ endDate: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Hora fim</label>
-                      <input type="time" className="input text-gray-800" value={sessionForm.endTime} onChange={e => updateSessionForm({ endTime: e.target.value })} />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Duração (horas) <span className="text-red-500">*</span></label>
-                    <input type="number" step="0.01" min="0" className="input text-gray-800 w-32" placeholder="Auto-calculado ou manual" value={sessionForm.duration} onChange={e => setSessionForm(f => ({ ...f, duration: e.target.value }))} />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleAddSession} disabled={sessionSaving || !sessionForm.duration} className="btn btn-primary text-sm disabled:opacity-50">
-                      {sessionSaving ? 'A guardar...' : 'Adicionar'}
+                  ) : canEdit && (
+                    <button onClick={() => setShowSessionForm(true)} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                      + Adicionar Sessão
                     </button>
-                    <button onClick={() => { setShowSessionForm(false); setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' }) }} className="btn btn-secondary text-sm">Cancelar</button>
-                  </div>
-                </div>
-              ) : canEdit && (
-                <button onClick={() => setShowSessionForm(true)} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-                  + Adicionar Sessão
-                </button>
+                  )}
+                  {(currentWo.sessions ?? []).length > 0 && (
+                    <div className="border-t pt-3 text-right">
+                      <span className="font-semibold text-gray-700">Total: {totalSessionHours.toFixed(2)}h</span>
+                    </div>
+                  )}
+                </>
               )}
-
-              {(wo!.sessions ?? []).length > 0 && (
-                <div className="border-t pt-3 text-right">
-                  <span className="font-semibold text-gray-700">Total: {totalSessionHours.toFixed(2)}h</span>
-                </div>
-              )}
-            </>
+            </div>
           )}
 
           {/* ── Parts tab ── */}
-          {isEdit && tab === 'parts' && (
+          {tab === 'parts' && (
             <>
-              {wo!.parts.length > 0 && (
+              {!currentWo && <p className="text-sm text-gray-400 text-center py-8">Guarda os detalhes primeiro para adicionar peças.</p>}
+              {currentWo && (currentWo.parts.length > 0 ? (
                 <div className="space-y-2">
-                  {wo!.parts.map(part => (
+                  {currentWo.parts.map(part => (
                     <div key={part.id} className="bg-gray-50 rounded-lg px-4 py-3 flex justify-between items-start gap-4">
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900 text-sm">{part.item.itemName}</p>
@@ -526,13 +530,11 @@ export default function WorkOrderModal({
                     </div>
                   ))}
                 </div>
-              )}
-
-              {wo!.parts.length === 0 && (
+              ) : (
                 <p className="text-sm text-gray-400 text-center py-2">Nenhuma peça utilizada.</p>
-              )}
+              ))}
 
-              {canEdit && (
+              {currentWo && canEdit && (
                 <button
                   onClick={() => setShowAddPart(true)}
                   className="w-full py-3 border-2 border-dashed border-blue-300 rounded-lg text-sm text-blue-600 hover:border-blue-400 hover:bg-blue-50 transition-colors"
@@ -543,11 +545,12 @@ export default function WorkOrderModal({
             </>
           )}
           {/* ── Recolhas tab ── */}
-          {isEdit && tab === 'collected' && (
+          {tab === 'collected' && (
             <>
-              {collectedLoading ? (
+              {!currentWo && <p className="text-sm text-gray-400 text-center py-8">Guarda os detalhes primeiro para registar recolhas.</p>}
+              {currentWo && collectedLoading ? (
                 <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500" /></div>
-              ) : (
+              ) : currentWo && (
                 <>
                   {collectedParts.length === 0 && !showCollectForm && (
                     <p className="text-sm text-gray-400 text-center py-4">Nenhuma peça recolhida nesta ordem de trabalho.</p>
@@ -809,7 +812,7 @@ export default function WorkOrderModal({
               )}
             </div>
             <div className="flex items-center gap-2">
-              {isEdit && <button onClick={() => onPrint(wo!)} className="btn btn-secondary text-sm">PDF</button>}
+              {currentWo && <button onClick={() => onPrint(currentWo)} className="btn btn-secondary text-sm">PDF</button>}
               <button onClick={onClose} className="btn btn-secondary text-sm">Fechar</button>
               {canEdit && (
                 <button onClick={handleSave} disabled={saving || !form.description.trim()} className="btn btn-primary text-sm disabled:opacity-50">
@@ -822,10 +825,10 @@ export default function WorkOrderModal({
       </div>
     </div>
 
-    {showAddPart && wo && (
+    {showAddPart && currentWo && (
       <AddPartModal
         interventionId={interventionId}
-        workOrderId={wo.id}
+        workOrderId={currentWo.id}
         technicianId={assignedTechnicianId}
         warehouseItems={warehouseItems}
         onPartAdded={onRefresh}
