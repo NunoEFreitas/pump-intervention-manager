@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import {
-  LABEL_SIZES,
   REPAIR_FIELD_DEFS,
   RECEPTION_FIELD_DEFS,
   PRODUCT_FIELD_DEFS,
@@ -13,7 +12,6 @@ import {
   printProductLabel,
   type LabelTemplates,
   type LabelTemplate,
-  type LabelSizeKey,
 } from '@/lib/labelPrint'
 import {
   downloadRepairLbx,
@@ -36,30 +34,29 @@ const FIELD_DEFS: Record<TabKey, { key: string; label: string }[]> = {
 }
 
 function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey }) {
-  const sz = LABEL_SIZES[template.size] ?? LABEL_SIZES['62x100']
   const allDefs = FIELD_DEFS[tab]
   const enabledDefs = template.fields
     .map(k => allDefs.find(d => d.key === k))
     .filter(Boolean) as { key: string; label: string }[]
 
-  // Always show preview with label reading orientation: w is horizontal, h is vertical
-  const scale = 180 / Math.max(sz.w, sz.h)
-  const boxW = sz.w * scale
-  const boxH = sz.h * scale
+  // 62×29mm — preview box scaled to fit
+  const scale = 180 / 62
+  const boxW  = 62 * scale
+  const boxH  = 29 * scale
 
   return (
     <div className="flex flex-col items-center gap-2">
       <p className="text-xs text-gray-500 font-medium">Pré-visualização</p>
       <div style={{ width: boxW, height: boxH, border: '1.5px solid #94a3b8', borderRadius: 3,
                     background: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
-                    overflow: 'hidden', padding: 4 * scale / 3,
+                    overflow: 'hidden', padding: 4,
                     display: 'flex', flexDirection: 'column', gap: 2 }}>
         {enabledDefs.map(d => (
           <div key={d.key} style={{
-            fontSize: d.key === 'barcode'   ? 7   * scale / 2
-                    : d.key === 'itemName'  ? 3.5 * scale / 2
-                    : d.key === 'reference' ? 4   * scale / 2
-                    : 2.5 * scale / 2,
+            fontSize: d.key === 'barcode'   ? 14
+                    : d.key === 'itemName'  ? 8
+                    : d.key === 'reference' ? 9
+                    : 6,
             fontWeight: ['itemName', 'reference'].includes(d.key) ? 700 : 400,
             fontFamily: d.key === 'barcode' ? "'Libre Barcode 128 Text', monospace"
                       : ['partNumber', 'serialNumber'].includes(d.key) ? 'monospace'
@@ -80,7 +77,7 @@ function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey 
           </div>
         ))}
       </div>
-      <p className="text-xs text-gray-400">{sz.w} × {sz.h} mm</p>
+      <p className="text-xs text-gray-400">62 × 29 mm</p>
     </div>
   )
 }
@@ -117,25 +114,9 @@ function TemplateEditor({
 
   return (
     <div className="space-y-6">
-      {/* Size */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Tamanho da etiqueta</label>
-        <select
-          className="input text-gray-800 w-full sm:w-auto"
-          value={template.size}
-          onChange={e => onChange({ ...template, size: e.target.value as LabelSizeKey })}
-        >
-          {(Object.entries(LABEL_SIZES) as [LabelSizeKey, typeof LABEL_SIZES[LabelSizeKey]][]).map(([k, v]) => (
-            <option key={k} value={k}>{v.label}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Fields */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Campos visíveis (ordem de impressão)</label>
         <div className="space-y-1">
-          {/* Enabled fields — in order */}
           {template.fields.map((key, idx) => {
             const def = defs.find(d => d.key === key)
             if (!def) return null
@@ -167,7 +148,6 @@ function TemplateEditor({
               </div>
             )
           })}
-          {/* Disabled fields */}
           {defs.filter(d => !enabledSet.has(d.key)).map(def => (
             <div key={def.key} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
               <input
@@ -181,7 +161,6 @@ function TemplateEditor({
           ))}
         </div>
       </div>
-
     </div>
   )
 }
@@ -244,9 +223,9 @@ export default function LabelTemplatesPage() {
 
   const handleTestPrint = () => {
     const companyName = ''
-    if (activeTab === 'repair')     printRepairLabel(TEST_DATA.repair, templates.repair, companyName)
+    if (activeTab === 'repair')         printRepairLabel(TEST_DATA.repair, templates.repair, companyName)
     else if (activeTab === 'reception') printReceptionLabels([TEST_DATA.reception], templates.reception, companyName)
-    else                            printProductLabel(TEST_DATA.product, templates.product, companyName)
+    else                                printProductLabel(TEST_DATA.product, templates.product, companyName)
   }
 
   const handleDownloadLbx = () => {
@@ -269,7 +248,7 @@ export default function LabelTemplatesPage() {
           ← Voltar ao Admin
         </button>
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">Etiquetas</h1>
-        <p className="text-gray-600 text-sm">Configura o conteúdo e tamanho de cada tipo de etiqueta (Impressora Brother QL-800)</p>
+        <p className="text-gray-600 text-sm">Configura o conteúdo de cada tipo de etiqueta (Brother QL-800 · 62 × 29 mm)</p>
       </div>
 
       {/* Tabs */}
