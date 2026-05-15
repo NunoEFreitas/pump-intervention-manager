@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') // PENDING | IN_REPAIR | QUOTE | REPAIRED | NOT_REPAIRED | WRITTEN_OFF | RETURNED_TO_CLIENT | ACTIVE | ALL
 
-    const ALLOWED_STATUSES = ['PENDING', 'IN_REPAIR', 'QUOTE', 'OVM', 'REPAIRED', 'NOT_REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT'] as const
+    const ALLOWED_STATUSES = ['PENDING', 'IN_REPAIR', 'REPAIR_DONE', 'WAITING_OVM', 'OVM_OK', 'WAITING_PARTS', 'READY_FOR_DELIVERY', 'QUOTE', 'OVM', 'REPAIRED', 'NOT_REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT'] as const
     type ValidStatus = typeof ALLOWED_STATUSES[number]
 
     let jobs: any[]
@@ -37,9 +37,9 @@ export async function GET(request: NextRequest) {
         LEFT JOIN "Client" cl ON cl.id = j."deliveredToClientId"
         LEFT JOIN "Intervention" inv ON inv.id = j."interventionId"
         LEFT JOIN "Client" icl ON icl.id = inv."clientId"
-        WHERE j.status IN ('PENDING', 'IN_REPAIR', 'QUOTE', 'OVM')
+        WHERE j.status NOT IN ('REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED')
         ORDER BY
-          CASE j.status WHEN 'IN_REPAIR' THEN 0 WHEN 'OVM' THEN 1 WHEN 'QUOTE' THEN 2 WHEN 'PENDING' THEN 3 ELSE 4 END,
+          CASE j.status WHEN 'IN_REPAIR' THEN 0 WHEN 'READY_FOR_DELIVERY' THEN 1 WHEN 'REPAIR_DONE' THEN 2 WHEN 'WAITING_OVM' THEN 3 WHEN 'OVM_OK' THEN 4 WHEN 'WAITING_PARTS' THEN 5 WHEN 'OVM' THEN 6 WHEN 'QUOTE' THEN 7 WHEN 'PENDING' THEN 8 ELSE 9 END,
           j."sentAt" ASC
       `
     } else if (status === 'ALL') {

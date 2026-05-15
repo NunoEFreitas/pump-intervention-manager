@@ -643,28 +643,30 @@ export default function WarehousePage() {
               <button onClick={() => router.push(`/${locale}/warehouse/new`)} className="btn btn-primary">{t('addItem')}</button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-2">
               {items.map((item) => (
-                <div key={item.id} className="card hover:shadow-lg transition-shadow cursor-pointer w-full" onClick={() => router.push(`/${locale}/warehouse/${item.id}`)}>
+                <div key={item.id} className="card hover:shadow-lg transition-shadow cursor-pointer w-full !py-2.5" onClick={() => router.push(`/${locale}/warehouse/${item.id}`)}>
                   <div className="flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate">{item.itemName}</h3>
-                      {item.ean13 && <span className="shrink-0 text-xs font-mono text-gray-400">{item.ean13}</span>}
-                      {item.tracksSerialNumbers && <span className="shrink-0 px-2 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN</span>}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="text-sm font-semibold text-gray-900 truncate">{item.itemName}</h3>
+                        {item.tracksSerialNumbers && <span className="shrink-0 px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN</span>}
+                        {item.ean13 && <span className="shrink-0 text-xs font-mono text-gray-400 hidden sm:inline">{item.ean13}</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        {item.categoryName && <span className="px-1.5 py-0 bg-indigo-50 text-indigo-700 text-xs font-medium rounded">{item.categoryName}</span>}
+                        {item.equipmentTypeName && <span className="text-xs text-gray-400">{item.equipmentTypeName}</span>}
+                        {item.brandName && <span className="text-xs text-gray-400">{item.brandName}</span>}
+                        {item.partNumber && <span className="text-xs font-mono text-gray-400">{item.partNumber}</span>}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {item.mainWarehouse > 0 && <div className="px-3 py-1.5 bg-blue-50 rounded-lg text-center"><p className="text-xs text-blue-600 font-medium">Armazém</p><p className="text-lg font-bold text-blue-900">{item.mainWarehouse}</p></div>}
-                      {item.totalTechnicianStock > 0 && <div className="px-3 py-1.5 bg-green-50 rounded-lg text-center"><p className="text-xs text-green-600 font-medium">Técnicos</p><p className="text-lg font-bold text-green-900">{item.totalTechnicianStock}</p></div>}
-                      {item.repairStock > 0 && <div className="px-3 py-1.5 bg-orange-50 rounded-lg text-center"><p className="text-xs text-orange-600 font-medium">Em Reparação</p><p className="text-lg font-bold text-orange-900">{item.repairStock}</p></div>}
-                      {item.clientPartsCount > 0 && <div className="px-3 py-1.5 bg-yellow-50 rounded-lg text-center"><p className="text-xs text-yellow-600 font-medium">Cliente</p><p className="text-lg font-bold text-yellow-900">{item.clientPartsCount}</p></div>}
-                      {item.destructionStock > 0 && <div className="px-3 py-1.5 bg-red-50 rounded-lg text-center"><p className="text-xs text-red-600 font-medium">Destruição</p><p className="text-lg font-bold text-red-900">{item.destructionStock}</p></div>}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {item.mainWarehouse > 0 && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-semibold whitespace-nowrap">{item.mainWarehouse} Arm.</span>}
+                      {item.totalTechnicianStock > 0 && <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-semibold whitespace-nowrap">{item.totalTechnicianStock} Téc.</span>}
+                      {item.repairStock > 0 && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-semibold whitespace-nowrap">{item.repairStock} Rep.</span>}
+                      {item.clientPartsCount > 0 && <span className="px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded text-xs font-semibold whitespace-nowrap">{item.clientPartsCount} Cli.</span>}
+                      {item.destructionStock > 0 && <span className="px-2 py-0.5 bg-red-50 text-red-700 rounded text-xs font-semibold whitespace-nowrap">{item.destructionStock} Dest.</span>}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                    {item.categoryName && <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded">{item.categoryName}</span>}
-                    {item.equipmentTypeName && <span><span className="text-gray-400">Tipo:</span> {item.equipmentTypeName}</span>}
-                    {item.brandName && <span><span className="text-gray-400">Marca:</span> {item.brandName}</span>}
-                    {item.partNumber && <span><span className="text-gray-400">{t('partNumber')}:</span> {item.partNumber}</span>}
                   </div>
                 </div>
               ))}

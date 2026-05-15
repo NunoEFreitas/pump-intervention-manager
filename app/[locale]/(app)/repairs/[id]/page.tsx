@@ -78,18 +78,29 @@ interface PhotoData extends Photo { data: string }
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Criada',
-  IN_REPAIR: 'Em Progresso',
+  IN_REPAIR: 'Em Reparação',
+  REPAIR_DONE: 'Reparado',
+  WAITING_OVM: 'Aguardar OVM',
+  OVM_OK: 'OVM OK',
+  WAITING_PARTS: 'Aguardar Peças',
+  READY_FOR_DELIVERY: 'Pronto para Entrega',
+  // legacy / terminal
   QUOTE: 'Orçamento',
   OVM: 'Sujeito a OVM',
   REPAIRED: 'Devolvido ao Stock',
   NOT_REPAIRED: 'Não Reparado',
   WRITTEN_OFF: 'Abate',
-  RETURNED_TO_CLIENT: 'Reparado',
+  RETURNED_TO_CLIENT: 'Concluído',
 }
 
 const STATUS_COLORS: Record<string, string> = {
   PENDING: 'bg-gray-100 text-gray-700',
   IN_REPAIR: 'bg-blue-100 text-blue-800',
+  REPAIR_DONE: 'bg-teal-100 text-teal-800',
+  WAITING_OVM: 'bg-purple-100 text-purple-800',
+  OVM_OK: 'bg-indigo-100 text-indigo-800',
+  WAITING_PARTS: 'bg-orange-100 text-orange-800',
+  READY_FOR_DELIVERY: 'bg-cyan-100 text-cyan-800',
   QUOTE: 'bg-yellow-100 text-yellow-800',
   OVM: 'bg-purple-100 text-purple-800',
   REPAIRED: 'bg-green-100 text-green-800',
@@ -97,6 +108,17 @@ const STATUS_COLORS: Record<string, string> = {
   WRITTEN_OFF: 'bg-red-100 text-red-800',
   RETURNED_TO_CLIENT: 'bg-green-100 text-green-800',
 }
+
+const SELECTABLE_STATUSES = [
+  { value: 'IN_REPAIR', label: 'Em Reparação' },
+  { value: 'REPAIR_DONE', label: 'Reparado' },
+  { value: 'WAITING_OVM', label: 'Aguardar OVM' },
+  { value: 'OVM_OK', label: 'OVM OK' },
+  { value: 'WAITING_PARTS', label: 'Aguardar Peças' },
+  { value: 'READY_FOR_DELIVERY', label: 'Pronto para Entrega' },
+]
+
+const TERMINAL_STATUSES = ['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED']
 
 const QUOTE_STATUS_LABELS: Record<string, string> = {
   PENDING_CLIENT: 'Pendente de aprovação',
@@ -360,6 +382,11 @@ export default function RepairDetailPage() {
 
   const handleStart = () => doAction({ action: 'start' })
 
+  const handleSetStatus = async (newStatus: string) => {
+    if (!job || newStatus === job.status) return
+    await doAction({ action: 'set_status', status: newStatus })
+  }
+
   const handleCancelClientRepair = async () => {
     if (!job?.clientPartId) return
     if (!confirm('Cancelar esta reparação? A peça voltará ao estado Pendente na intervenção.')) return
@@ -521,29 +548,9 @@ export default function RepairDetailPage() {
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>
   if (error || !job) return <div className="px-4 sm:px-0"><div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4">{error || 'Não encontrado'}</div></div>
 
-  const isActive = ['PENDING', 'IN_REPAIR', 'QUOTE', 'OVM'].includes(job.status)
+  const isActive = !TERMINAL_STATUSES.includes(job.status)
   const isTerminal = !isActive
 
-  // STOCK timeline
-  const stockTimeline = job.status === 'WRITTEN_OFF'
-    ? ['PENDING', 'IN_REPAIR', 'WRITTEN_OFF']
-    : ['PENDING', 'IN_REPAIR', 'REPAIRED']
-
-  // CLIENT timeline
-  const clientTimeline = (() => {
-    const base = ['PENDING', 'IN_REPAIR']
-    if (job.quoteAmount !== null) base.push('QUOTE')
-    if (['OVM', 'NOT_REPAIRED', 'RETURNED_TO_CLIENT'].includes(job.status) || job.status === 'OVM') {
-      if (!base.includes('OVM')) base.push('OVM')
-    }
-    if (job.status === 'NOT_REPAIRED') { base.push('NOT_REPAIRED'); return base }
-    base.push('RETURNED_TO_CLIENT')
-    return base
-  })()
-
-  const timeline = job.type === 'CLIENT' ? clientTimeline : stockTimeline
-  const timelineOrder = [...timeline]
-  const currentIdx = timelineOrder.indexOf(job.status)
 
   return (
     <div className="px-4 sm:px-0">
@@ -586,12 +593,16 @@ export default function RepairDetailPage() {
         {/* ── Left column ─────────────────────────────────────────────────── */}
         <div className="space-y-5">
           {/* Client info card — CLIENT type only */}
-          {(job.type === 'CLIENT' && job.clientName) || job.locationName ? (
+          {job.type === 'CLIENT' && ((job.clientName) || job.locationName) ? (
             <div className="bg-orange-50 border border-orange-200 rounded-xl p-5">
               <h2 className="text-sm font-semibold text-orange-700 mb-3 uppercase tracking-wide">Cliente / Localização</h2>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                {job.clientName && <div className="col-span-2"><dt className="text-orange-600 text-xs">Cliente</dt><dd className="font-semibold text-gray-900">{job.clientName}</dd></div>}
-                {job.clientVat && <div><dt className="text-orange-600 text-xs">NIF</dt><dd className="font-medium text-gray-900">{job.clientVat}</dd></div>}
+                {job.clientName && (
+                  <div className="col-span-2 flex items-start justify-between gap-4">
+                    <div><dt className="text-orange-600 text-xs">Cliente</dt><dd className="font-semibold text-gray-900">{job.clientName}</dd></div>
+                    {job.clientVat && <div className="text-right shrink-0"><dt className="text-orange-600 text-xs">NIF</dt><dd className="font-medium text-gray-900">{job.clientVat}</dd></div>}
+                  </div>
+                )}
                 {job.clientPhone && <div><dt className="text-orange-600 text-xs">Telefone</dt><dd className="font-medium text-gray-900">{job.clientPhone}</dd></div>}
                 {job.clientEmail && <div className="col-span-2"><dt className="text-orange-600 text-xs">Email</dt><dd className="font-medium text-gray-900">{job.clientEmail}</dd></div>}
                 {job.locationName && (
@@ -881,39 +892,37 @@ export default function RepairDetailPage() {
             <h2 className="text-sm font-semibold text-gray-700 mb-4 uppercase tracking-wide">Ações</h2>
             <div className="space-y-3">
 
-              {/* PENDING: start */}
-              {job.status === 'PENDING' && (
-                <button onClick={handleStart} disabled={actionLoading} className="w-full btn bg-blue-600 hover:bg-blue-700 text-white text-sm">
-                  Iniciar Reparação
-                </button>
+              {/* Status select */}
+              {isTerminal ? (
+                <p className="text-sm text-gray-500 text-center py-2">Esta reparação está concluída.</p>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1.5">Estado</label>
+                  <select
+                    value={SELECTABLE_STATUSES.find(s => s.value === job.status) ? job.status : ''}
+                    onChange={e => handleSetStatus(e.target.value)}
+                    disabled={actionLoading}
+                    className="input text-gray-800 w-full text-sm"
+                  >
+                    {!SELECTABLE_STATUSES.find(s => s.value === job.status) && (
+                      <option value="" disabled>{STATUS_LABELS[job.status] ?? job.status}</option>
+                    )}
+                    {SELECTABLE_STATUSES.map(s => (
+                      <option key={s.value} value={s.value}>{s.label}</option>
+                    ))}
+                  </select>
+                </div>
               )}
 
-              {/* IN_REPAIR — STOCK */}
-              {job.type !== 'CLIENT' && job.status === 'IN_REPAIR' && (
+              {/* Concluir */}
+              {isActive && (
                 <button onClick={() => { setCompleteNotes(''); setShowCompleteModal(true) }} disabled={actionLoading} className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm">
                   Concluir Reparação
                 </button>
               )}
 
-              {/* IN_REPAIR — CLIENT */}
-              {job.type === 'CLIENT' && job.status === 'IN_REPAIR' && (
-                <>
-                  {!job.quoteAmount && (
-                    <button onClick={() => { setQuoteAmountInput(''); setQuoteNotesInput(''); setQuoteFormError(''); setShowQuoteForm(true) }} disabled={actionLoading} className="w-full btn bg-yellow-500 hover:bg-yellow-600 text-white text-sm">
-                      Criar Orçamento
-                    </button>
-                  )}
-                  <button onClick={handleSendToOvm} disabled={actionLoading} className="w-full btn bg-purple-600 hover:bg-purple-700 text-white text-sm">
-                    Enviar para OVM
-                  </button>
-                  <button onClick={() => { setCompleteNotes(''); setShowCompleteModal(true) }} disabled={actionLoading} className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm">
-                    Concluir Reparação
-                  </button>
-                </>
-              )}
-
-              {/* Trocar / Cancelar — CLIENT, active statuses */}
-              {job.type === 'CLIENT' && job.clientPartId && ['PENDING', 'IN_REPAIR'].includes(job.status) && (
+              {/* Trocar / Cancelar — CLIENT only */}
+              {job.type === 'CLIENT' && job.clientPartId && isActive && (
                 <>
                   <button onClick={openSwapModal} disabled={actionLoading} className="w-full btn bg-indigo-600 hover:bg-indigo-700 text-white text-sm">
                     Trocar ao Cliente
@@ -925,56 +934,34 @@ export default function RepairDetailPage() {
                   )}
                 </>
               )}
-
-              {/* QUOTE state — CLIENT */}
-              {job.status === 'QUOTE' && (
-                <>
-                  <p className="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">A aguardar aprovação do cliente.</p>
-                  <button onClick={handleAcceptQuote} disabled={actionLoading} className="w-full btn bg-green-600 hover:bg-green-700 text-white text-sm">
-                    Aceitar Orçamento
-                  </button>
-                  <button onClick={handleRejectQuote} disabled={actionLoading} className="w-full btn bg-red-500 hover:bg-red-600 text-white text-sm">
-                    Rejeitar Orçamento
-                  </button>
-                  <button onClick={handleOpenPdf} className="w-full btn btn-secondary text-sm flex items-center justify-center gap-1.5">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    Gerar PDF do Orçamento
-                  </button>
-                </>
-              )}
-
-              {/* OVM state — CLIENT */}
-              {job.status === 'OVM' && (
-                <>
-                  <p className="text-xs text-purple-700 bg-purple-50 border border-purple-200 rounded p-2">A aguardar inspeção da entidade reguladora (OVM).</p>
-                  <button onClick={handleReturnFromOvm} disabled={actionLoading} className="w-full btn bg-blue-600 hover:bg-blue-700 text-white text-sm">
-                    Conforme — Continuar Reparação
-                  </button>
-                  <button onClick={handleOvmFailed} disabled={actionLoading} className="w-full btn bg-red-500 hover:bg-red-600 text-white text-sm">
-                    Não Conforme
-                  </button>
-                </>
-              )}
-
-              {isTerminal && (
-                <p className="text-sm text-gray-500 text-center py-2">Esta reparação está concluída.</p>
-              )}
             </div>
           </div>
 
           {/* Timeline */}
           <div className="bg-white rounded-xl border border-gray-200 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Progresso</h2>
-            <ol className="space-y-2">
-              {timeline.map((s, i) => {
-                const done = timelineOrder.indexOf(s) <= currentIdx
-                const color = job.type === 'CLIENT' ? 'bg-orange-500' : 'bg-blue-600'
+            <ol className="relative border-l border-gray-200 ml-2 space-y-4">
+              {/* Initial state */}
+              <li className="ml-4">
+                <span className="absolute -left-1.5 w-3 h-3 rounded-full border-2 border-white bg-gray-400" />
+                <p className="text-sm font-semibold text-gray-900">Criada</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {new Date(job.sentAt).toLocaleDateString('pt-PT')}
+                  {job.sentByName ? ` · ${job.sentByName}` : ''}
+                </p>
+              </li>
+              {/* Status change events from history */}
+              {history.filter(e => e.eventType === 'STATUS_CHANGED').map((entry, i, arr) => {
+                const isLast = i === arr.length - 1
+                const dotColor = isLast && isTerminal ? 'bg-green-500' : isLast ? 'bg-blue-500' : 'bg-gray-400'
                 return (
-                  <li key={s} className="flex items-center gap-2.5 text-sm">
-                    <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${done ? `${color} text-white` : 'bg-gray-100 text-gray-400'}`}>
-                      {done ? '✓' : i + 1}
-                    </span>
-                    <span className={done ? 'text-gray-900 font-medium' : 'text-gray-400'}>{STATUS_LABELS[s] ?? s}</span>
+                  <li key={entry.id} className="ml-4">
+                    <span className={`absolute -left-1.5 w-3 h-3 rounded-full border-2 border-white ${dotColor}`} />
+                    <p className="text-sm font-semibold text-gray-900">{entry.description}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(entry.performedAt).toLocaleDateString('pt-PT')}
+                      {entry.performedByName ? ` · ${entry.performedByName}` : ''}
+                    </p>
                   </li>
                 )
               })}

@@ -28,18 +28,28 @@ interface RepairJob {
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING: 'Criada',
-  IN_REPAIR: 'Em Progresso',
+  IN_REPAIR: 'Em Reparação',
+  REPAIR_DONE: 'Reparado',
+  WAITING_OVM: 'Aguardar OVM',
+  OVM_OK: 'OVM OK',
+  WAITING_PARTS: 'Aguardar Peças',
+  READY_FOR_DELIVERY: 'Pronto para Entrega',
   QUOTE: 'Orçamento',
   OVM: 'Sujeito a OVM',
   REPAIRED: 'Devolvido ao Stock',
   NOT_REPAIRED: 'Não Reparado',
   WRITTEN_OFF: 'Abate',
-  RETURNED_TO_CLIENT: 'Reparado',
+  RETURNED_TO_CLIENT: 'Concluído',
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  PENDING: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  PENDING: 'bg-gray-100 text-gray-700 border-gray-300',
   IN_REPAIR: 'bg-blue-100 text-blue-800 border-blue-300',
+  REPAIR_DONE: 'bg-teal-100 text-teal-800 border-teal-300',
+  WAITING_OVM: 'bg-purple-100 text-purple-800 border-purple-300',
+  OVM_OK: 'bg-indigo-100 text-indigo-800 border-indigo-300',
+  WAITING_PARTS: 'bg-orange-100 text-orange-800 border-orange-300',
+  READY_FOR_DELIVERY: 'bg-cyan-100 text-cyan-800 border-cyan-300',
   QUOTE: 'bg-orange-100 text-orange-800 border-orange-300',
   OVM: 'bg-purple-100 text-purple-800 border-purple-300',
   REPAIRED: 'bg-green-100 text-green-800 border-green-300',
@@ -49,8 +59,13 @@ const STATUS_COLORS: Record<string, string> = {
 }
 
 const STATUS_BORDER: Record<string, string> = {
-  PENDING: 'border-l-yellow-400',
+  PENDING: 'border-l-gray-400',
   IN_REPAIR: 'border-l-blue-500',
+  REPAIR_DONE: 'border-l-teal-500',
+  WAITING_OVM: 'border-l-purple-500',
+  OVM_OK: 'border-l-indigo-500',
+  WAITING_PARTS: 'border-l-orange-400',
+  READY_FOR_DELIVERY: 'border-l-cyan-500',
   QUOTE: 'border-l-orange-400',
   OVM: 'border-l-purple-500',
   REPAIRED: 'border-l-green-500',
@@ -63,13 +78,16 @@ const FILTER_OPTIONS = [
   { value: 'ACTIVE', label: 'Ativas' },
   { value: 'ALL', label: 'Todas' },
   { value: 'PENDING', label: 'Criadas' },
-  { value: 'IN_REPAIR', label: 'Em Progresso' },
-  { value: 'QUOTE', label: 'Orçamento' },
-  { value: 'OVM', label: 'Sujeito a OVM' },
+  { value: 'IN_REPAIR', label: 'Em Reparação' },
+  { value: 'REPAIR_DONE', label: 'Reparado' },
+  { value: 'WAITING_OVM', label: 'Aguardar OVM' },
+  { value: 'OVM_OK', label: 'OVM OK' },
+  { value: 'WAITING_PARTS', label: 'Aguardar Peças' },
+  { value: 'READY_FOR_DELIVERY', label: 'Pronto para Entrega' },
   { value: 'REPAIRED', label: 'Devolvido ao Stock' },
   { value: 'NOT_REPAIRED', label: 'Não Reparado' },
   { value: 'WRITTEN_OFF', label: 'Abate' },
-  { value: 'RETURNED_TO_CLIENT', label: 'Reparado' },
+  { value: 'RETURNED_TO_CLIENT', label: 'Concluído' },
 ]
 
 interface WarehouseItemOption {

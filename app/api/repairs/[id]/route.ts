@@ -97,15 +97,27 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação iniciada', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Em Reparação', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
 
-    // ── RETURN TO STOCK (STOCK type only, from IN_REPAIR) ───────────────────
+    // ── SET STATUS (any non-terminal → any non-terminal) ────────────────────
+    if (data.action === 'set_status') {
+      const TERMINAL = ['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED']
+      const VALID = ['PENDING', 'IN_REPAIR', 'REPAIR_DONE', 'WAITING_OVM', 'OVM_OK', 'WAITING_PARTS', 'READY_FOR_DELIVERY']
+      if (TERMINAL.includes(job.status)) return NextResponse.json({ error: 'Reparação está concluída' }, { status: 400 })
+      if (!VALID.includes(data.status as string)) return NextResponse.json({ error: 'Estado inválido' }, { status: 400 })
+      const label = ({ PENDING: 'Criada', IN_REPAIR: 'Em Reparação', REPAIR_DONE: 'Reparado', WAITING_OVM: 'Aguardar OVM', OVM_OK: 'OVM OK', WAITING_PARTS: 'Aguardar Peças', READY_FOR_DELIVERY: 'Pronto para Entrega' } as Record<string, string>)[data.status as string]
+      await prisma.$executeRaw`UPDATE "PartRepairJob" SET status = ${data.status as string}, "updatedAt" = ${now}::timestamptz WHERE id = ${id}`
+      await prisma.$executeRaw`INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt") VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', ${label}, ${payload.userId}, ${now}::timestamptz)`
+      return NextResponse.json({ ok: true })
+    }
+
+    // ── RETURN TO STOCK (STOCK type only) ────────────────────────────────────
     if (data.action === 'return_to_stock') {
       if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
-      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      if (['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED'].includes(job.status)) return NextResponse.json({ error: 'Reparação já está concluída' }, { status: 400 })
 
       // Client part SNs are not tracked in repairStock — only update mainWarehouse
       const isClientPartSwap = job.snIsClientPart === true
@@ -157,15 +169,15 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — devolvido ao stock', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Devolvido ao Stock', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
 
-    // ── SEND TO DESTRUCTION (STOCK type only, from IN_REPAIR) ───────────────
+    // ── SEND TO DESTRUCTION (STOCK type only) ────────────────────────────────
     if (data.action === 'send_to_destruction') {
       if (job.type === 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de stock' }, { status: 400 })
-      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      if (['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED'].includes(job.status)) return NextResponse.json({ error: 'Reparação já está concluída' }, { status: 400 })
 
       const isClientPartSwapD = job.snIsClientPart === true
       if (job.serialNumberId) {
@@ -216,7 +228,7 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — enviado para destruição', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Abate', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -277,10 +289,10 @@ export async function PUT(
       return NextResponse.json({ ok: true })
     }
 
-    // ── COMPLETE REPAIRED (CLIENT type only, from IN_REPAIR) ────────────────
+    // ── COMPLETE REPAIRED (CLIENT type only) ─────────────────────────────────
     if (data.action === 'complete_repaired') {
       if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
-      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      if (['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED'].includes(job.status)) return NextResponse.json({ error: 'Reparação já está concluída' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob"
         SET status = 'RETURNED_TO_CLIENT',
@@ -291,15 +303,15 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — devolvido ao cliente', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Concluído', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
 
-    // ── COMPLETE NOT REPAIRED (CLIENT type only, from IN_REPAIR) ────────────
+    // ── COMPLETE NOT REPAIRED (CLIENT type only) ─────────────────────────────
     if (data.action === 'complete_not_repaired') {
       if (job.type !== 'CLIENT') return NextResponse.json({ error: 'Apenas para reparações de cliente' }, { status: 400 })
-      if (job.status !== 'IN_REPAIR') return NextResponse.json({ error: 'Reparação não está Em Progresso' }, { status: 400 })
+      if (['REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT', 'NOT_REPAIRED'].includes(job.status)) return NextResponse.json({ error: 'Reparação já está concluída' }, { status: 400 })
       await prisma.$executeRaw`
         UPDATE "PartRepairJob"
         SET status = 'NOT_REPAIRED',
@@ -310,7 +322,7 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Reparação concluída — não reparado', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Não Reparado', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -324,7 +336,7 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Enviado para OVM', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Sujeito a OVM', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -338,7 +350,7 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Devolvido de OVM (conforme) — retoma em progresso', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Em Reparação', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
@@ -356,7 +368,7 @@ export async function PUT(
       `
       await prisma.$executeRaw`
         INSERT INTO "RepairHistory" (id, "jobId", "eventType", description, "performedById", "performedAt")
-        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'OVM não aprovado — reparação encerrada', ${payload.userId}, ${now}::timestamptz)
+        VALUES (${crypto.randomUUID()}, ${id}, 'STATUS_CHANGED', 'Não Reparado', ${payload.userId}, ${now}::timestamptz)
       `
       return NextResponse.json({ ok: true })
     }
