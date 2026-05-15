@@ -65,7 +65,7 @@ interface Props {
   onCreated?: (id: string) => void
 }
 
-type Tab = 'details' | 'hours' | 'parts' | 'collected'
+type Tab = 'details' | 'hours' | 'parts' | 'swap' | 'client-repair'
 
 interface CollectedPart {
   id: string
@@ -155,7 +155,23 @@ export default function WorkOrderPanel({
   }
 
   useEffect(() => {
-    if (tab === 'collected' && wo) fetchCollectedParts()
+    if ((tab === 'swap' || tab === 'client-repair') && wo) {
+      setShowCollectForm(false)
+      setCollectForm({ warehouseItemId: '', serialNumber: '', clientItemSn: '', faultDescription: '', preSwapped: tab === 'swap' })
+      setCollectItemSearch('')
+      fetchCollectedParts()
+      if (tab === 'swap' && assignedTechnicianId) {
+        setTechnicianStockLoading(true)
+        const token = localStorage.getItem('token')
+        fetch(`/api/warehouse/technicians/${assignedTechnicianId}`, { headers: { Authorization: `Bearer ${token}` } })
+          .then(r => r.json())
+          .then(data => setTechnicianStock(Array.isArray(data.stocks) ? data.stocks.filter((s: any) =>
+            s.tracksSerialNumbers ? (s.serialNumbers?.length ?? 0) > 0 : s.quantity > 0
+          ) : []))
+          .catch(() => setTechnicianStock([]))
+          .finally(() => setTechnicianStockLoading(false))
+      }
+    }
   }, [tab])
 
   const handleCollect = async () => {
@@ -308,8 +324,11 @@ export default function WorkOrderPanel({
             <button onClick={() => setTab('parts')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'parts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Peças{wo!.parts.length > 0 ? ` (${wo!.parts.length})` : ''}
             </button>
-            <button onClick={() => setTab('collected')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'collected' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              Recolhas{collectedParts.length > 0 ? ` (${collectedParts.length})` : ''}
+            <button onClick={() => setTab('swap')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'swap' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              Swap{collectedParts.filter(p => p.preSwapped).length > 0 ? ` (${collectedParts.filter(p => p.preSwapped).length})` : ''}
+            </button>
+            <button onClick={() => setTab('client-repair')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'client-repair' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              Rep. Cliente{collectedParts.filter(p => !p.preSwapped).length > 0 ? ` (${collectedParts.filter(p => !p.preSwapped).length})` : ''}
             </button>
           </div>
         )}
@@ -546,42 +565,151 @@ export default function WorkOrderPanel({
             </>
           )}
 
-          {/* ── Recolhas tab ── */}
-          {isEdit && tab === 'collected' && (
+          {/* ── Swap tab ── */}
+          {isEdit && tab === 'swap' && (
+            <>
+              {collectedLoading ? (
+                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-600" /></div>
+              ) : (
+                <>
+                  {collectedParts.filter(p => p.preSwapped).length === 0 && !showCollectForm && (
+                    <p className="text-sm text-gray-400 text-center py-4">Nenhum swap registado nesta ordem de trabalho.</p>
+                  )}
+                  <div className="space-y-2">
+                    {collectedParts.filter(p => p.preSwapped).map(part => (
+                      <div key={part.id} className="rounded-lg border px-4 py-3 text-sm bg-green-50 border-green-200">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-gray-800">{part.itemName}</span>
+                          {part.partNumber !== '__GENERIC__' && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>}
+                          <span className="text-xs font-medium px-1.5 py-0.5 rounded ml-auto bg-green-100 text-green-800">Resolvida</span>
+                        </div>
+                        {part.serialNumber && <p className="text-xs font-mono text-gray-600 mt-1">SN entregue: {part.serialNumber}</p>}
+                        {part.clientItemSn && <p className="text-xs font-mono text-gray-600 mt-0.5">SN recolhido: {part.clientItemSn}</p>}
+                        {part.faultDescription && <p className="text-xs text-gray-500 italic mt-0.5">{part.faultDescription}</p>}
+                        {part.repairReference && <p className="text-xs font-mono text-orange-700 mt-0.5">{part.repairReference}</p>}
+                        <p className="text-xs text-gray-400 mt-1">{new Date(part.createdAt).toLocaleString()}{part.pickedUpByName ? ` — ${part.pickedUpByName}` : ''}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {showCollectForm ? (
+                    <div className="border border-green-200 rounded-lg p-4 bg-green-50 space-y-3 mt-2">
+                      <h4 className="font-semibold text-gray-800 text-sm">Registar Swap</h4>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Artigo (do stock do técnico)</label>
+                        <div ref={collectItemRef} className="relative">
+                          <button type="button" onClick={() => setCollectItemOpen(o => !o)} className="input text-sm w-full text-left flex items-center justify-between">
+                            <span className={collectForm.warehouseItemId ? 'text-gray-800' : 'text-gray-400'}>
+                              {collectForm.warehouseItemId
+                                ? (() => { const f = technicianStock.find(i => i.itemId === collectForm.warehouseItemId); return f ? `${f.itemName} (${f.partNumber})` : 'Selecionar...' })()
+                                : 'Selecionar do stock do técnico...'}
+                            </span>
+                            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                          {collectItemOpen && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
+                              <div className="p-2 border-b">
+                                <input type="text" autoFocus placeholder="Pesquisar..." value={collectItemSearch} onChange={e => setCollectItemSearch(e.target.value)} className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                              </div>
+                              <ul className="overflow-y-auto" style={{ maxHeight: '11rem' }}>
+                                {technicianStockLoading
+                                  ? <li className="px-3 py-2 text-sm text-gray-400">A carregar stock...</li>
+                                  : technicianStock.length === 0
+                                    ? <li className="px-3 py-2 text-sm text-gray-400">Sem stock disponível</li>
+                                    : technicianStock.filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(collectItemSearch.toLowerCase())).map(item => (
+                                        <li key={item.itemId} onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: item.itemId, serialNumber: '', clientItemSn: '' })); setCollectItemOpen(false); setCollectItemSearch('') }}
+                                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${collectForm.warehouseItemId === item.itemId ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                                          {item.itemName} <span className="text-gray-400">({item.partNumber})</span>
+                                          <span className="ml-2 text-xs text-gray-400">× {item.tracksSerialNumbers ? (item.serialNumbers?.length ?? 0) : item.quantity}</span>
+                                        </li>
+                                      ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {(() => {
+                        const techItem = collectForm.warehouseItemId ? technicianStock.find(i => i.itemId === collectForm.warehouseItemId) : null
+                        const availableSns = techItem?.tracksSerialNumbers && techItem.serialNumbers?.length ? techItem.serialNumbers : null
+                        return (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                              Nº de série entregue ao cliente{availableSns ? <span className="text-red-500"> *</span> : <span className="text-gray-400 font-normal"> (opcional)</span>}
+                            </label>
+                            {availableSns ? (
+                              <select className="input text-gray-800 w-full text-sm" value={collectForm.serialNumber} onChange={e => setCollectForm(f => ({ ...f, serialNumber: e.target.value }))}>
+                                <option value="">Selecionar SN entregue...</option>
+                                {availableSns.map(sn => <option key={sn.id} value={sn.serialNumber}>{sn.serialNumber}</option>)}
+                              </select>
+                            ) : (
+                              <input type="text" placeholder="Ex: SN-12345" className="input text-gray-800 w-full text-sm" value={collectForm.serialNumber} onChange={e => setCollectForm(f => ({ ...f, serialNumber: e.target.value }))} />
+                            )}
+                          </div>
+                        )
+                      })()}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Nº de série da peça avariada recolhida <span className="text-gray-400 font-normal">(opcional — confirmável no armazém)</span></label>
+                        <input type="text" placeholder="SN da peça com defeito que o técnico vai trazer..." className="input text-gray-800 w-full text-sm" value={collectForm.clientItemSn} onChange={e => setCollectForm(f => ({ ...f, clientItemSn: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Descrição da avaria <span className="text-gray-400 font-normal">(opcional)</span></label>
+                        <textarea rows={2} placeholder="Ex: Não liga, sensor danificado..." className="input text-gray-800 w-full text-sm" value={collectForm.faultDescription} onChange={e => setCollectForm(f => ({ ...f, faultDescription: e.target.value }))} />
+                      </div>
+                      <div className="flex gap-2">
+                        {(() => {
+                          const techItem = collectForm.warehouseItemId ? technicianStock.find(i => i.itemId === collectForm.warehouseItemId) : null
+                          const snRequired = !!(techItem?.tracksSerialNumbers && (techItem.serialNumbers?.length ?? 0) > 0)
+                          return (
+                            <button onClick={handleCollect} disabled={collectSaving || !collectForm.warehouseItemId || (snRequired && !collectForm.serialNumber)} className="btn btn-primary text-sm disabled:opacity-50">
+                              {collectSaving ? 'A guardar...' : 'Registar'}
+                            </button>
+                          )
+                        })()}
+                        <button onClick={() => { setShowCollectForm(false); setCollectForm({ warehouseItemId: '', serialNumber: '', clientItemSn: '', faultDescription: '', preSwapped: true }); setCollectItemSearch('') }} className="btn btn-secondary text-sm">Cancelar</button>
+                      </div>
+                    </div>
+                  ) : canEdit && (
+                    <button onClick={() => setShowCollectForm(true)} className="w-full py-3 border-2 border-dashed border-green-300 rounded-lg text-sm text-green-700 hover:border-green-400 hover:bg-green-50 transition-colors mt-2">
+                      + Registar Swap
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          {/* ── Rep. Cliente tab ── */}
+          {isEdit && tab === 'client-repair' && (
             <>
               {collectedLoading ? (
                 <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500" /></div>
               ) : (
                 <>
-                  {collectedParts.length === 0 && !showCollectForm && (
-                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma peça recolhida nesta ordem de trabalho.</p>
+                  {collectedParts.filter(p => !p.preSwapped).length === 0 && !showCollectForm && (
+                    <p className="text-sm text-gray-400 text-center py-4">Nenhuma peça de cliente registada nesta ordem de trabalho.</p>
                   )}
                   <div className="space-y-2">
-                    {collectedParts.map(part => (
-                      <div key={part.id} className={`rounded-lg border px-4 py-3 text-sm ${part.preSwapped ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+                    {collectedParts.filter(p => !p.preSwapped).map(part => (
+                      <div key={part.id} className="rounded-lg border px-4 py-3 text-sm bg-amber-50 border-amber-200">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-gray-800">{part.itemName}</span>
                           {part.partNumber !== '__GENERIC__' && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>}
                           {part.partNumber === '__GENERIC__' && <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Genérico</span>}
-                          {part.preSwapped && <span className="text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Sub. Imediata</span>}
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ml-auto ${
-                            part.preSwapped ? 'bg-green-100 text-green-800' :
                             part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-100 text-yellow-800' :
                             part.clientPartStatus === 'PENDING' ? 'bg-orange-100 text-orange-800' :
                             part.clientPartStatus === 'REPAIR' ? 'bg-blue-100 text-blue-800' :
                             part.clientPartStatus === 'RESOLVED' ? 'bg-green-100 text-green-800' :
                             'bg-gray-100 text-gray-600'
                           }`}>
-                            {part.preSwapped ? 'Resolvida' :
-                             part.clientPartStatus === 'IN_TRANSIT' ? 'Em Trânsito' :
+                            {part.clientPartStatus === 'IN_TRANSIT' ? 'Em Trânsito' :
                              part.clientPartStatus === 'PENDING' ? 'No Armazém' :
                              part.clientPartStatus === 'REPAIR' ? 'Em Reparação' :
                              part.clientPartStatus === 'RESOLVED' ? 'Concluída' :
                              part.clientPartStatus ?? '—'}
                           </span>
                         </div>
-                        {part.serialNumber && <p className="text-xs font-mono text-gray-600 mt-1">{part.preSwapped ? 'SN entregue:' : 'SN:'} {part.serialNumber}</p>}
-                        {part.preSwapped && part.clientItemSn && <p className="text-xs font-mono text-gray-600 mt-0.5">SN recolhido: {part.clientItemSn}</p>}
+                        {part.serialNumber && <p className="text-xs font-mono text-gray-600 mt-1">SN: {part.serialNumber}</p>}
                         {part.faultDescription && <p className="text-xs text-gray-500 italic mt-0.5">{part.faultDescription}</p>}
                         {part.repairReference && <p className="text-xs font-mono text-orange-700 mt-0.5">{part.repairReference}</p>}
                         <p className="text-xs text-gray-400 mt-1">{new Date(part.createdAt).toLocaleString()}{part.pickedUpByName ? ` — ${part.pickedUpByName}` : ''}</p>
@@ -592,203 +720,57 @@ export default function WorkOrderPanel({
                   {showCollectForm ? (
                     <div className="border border-amber-200 rounded-lg p-4 bg-amber-50 space-y-3 mt-2">
                       <h4 className="font-semibold text-gray-800 text-sm">Registar Recolha</h4>
-
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Artigo</label>
                         <div ref={collectItemRef} className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setCollectItemOpen(o => !o)}
-                            className="input text-sm w-full text-left flex items-center justify-between"
-                          >
+                          <button type="button" onClick={() => setCollectItemOpen(o => !o)} className="input text-sm w-full text-left flex items-center justify-between">
                             <span className={collectForm.warehouseItemId ? 'text-gray-800' : 'text-gray-400'}>
-                              {collectForm.warehouseItemId
-                                ? (() => {
-                                    if (collectForm.preSwapped) {
-                                      const f = technicianStock.find(i => i.itemId === collectForm.warehouseItemId)
-                                      return f ? `${f.itemName} (${f.partNumber})` : 'Selecionar...'
-                                    }
-                                    if (collectForm.warehouseItemId === '__GENERIC__') return <span className="text-amber-700 font-medium">Artigo não catalogado</span>
-                                    const f = warehouseItems.find(i => i.id === collectForm.warehouseItemId)
-                                    return f ? `${f.itemName} (${f.partNumber})` : 'Selecionar...'
-                                  })()
-                                : collectForm.preSwapped ? 'Selecionar do stock do técnico...' : 'Selecionar artigo...'}
+                              {collectForm.warehouseItemId === '__GENERIC__'
+                                ? <span className="text-amber-700 font-medium">Artigo não catalogado</span>
+                                : collectForm.warehouseItemId
+                                  ? (() => { const f = warehouseItems.find(i => i.id === collectForm.warehouseItemId); return f ? `${f.itemName} (${f.partNumber})` : 'Selecionar...' })()
+                                  : 'Selecionar artigo...'}
                             </span>
                             <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                           </button>
                           {collectItemOpen && (
                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg">
                               <div className="p-2 border-b">
-                                <input
-                                  type="text" autoFocus placeholder="Pesquisar..."
-                                  value={collectItemSearch}
-                                  onChange={e => setCollectItemSearch(e.target.value)}
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
+                                <input type="text" autoFocus placeholder="Pesquisar..." value={collectItemSearch} onChange={e => setCollectItemSearch(e.target.value)} className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
                               </div>
                               <ul className="overflow-y-auto" style={{ maxHeight: '11rem' }}>
-                                {collectForm.preSwapped ? (
-                                  technicianStockLoading
-                                    ? <li className="px-3 py-2 text-sm text-gray-400">A carregar stock...</li>
-                                    : technicianStock.length === 0
-                                      ? <li className="px-3 py-2 text-sm text-gray-400">Sem stock disponível</li>
-                                      : technicianStock
-                                          .filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(collectItemSearch.toLowerCase()))
-                                          .map(item => (
-                                            <li
-                                              key={item.itemId}
-                                              onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: item.itemId, serialNumber: '', clientItemSn: '' })); setCollectItemOpen(false); setCollectItemSearch('') }}
-                                              className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${collectForm.warehouseItemId === item.itemId ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}
-                                            >
-                                              {item.itemName} <span className="text-gray-400">({item.partNumber})</span>
-                                              <span className="ml-2 text-xs text-gray-400">× {item.tracksSerialNumbers ? (item.serialNumbers?.length ?? 0) : item.quantity}</span>
-                                            </li>
-                                          ))
-                                ) : (
-                                  <>
-                                    <li
-                                      onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: '__GENERIC__' })); setCollectItemOpen(false); setCollectItemSearch('') }}
-                                      className={`px-3 py-2 text-sm cursor-pointer hover:bg-amber-50 border-b border-gray-100 text-amber-700 font-medium ${collectForm.warehouseItemId === '__GENERIC__' ? 'bg-amber-100' : ''}`}
-                                    >
-                                      Artigo não catalogado
-                                    </li>
-                                    {warehouseItems
-                                      .filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(collectItemSearch.toLowerCase()))
-                                      .map(item => (
-                                        <li
-                                          key={item.id}
-                                          onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: item.id })); setCollectItemOpen(false); setCollectItemSearch('') }}
-                                          className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${collectForm.warehouseItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}
-                                        >
-                                          {item.itemName} <span className="text-gray-400">({item.partNumber})</span>
-                                        </li>
-                                      ))}
-                                  </>
-                                )}
+                                <li onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: '__GENERIC__' })); setCollectItemOpen(false); setCollectItemSearch('') }}
+                                  className={`px-3 py-2 text-sm cursor-pointer hover:bg-amber-50 border-b border-gray-100 text-amber-700 font-medium ${collectForm.warehouseItemId === '__GENERIC__' ? 'bg-amber-100' : ''}`}>
+                                  Artigo não catalogado
+                                </li>
+                                {warehouseItems.filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(collectItemSearch.toLowerCase())).map(item => (
+                                  <li key={item.id} onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: item.id })); setCollectItemOpen(false); setCollectItemSearch('') }}
+                                    className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${collectForm.warehouseItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
+                                    {item.itemName} <span className="text-gray-400">({item.partNumber})</span>
+                                  </li>
+                                ))}
                               </ul>
                             </div>
                           )}
                         </div>
                       </div>
-
-                      {(() => {
-                        const techItem = collectForm.preSwapped && collectForm.warehouseItemId
-                          ? technicianStock.find(i => i.itemId === collectForm.warehouseItemId)
-                          : null
-                        const availableSns = techItem?.tracksSerialNumbers && techItem.serialNumbers?.length
-                          ? techItem.serialNumbers
-                          : null
-                        return (
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                              {collectForm.preSwapped
-                                ? <>Nº de série entregue ao cliente{availableSns ? <span className="text-red-500"> *</span> : <span className="text-gray-400 font-normal"> (opcional)</span>}</>
-                                : <>Nº de série da peça recolhida <span className="text-gray-400 font-normal">(opcional)</span></>}
-                            </label>
-                            {availableSns ? (
-                              <select
-                                className="input text-gray-800 w-full text-sm"
-                                value={collectForm.serialNumber}
-                                onChange={e => setCollectForm(f => ({ ...f, serialNumber: e.target.value }))}
-                                required
-                              >
-                                <option value="">Selecionar SN entregue...</option>
-                                {availableSns.map(sn => (
-                                  <option key={sn.id} value={sn.serialNumber}>{sn.serialNumber}</option>
-                                ))}
-                              </select>
-                            ) : (
-                              <input type="text" placeholder="Ex: SN-12345" className="input text-gray-800 w-full text-sm"
-                                value={collectForm.serialNumber} onChange={e => setCollectForm(f => ({ ...f, serialNumber: e.target.value }))} />
-                            )}
-                          </div>
-                        )
-                      })()}
-
-                      {collectForm.preSwapped && (
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            Nº de série da peça avariada recolhida <span className="text-gray-400 font-normal">(opcional — confirmável no armazém)</span>
-                          </label>
-                          <input
-                            type="text"
-                            placeholder="SN da peça com defeito que o técnico vai trazer..."
-                            className="input text-gray-800 w-full text-sm"
-                            value={collectForm.clientItemSn}
-                            onChange={e => setCollectForm(f => ({ ...f, clientItemSn: e.target.value }))}
-                          />
-                        </div>
-                      )}
-
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Nº de série da peça recolhida <span className="text-gray-400 font-normal">(opcional)</span></label>
+                        <input type="text" placeholder="Ex: SN-12345" className="input text-gray-800 w-full text-sm" value={collectForm.serialNumber} onChange={e => setCollectForm(f => ({ ...f, serialNumber: e.target.value }))} />
+                      </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Descrição da avaria <span className="text-gray-400 font-normal">(opcional)</span></label>
-                        <textarea rows={2} placeholder="Ex: Não liga, sensor danificado..." className="input text-gray-800 w-full text-sm"
-                          value={collectForm.faultDescription} onChange={e => setCollectForm(f => ({ ...f, faultDescription: e.target.value }))} />
+                        <textarea rows={2} placeholder="Ex: Não liga, sensor danificado..." className="input text-gray-800 w-full text-sm" value={collectForm.faultDescription} onChange={e => setCollectForm(f => ({ ...f, faultDescription: e.target.value }))} />
                       </div>
-
-                      <label className="flex items-start gap-3 cursor-pointer bg-green-50 border border-green-200 rounded-lg p-3">
-                        <input
-                          type="checkbox"
-                          checked={collectForm.preSwapped}
-                          onChange={async e => {
-                            const checked = e.target.checked
-                            setCollectForm(f => ({ ...f, preSwapped: checked, warehouseItemId: '', serialNumber: '', clientItemSn: '' }))
-                            setCollectItemSearch('')
-                            if (checked && assignedTechnicianId) {
-                              setTechnicianStockLoading(true)
-                              try {
-                                const token = localStorage.getItem('token')
-                                const data = await fetch(`/api/warehouse/technicians/${assignedTechnicianId}`, {
-                                  headers: { Authorization: `Bearer ${token}` },
-                                }).then(r => r.json())
-                                setTechnicianStock(Array.isArray(data.stocks) ? data.stocks.filter((s: any) =>
-                                  s.tracksSerialNumbers
-                                    ? (s.serialNumbers?.length ?? 0) > 0
-                                    : s.quantity > 0
-                                ) : [])
-                              } catch { setTechnicianStock([]) } finally { setTechnicianStockLoading(false) }
-                            } else {
-                              setTechnicianStock([])
-                            }
-                          }}
-                          className="mt-0.5 w-4 h-4 text-green-600"
-                        />
-                        <div>
-                          <p className="text-sm font-semibold text-green-900">Substituição imediata</p>
-                          <p className="text-xs text-green-700 mt-0.5">O técnico já levou uma peça de substituição para o cliente. A peça recolhida será reparada e entrará para o stock da empresa.</p>
-                        </div>
-                      </label>
-
                       <div className="flex gap-2">
-                        {(() => {
-                          const selectedTechItem = collectForm.preSwapped && collectForm.warehouseItemId
-                            ? technicianStock.find(i => i.itemId === collectForm.warehouseItemId)
-                            : null
-                          const snRequired = !!(selectedTechItem?.tracksSerialNumbers && (selectedTechItem.serialNumbers?.length ?? 0) > 0)
-                          const snMissing = snRequired && !collectForm.serialNumber
-                          return (
-                            <button
-                              onClick={handleCollect}
-                              disabled={collectSaving || !collectForm.warehouseItemId || snMissing}
-                              className="btn btn-primary text-sm disabled:opacity-50"
-                            >
-                              {collectSaving ? 'A guardar...' : 'Registar'}
-                            </button>
-                          )
-                        })()}
-                        <button
-                          onClick={() => { setShowCollectForm(false); setCollectForm({ warehouseItemId: '', serialNumber: '', clientItemSn: '', faultDescription: '', preSwapped: false }); setCollectItemSearch('') }}
-                          className="btn btn-secondary text-sm"
-                        >
-                          Cancelar
+                        <button onClick={handleCollect} disabled={collectSaving || !collectForm.warehouseItemId} className="btn btn-primary text-sm disabled:opacity-50">
+                          {collectSaving ? 'A guardar...' : 'Registar'}
                         </button>
+                        <button onClick={() => { setShowCollectForm(false); setCollectForm({ warehouseItemId: '', serialNumber: '', clientItemSn: '', faultDescription: '', preSwapped: false }); setCollectItemSearch('') }} className="btn btn-secondary text-sm">Cancelar</button>
                       </div>
                     </div>
                   ) : canEdit && (
-                    <button
-                      onClick={() => setShowCollectForm(true)}
-                      className="w-full py-3 border-2 border-dashed border-amber-300 rounded-lg text-sm text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition-colors mt-2"
-                    >
+                    <button onClick={() => setShowCollectForm(true)} className="w-full py-3 border-2 border-dashed border-amber-300 rounded-lg text-sm text-amber-600 hover:border-amber-400 hover:bg-amber-50 transition-colors mt-2">
                       + Registar Recolha
                     </button>
                   )}

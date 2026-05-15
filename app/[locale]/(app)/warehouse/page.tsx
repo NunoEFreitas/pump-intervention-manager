@@ -661,11 +661,11 @@ export default function WarehousePage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {item.mainWarehouse > 0 && <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-semibold whitespace-nowrap">{item.mainWarehouse} Arm.</span>}
-                      {item.totalTechnicianStock > 0 && <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-semibold whitespace-nowrap">{item.totalTechnicianStock} Téc.</span>}
-                      {item.repairStock > 0 && <span className="px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-semibold whitespace-nowrap">{item.repairStock} Rep.</span>}
-                      {item.clientPartsCount > 0 && <span className="px-2 py-0.5 bg-yellow-50 text-yellow-700 rounded text-xs font-semibold whitespace-nowrap">{item.clientPartsCount} Cli.</span>}
-                      {item.destructionStock > 0 && <span className="px-2 py-0.5 bg-red-50 text-red-700 rounded text-xs font-semibold whitespace-nowrap">{item.destructionStock} Dest.</span>}
+                      {item.mainWarehouse > 0 && <div className="px-2.5 py-1 bg-blue-50 rounded-lg text-center"><p className="text-xs text-blue-600 font-medium leading-none mb-0.5">Arm.</p><p className="text-sm font-bold text-blue-900 leading-none">{item.mainWarehouse}</p></div>}
+                      {item.totalTechnicianStock > 0 && <div className="px-2.5 py-1 bg-green-50 rounded-lg text-center"><p className="text-xs text-green-600 font-medium leading-none mb-0.5">Téc.</p><p className="text-sm font-bold text-green-900 leading-none">{item.totalTechnicianStock}</p></div>}
+                      {item.repairStock > 0 && <div className="px-2.5 py-1 bg-orange-50 rounded-lg text-center"><p className="text-xs text-orange-600 font-medium leading-none mb-0.5">Rep.</p><p className="text-sm font-bold text-orange-900 leading-none">{item.repairStock}</p></div>}
+                      {item.clientPartsCount > 0 && <div className="px-2.5 py-1 bg-yellow-50 rounded-lg text-center"><p className="text-xs text-yellow-600 font-medium leading-none mb-0.5">Cli.</p><p className="text-sm font-bold text-yellow-900 leading-none">{item.clientPartsCount}</p></div>}
+                      {item.destructionStock > 0 && <div className="px-2.5 py-1 bg-red-50 rounded-lg text-center"><p className="text-xs text-red-600 font-medium leading-none mb-0.5">Dest.</p><p className="text-sm font-bold text-red-900 leading-none">{item.destructionStock}</p></div>}
                     </div>
                   </div>
                 </div>
