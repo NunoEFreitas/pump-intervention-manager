@@ -13,6 +13,7 @@ interface WarehouseItem {
   repairStock: number
   destructionStock: number
   clientPartsCount: number
+  activeRepairJobsCount: number
   ean13: string | null
   tracksSerialNumbers: boolean
   totalTechnicianStock: number
