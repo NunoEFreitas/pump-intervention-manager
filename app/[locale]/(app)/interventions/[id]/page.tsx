@@ -1141,36 +1141,23 @@ export default function InterventionDetailPage() {
                 {clientParts.map((part) => (
                   <div
                     key={part.id}
-                    className={`border rounded-lg px-4 py-3 ${
-                      (part.preSwapped || part.clientPartStatus === 'RESOLVED') ? 'bg-green-50 border-green-200' :
-                      part.clientPartStatus === 'RETURNING'  ? 'bg-purple-50 border-purple-200' :
-                      part.clientPartStatus === 'REPAIR'     ? 'bg-blue-50 border-blue-200' :
-                      part.clientPartStatus === 'SWAP'       ? 'bg-purple-50 border-purple-200' :
-                      part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-50 border-yellow-200' :
-                      'bg-amber-50 border-amber-200'
-                    }`}
+                    className={`border rounded-lg px-4 py-3 ${part.preSwapped ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${
-                        (part.preSwapped || part.clientPartStatus === 'RESOLVED') ? 'bg-green-200 text-green-900' :
-                        part.clientPartStatus === 'RETURNING'  ? 'bg-purple-200 text-purple-900' :
-                        part.clientPartStatus === 'REPAIR'     ? 'bg-blue-200 text-blue-900' :
-                        part.clientPartStatus === 'SWAP'       ? 'bg-purple-200 text-purple-900' :
-                        part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-200 text-yellow-900' :
-                        'bg-amber-300 text-amber-900'
-                      }`}>
-                        {part.preSwapped                        ? 'Resolvida' :
-                         part.clientPartStatus === 'RESOLVED' && part.repairReference ? 'Reparada' :
-                         part.clientPartStatus === 'RESOLVED'   ? 'Trocada' :
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide shrink-0 ${part.preSwapped ? 'bg-green-200 text-green-900' : 'bg-orange-200 text-orange-900'}`}>
+                        {part.clientPartStatus === 'RESOLVED' && part.repairReference ? 'Reparada' :
+                         part.clientPartStatus === 'RESOLVED'   ? 'Resolvida' :
                          part.clientPartStatus === 'RETURNING'  ? 'A Devolver' :
                          part.clientPartStatus === 'REPAIR'     ? 'Em Reparação' :
-                         part.clientPartStatus === 'SWAP'       ? 'Troca' :
                          part.clientPartStatus === 'IN_TRANSIT' ? 'Em Trânsito' :
                          'Pendente'}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-gray-900 text-sm flex items-center gap-1.5">
+                        <p className="font-medium text-gray-900 text-sm flex items-center gap-1.5 flex-wrap">
                           {part.itemName}
+                          {part.preSwapped && (
+                            <span className="text-xs font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded border border-green-200">Swap</span>
+                          )}
                           {part.partNumber === '__GENERIC__' && (
                             <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Genérico</span>
                           )}
