@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const stockFilter = minStock > 0 ? Prisma.sql`AND w."mainWarehouse" >= ${minStock}` : Prisma.sql``
     const categoryFilter = categoryId ? Prisma.sql`AND w."categoryId" = ${categoryId}` : Prisma.sql``
 
-    const [countRows, items, extraFields, clientPartsCounts] = await Promise.all([
+    const [countRows, items, extraFields, clientPartsCounts, activeRepairCounts] = await Promise.all([
       prisma.$queryRaw<[{ count: bigint }]>`
         SELECT COUNT(*)::bigint AS count FROM "WarehouseItem" w
         WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
@@ -95,6 +95,20 @@ export async function GET(request: NextRequest) {
           )
         GROUP BY "itemId"
       `,
+      prisma.$queryRaw<Array<{ itemId: string; count: bigint }>>`
+        SELECT "itemId", COUNT(*)::bigint AS count
+        FROM "PartRepairJob"
+        WHERE type = 'STOCK'
+          AND status NOT IN ('REPAIRED', 'NOT_REPAIRED', 'WRITTEN_OFF', 'RETURNED_TO_CLIENT')
+          AND "itemId" IN (
+            SELECT id FROM "WarehouseItem" w
+            WHERE (LOWER("itemName") LIKE ${searchLike} OR LOWER("partNumber") LIKE ${searchLike} OR LOWER(COALESCE("ean13", '')) LIKE ${searchLike})
+            ${categoryFilter}
+            ORDER BY "createdAt" DESC
+            LIMIT ${limit} OFFSET ${offset}
+          )
+        GROUP BY "itemId"
+      `,
     ])
 
     const total = Number(countRows[0].count)
@@ -112,15 +126,22 @@ export async function GET(request: NextRequest) {
       clientPartsMap.set(cp.itemId, Number(cp.count))
     }
 
+    const activeRepairMap = new Map<string, number>()
+    for (const r of activeRepairCounts) {
+      activeRepairMap.set(r.itemId, Number(r.count))
+    }
+
     const itemsWithTotals = items.map(item => {
       const techStocks = techMap.get(item.id) ?? []
       const totalTechnicianStock = techStocks.reduce((s, ts) => s + ts.quantity, 0)
       const clientPartsCount = clientPartsMap.get(item.id) ?? 0
+      const activeRepairJobsCount = activeRepairMap.get(item.id) ?? 0
       return {
         ...item,
         technicianStocks: techStocks,
         totalTechnicianStock,
         clientPartsCount,
+        activeRepairJobsCount,
         totalStock: item.mainWarehouse + totalTechnicianStock,
       }
     })
