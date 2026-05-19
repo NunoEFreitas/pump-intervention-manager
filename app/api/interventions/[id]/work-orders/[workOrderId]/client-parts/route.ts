@@ -45,7 +45,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const { id: interventionId, workOrderId } = await params
-    const { warehouseItemId, serialNumber, faultDescription, clientItemSn: rawClientItemSn, technicianId: requestedTechId, preSwapped } = await request.json()
+    const { warehouseItemId, serialNumber, faultDescription, clientItemSn: rawClientItemSn, technicianId: requestedTechId, preSwapped, fromWarehouse } = await request.json()
 
     if (!warehouseItemId) return NextResponse.json({ error: 'Warehouse item is required' }, { status: 400 })
 
@@ -108,8 +108,104 @@ export async function POST(request: NextRequest, { params }: Params) {
     const fd = faultDescription?.trim() || null
     const clientItemSnVal = rawClientItemSn?.trim() || null
     const isPreSwapped = preSwapped === true
+    const isFromWarehouse = fromWarehouse === true
 
     const creator = await prisma.user.findUnique({ where: { id: payload.userId }, select: { name: true } })
+
+    // For swap directly from main warehouse: decrement mainWarehouse, create client part record
+    if (isPreSwapped && isFromWarehouse) {
+      if (resolvedTracksSerialNumbers && sn) {
+        const existing = await prisma.$queryRaw<{ id: string }[]>`
+          SELECT id FROM "SerialNumberStock"
+          WHERE "itemId" = ${resolvedItemId}
+            AND "serialNumber" = ${sn}
+            AND location = 'MAIN_WAREHOUSE'
+            AND status = 'AVAILABLE'
+            AND "isClientPart" = false
+          LIMIT 1
+        `
+        if (existing.length === 0) {
+          return NextResponse.json({ error: 'Número de série não encontrado no armazém' }, { status: 400 })
+        }
+        const existingId = existing[0].id
+        await prisma.$executeRaw`
+          UPDATE "SerialNumberStock"
+          SET location = 'CLIENT_WAREHOUSE',
+              "isClientPart" = true,
+              "clientPartStatus" = 'IN_TRANSIT',
+              "preSwapped" = true,
+              "interventionId" = ${interventionId},
+              "workOrderId" = ${workOrderId},
+              "technicianId" = ${resolvedTechId},
+              "pickedUpById" = ${payload.userId},
+              "faultDescription" = ${fd},
+              "clientItemSn" = ${clientItemSnVal},
+              "updatedAt" = NOW()
+          WHERE id = ${existingId}
+        `
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "mainWarehouse" = "mainWarehouse" - 1, "updatedAt" = NOW()
+          WHERE id = ${resolvedItemId}
+        `
+        await prisma.itemMovement.create({
+          data: {
+            itemId: resolvedItemId,
+            movementType: 'USE',
+            quantity: 1,
+            notes: `Swap de armazém — entregue ao cliente${fd ? `: ${fd}` : ''}${sn ? ` (SN: ${sn})` : ''}`,
+            createdById: payload.userId,
+          },
+        })
+        return NextResponse.json({
+          id: existingId, serialNumber: sn, clientItemSn: clientItemSnVal, faultDescription: fd,
+          itemId: resolvedItemId, itemName: resolvedItemName, partNumber: resolvedPartNumber,
+          preSwapped: true, workOrderId, createdAt: new Date(), location: 'CLIENT_WAREHOUSE',
+          pickedUpByName: creator?.name ?? null,
+        }, { status: 201 })
+      } else {
+        // Non-SN item from warehouse
+        await prisma.$executeRaw`
+          UPDATE "WarehouseItem"
+          SET "mainWarehouse" = "mainWarehouse" - 1, "updatedAt" = NOW()
+          WHERE id = ${resolvedItemId}
+        `
+        const newSnId = randomUUID()
+        await prisma.$executeRaw`
+          INSERT INTO "SerialNumberStock" (
+            id, "itemId", "serialNumber", "faultDescription",
+            location, "technicianId", status,
+            "isClientPart", "clientPartStatus",
+            "interventionId", "workOrderId",
+            "preSwapped", "clientItemSn", "pickedUpById",
+            "createdAt", "updatedAt"
+          )
+          VALUES (
+            ${newSnId}, ${resolvedItemId}, ${sn}, ${fd},
+            'CLIENT_WAREHOUSE', ${resolvedTechId}, 'AVAILABLE',
+            true, 'IN_TRANSIT'::"ClientPartStatus",
+            ${interventionId}, ${workOrderId},
+            true, ${clientItemSnVal}, ${payload.userId},
+            NOW(), NOW()
+          )
+        `
+        await prisma.itemMovement.create({
+          data: {
+            itemId: resolvedItemId,
+            movementType: 'USE',
+            quantity: 1,
+            notes: `Swap de armazém — entregue ao cliente${fd ? `: ${fd}` : ''}`,
+            createdById: payload.userId,
+          },
+        })
+        return NextResponse.json({
+          id: newSnId, serialNumber: sn, clientItemSn: clientItemSnVal, faultDescription: fd,
+          itemId: resolvedItemId, itemName: resolvedItemName, partNumber: resolvedPartNumber,
+          preSwapped: true, workOrderId, createdAt: new Date(), location: 'CLIENT_WAREHOUSE',
+          pickedUpByName: creator?.name ?? null,
+        }, { status: 201 })
+      }
+    }
 
     // For preSwapped + known SN: UPDATE the existing tech stock entry instead of inserting
     // (avoids unique constraint on itemId+serialNumber and correctly marks that SN as given to client)
