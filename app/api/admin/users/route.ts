@@ -10,6 +10,7 @@ const CreateUserSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
   password: z.string().min(8, 'Password must be at least 8 characters').max(255),
   role: z.enum(['ADMIN', 'SUPERVISOR', 'TECHNICIAN'] as const, { message: 'Invalid role' }),
+  phones: z.array(z.string()).optional(),
 })
 
 // GET all users (admin only)
@@ -84,12 +85,14 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(data.password)
     const reference = await generateUserReference()
 
+    const phones = (data.phones ?? []).filter((p: string) => p.trim())
     const user = await prisma.user.create({
       data: {
         email: data.email,
         password: hashedPassword,
         name: data.name,
         role: data.role,
+        phones,
       },
       select: {
         id: true,

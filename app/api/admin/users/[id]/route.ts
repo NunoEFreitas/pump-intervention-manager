@@ -35,11 +35,11 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const refRow = await prisma.$queryRaw<{ reference: string | null }[]>`
-      SELECT reference FROM "User" WHERE id = ${id}
+    const extraRow = await prisma.$queryRaw<{ reference: string | null; phones: string[] }[]>`
+      SELECT reference, phones FROM "User" WHERE id = ${id}
     `
 
-    return NextResponse.json({ ...user, reference: refRow[0]?.reference ?? null })
+    return NextResponse.json({ ...user, reference: extraRow[0]?.reference ?? null, phones: extraRow[0]?.phones ?? [] })
   } catch (error) {
     console.error('Error fetching user:', error)
     return NextResponse.json(
@@ -77,7 +77,6 @@ export async function PUT(
       role: data.role,
     }
 
-    // Only update password if provided
     if (data.password) {
       updateData.password = await hashPassword(data.password)
     }
@@ -95,7 +94,10 @@ export async function PUT(
       },
     })
 
-    return NextResponse.json(user)
+    const phones = Array.isArray(data.phones) ? data.phones.filter((p: string) => p.trim()) : []
+    await prisma.$executeRaw`UPDATE "User" SET phones = ${phones} WHERE id = ${id}`
+
+    return NextResponse.json({ ...user, phones })
   } catch (error) {
     console.error('Error updating user:', error)
     return NextResponse.json(

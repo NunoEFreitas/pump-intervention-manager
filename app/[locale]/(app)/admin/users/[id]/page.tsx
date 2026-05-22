@@ -10,6 +10,7 @@ interface User {
   name: string
   email: string
   role: string
+  phones: string[]
   createdAt: string
   _count?: {
     assignedInterventions: number
@@ -29,6 +30,7 @@ export default function EditUserPage() {
     email: '',
     password: '',
     role: 'TECHNICIAN',
+    phones: [] as string[],
   })
 
   const tAdmin = useTranslations('admin')
@@ -66,6 +68,7 @@ export default function EditUserPage() {
         email: data.email,
         password: '',
         role: data.role,
+        phones: Array.isArray(data.phones) ? data.phones : [],
       })
     } catch (error) {
       console.error('Error fetching user:', error)
@@ -85,9 +88,9 @@ export default function EditUserPage() {
         name: formData.name,
         email: formData.email,
         role: formData.role,
+        phones: formData.phones.filter(p => p.trim()),
       }
 
-      // Only include password if it's been changed
       if (formData.password) {
         updateData.password = formData.password
       }
@@ -200,6 +203,25 @@ export default function EditUserPage() {
                 <option value="ADMIN">{tAdmin('rolesAdmin')}</option>
               </select>
             )}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Telefones / Telemóveis</label>
+          <div className="space-y-2">
+            {formData.phones.map((phone, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  type="tel"
+                  className="input text-gray-800 flex-1"
+                  value={phone}
+                  placeholder="+351 912 345 678"
+                  onChange={e => { const phones = [...formData.phones]; phones[i] = e.target.value; setFormData(f => ({ ...f, phones })) }}
+                />
+                <button type="button" onClick={() => setFormData(f => ({ ...f, phones: f.phones.filter((_, j) => j !== i) }))} className="px-3 text-red-500 hover:text-red-700 text-lg leading-none">&times;</button>
+              </div>
+            ))}
+            <button type="button" onClick={() => setFormData(f => ({ ...f, phones: [...f.phones, ''] }))} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ Adicionar telefone</button>
           </div>
         </div>
 

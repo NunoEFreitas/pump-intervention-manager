@@ -119,6 +119,8 @@ export default function RepairsPage() {
   const [statusFilter, setStatusFilter] = useState('ACTIVE')
   const [search, setSearch] = useState('')
   const [pdfLoading, setPdfLoading] = useState(false)
+  const [sortBy, setSortBy] = useState<'sentAt' | 'clientName' | 'itemName'>('sentAt')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   // ── Create Repair Modal ──────────────────────────────────────────────────
   const [showCreate, setShowCreate] = useState(false)
@@ -258,16 +260,28 @@ export default function RepairsPage() {
     } catch { /* ignore */ } finally { setPdfLoading(false) }
   }
 
-  const filtered = jobs.filter(j => {
-    if (!search) return true
-    const s = search.toLowerCase()
-    return (
-      j.itemName.toLowerCase().includes(s) ||
-      j.partNumber.toLowerCase().includes(s) ||
-      (j.snNumber?.toLowerCase().includes(s) ?? false) ||
-      (j.problem?.toLowerCase().includes(s) ?? false)
-    )
-  })
+  const filtered = jobs
+    .filter(j => {
+      if (!search) return true
+      const s = search.toLowerCase()
+      return (
+        j.itemName.toLowerCase().includes(s) ||
+        j.partNumber.toLowerCase().includes(s) ||
+        (j.snNumber?.toLowerCase().includes(s) ?? false) ||
+        (j.problem?.toLowerCase().includes(s) ?? false)
+      )
+    })
+    .sort((a, b) => {
+      let cmp = 0
+      if (sortBy === 'sentAt') {
+        cmp = new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+      } else if (sortBy === 'clientName') {
+        cmp = (a.clientName ?? '').localeCompare(b.clientName ?? '')
+      } else {
+        cmp = a.itemName.localeCompare(b.itemName)
+      }
+      return sortDir === 'desc' ? -cmp : cmp
+    })
 
   return (
     <div className="px-4 sm:px-0">
@@ -288,13 +302,49 @@ export default function RepairsPage() {
 
       {/* Filters */}
       <div className="flex flex-col gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="Pesquisar peça, fornecedor, problema..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="input text-gray-800 w-full"
-        />
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Pesquisar..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="input text-gray-800 min-w-0 flex-1"
+          />
+          <div className="flex items-center gap-1 shrink-0">
+            {([
+              { key: 'sentAt', label: 'Data' },
+              { key: 'clientName', label: 'Cliente' },
+              { key: 'itemName', label: 'Artigo' },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  if (sortBy === key) {
+                    setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                  } else {
+                    setSortBy(key)
+                    setSortDir(key === 'sentAt' ? 'desc' : 'asc')
+                  }
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  sortBy === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+                {sortBy === key && (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {sortDir === 'desc'
+                      ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                      : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                    }
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="flex gap-2 flex-wrap">
           {FILTER_OPTIONS.map(opt => (
             <button

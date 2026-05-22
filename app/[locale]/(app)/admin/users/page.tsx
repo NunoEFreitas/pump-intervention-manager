@@ -20,9 +20,7 @@ export default function AdminUsersPage() {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations('admin')
-  const tAuth = useTranslations('auth')
   const tCommon = useTranslations('common')
-  const tNav = useTranslations('nav')
 
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,51 +108,35 @@ export default function AdminUsersPage() {
           <h2 className="text-xl font-bold text-gray-900">{t('userManagement')}</h2>
           <button onClick={() => router.push(`/${locale}/admin/users/new`)} className="btn btn-primary w-full sm:w-auto text-sm">{t('addUser')}</button>
         </div>
-        <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">ID</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{tAuth('name')}</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">{tAuth('email')}</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">{t('role')}</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">{tNav('interventions')}</th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">{t('joined')}</th>
-                <th className="px-4 sm:px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {users.map((user) => (
-                <tr key={user.id} className={`hover:bg-gray-50 ${user.blocked ? 'opacity-60' : ''}`}>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden sm:table-cell">
-                    {user.reference
-                      ? <span className="text-xs font-mono font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{user.reference}</span>
-                      : <span className="text-xs text-gray-400">—</span>}
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                      {user.blocked && <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium">{t('blocked')}</span>}
-                    </div>
-                    <div className="text-xs text-gray-500 sm:hidden">{user.email}</div>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden sm:table-cell"><div className="text-sm text-gray-600">{user.email}</div></td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                    <span className={`text-xs px-2 py-1 rounded-full ${getRoleBadgeColor(user.role)}`}>{getRoleLabel(user.role)}</span>
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden md:table-cell"><div className="text-sm text-gray-600">{user._count?.assignedInterventions || 0}</div></td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap hidden lg:table-cell"><div className="text-sm text-gray-600">{new Date(user.createdAt).toLocaleDateString()}</div></td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onClick={() => router.push(`/${locale}/admin/users/${user.id}`)} className="text-blue-600 hover:text-blue-900 mr-3">{tCommon('edit')}</button>
-                    <button onClick={() => handleToggleBlock(user.id, !user.blocked)} className={`mr-3 ${user.blocked ? 'text-green-600 hover:text-green-900' : 'text-orange-600 hover:text-orange-900'}`}>
-                      {user.blocked ? t('unblock') : t('block')}
-                    </button>
-                    <button onClick={() => handleDeleteUser(user.id)} className="text-red-600 hover:text-red-900">{tCommon('delete')}</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="divide-y divide-gray-100">
+          {users.map((user) => (
+            <div key={user.id} className={`flex items-center gap-3 py-3 ${user.blocked ? 'opacity-60' : ''}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                  <span className="text-sm font-semibold text-gray-900 truncate">{user.name}</span>
+                  {user.reference && (
+                    <span className="text-xs font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">{user.reference}</span>
+                  )}
+                  {user.blocked && (
+                    <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-700 rounded font-medium shrink-0">{t('blocked')}</span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span className="truncate">{user.email}</span>
+                  <span className="text-gray-300">·</span>
+                  <span>{new Date(user.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full shrink-0 ${getRoleBadgeColor(user.role)}`}>{getRoleLabel(user.role)}</span>
+              <div className="flex items-center gap-3 shrink-0 text-sm font-medium">
+                <button onClick={() => router.push(`/${locale}/admin/users/${user.id}`)} className="text-blue-600 hover:text-blue-800">{tCommon('edit')}</button>
+                <button onClick={() => handleToggleBlock(user.id, !user.blocked)} className={user.blocked ? 'text-green-600 hover:text-green-800' : 'text-orange-500 hover:text-orange-700'}>
+                  {user.blocked ? t('unblock') : t('block')}
+                </button>
+                <button onClick={() => handleDeleteUser(user.id)} className="text-red-500 hover:text-red-700">{tCommon('delete')}</button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

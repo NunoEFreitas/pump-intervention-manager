@@ -18,6 +18,7 @@ model User {
   name                    String
   role                    UserRole       @default(TECHNICIAN)
   blocked                 Boolean        @default(false)
+  phones                  String[]       @default([])
   clientId                String?
   clientRef               Client?        @relation("ClientUsers", fields: [clientId], references: [id])
   createdAt               DateTime       @default(now())

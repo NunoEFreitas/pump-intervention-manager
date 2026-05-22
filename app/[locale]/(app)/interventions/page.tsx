@@ -13,6 +13,7 @@ interface Intervention {
   scheduledDate: string | null
   scheduledTime: string | null
   createdAt: string
+  updatedAt: string
   breakdown: string | null
   comments: string | null
   client: {
@@ -43,6 +44,8 @@ function InterventionsContent() {
   const [error, setError] = useState('')
   const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'ALL')
   const [clientSearch, setClientSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt' | 'clientName'>('createdAt')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
   const getStatusBorder = (status: string): string => {
     switch (status) {
@@ -113,6 +116,15 @@ function InterventionsContent() {
   const filteredInterventions = interventions
     .filter(i => statusFilter === 'ALL' || i.status === statusFilter)
     .filter(i => clientSearch === '' || i.client.name.toLowerCase().includes(clientSearch.toLowerCase()) || i.reference?.toLowerCase().includes(clientSearch.toLowerCase()))
+    .sort((a, b) => {
+      let cmp = 0
+      if (sortBy === 'clientName') {
+        cmp = a.client.name.localeCompare(b.client.name)
+      } else {
+        cmp = new Date(a[sortBy]).getTime() - new Date(b[sortBy]).getTime()
+      }
+      return sortDir === 'desc' ? -cmp : cmp
+    })
 
   if (loading) return <div className="text-center py-12 text-gray-600">{tCommon('loading')}</div>
 
@@ -156,14 +168,48 @@ function InterventionsContent() {
       </div>
 
       <div className="card mb-6">
-        <div className="mb-4">
+        <div className="flex items-center gap-2 mb-4">
           <input
             type="text"
-            className="input"
-            placeholder={`${tCommon('search')} ${t('fieldsClient').toLowerCase()}...`}
+            className="input min-w-0 flex-1"
+            placeholder={`${tCommon('search')}...`}
             value={clientSearch}
             onChange={(e) => setClientSearch(e.target.value)}
           />
+          <div className="flex items-center gap-1 shrink-0">
+            {([
+              { key: 'createdAt', label: 'Criação' },
+              { key: 'updatedAt', label: 'Atualização' },
+              { key: 'clientName', label: 'Cliente' },
+            ] as const).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => {
+                  if (sortBy === key) {
+                    setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+                  } else {
+                    setSortBy(key)
+                    setSortDir(key === 'clientName' ? 'asc' : 'desc')
+                  }
+                }}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  sortBy === key
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {label}
+                {sortBy === key && (
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    {sortDir === 'desc'
+                      ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                      : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                    }
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap">
           {['ALL', 'OPEN', 'ASSIGNED', 'IN_PROGRESS', 'PENDING_PARTS', 'QUALITY_ASSESSMENT', 'COMPLETED', 'CANCELED'].map((status) => (
