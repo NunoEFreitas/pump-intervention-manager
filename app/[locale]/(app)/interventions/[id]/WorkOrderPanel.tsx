@@ -125,6 +125,18 @@ export default function WorkOrderPanel({
 
   const [showSessionForm, setShowSessionForm] = useState(false)
   const [sessionForm, setSessionForm] = useState({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' })
+
+  const todayString = () => new Date().toISOString().slice(0, 10)
+  const currentHourString = () => {
+    const now = new Date()
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  }
+  const openSessionForm = () => {
+    const today = todayString()
+    const endHour = currentHourString()
+    setSessionForm({ startDate: today, startTime: '', endDate: today, endTime: endHour, duration: '' })
+    setShowSessionForm(true)
+  }
   const [sessionSaving, setSessionSaving] = useState(false)
 
   const [showAddPart, setShowAddPart] = useState(false)
@@ -319,7 +331,7 @@ export default function WorkOrderPanel({
         body: JSON.stringify({
           startDate: sessionForm.startDate || null,
           startTime: sessionForm.startTime || null,
-          endDate: sessionForm.endDate || null,
+          endDate: sessionForm.startDate || null,
           endTime: sessionForm.endTime || null,
           duration: parseFloat(sessionForm.duration),
         }),
@@ -342,6 +354,8 @@ export default function WorkOrderPanel({
   }
 
   const updateSessionForm = (patch: Partial<typeof sessionForm>) => {
+    // Keeping start/end date in sync — they're always the same day
+    if (patch.startDate) patch.endDate = patch.startDate
     const next = { ...sessionForm, ...patch }
     const dur = calcDuration(next.startDate, next.startTime, next.endDate, next.endTime)
     setSessionForm({ ...next, duration: dur || next.duration })
@@ -352,39 +366,39 @@ export default function WorkOrderPanel({
 
   return (
     <>
-      <div className="mt-2 border border-blue-200 rounded-xl bg-white">
+      <div className="mt-4 rounded-xl bg-white shadow-lg ring-1 ring-black/8 overflow-hidden">
 
-        {/* Panel header */}
-        <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b rounded-t-xl">
+        {/* Panel header — navy strip */}
+        <div className="flex items-center justify-between px-5 py-3.5" style={{ background: '#1e3a5f' }}>
           <div className="flex items-center gap-3 min-w-0">
-            {wo?.reference && <span className="font-mono font-bold text-gray-800 shrink-0">{wo.reference}</span>}
-            <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${form.internal ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+            {wo?.reference && <span className="font-mono font-bold text-white shrink-0">{wo.reference}</span>}
+            <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-xs font-semibold ${form.internal ? 'bg-blue-300/30 text-blue-100 ring-1 ring-blue-300/40' : 'bg-orange-300/30 text-orange-100 ring-1 ring-orange-300/40'}`}>
               {form.internal ? 'Interno' : 'Externo'}
             </span>
-            {wo && <span className="text-xs text-gray-400 truncate">{new Date(wo.createdAt).toLocaleDateString()} · {wo.createdBy.name}</span>}
-            {!isEdit && <span className="text-sm font-semibold text-gray-700">Nova Ordem de Trabalho</span>}
+            {wo && <span className="text-xs text-blue-200 truncate">{new Date(wo.createdAt).toLocaleDateString()} · {wo.createdBy.name}</span>}
+            {!isEdit && <span className="text-sm font-semibold text-white">Nova Ordem de Trabalho</span>}
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+          <button onClick={onClose} className="p-1 text-blue-200 hover:text-white rounded-lg shrink-0 transition-colors">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
 
         {/* Tabs */}
         {isEdit && (
-          <div className="flex border-b px-4">
-            <button onClick={() => setTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+          <div className="flex border-b border-gray-200 px-4 bg-gray-50">
+            <button onClick={() => setTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'details' ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Detalhes
             </button>
-            <button onClick={() => setTab('hours')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'hours' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('hours')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'hours' ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Horas{(wo!.sessions?.length ?? 0) > 0 ? ` (${wo!.sessions.length})` : ''}
             </button>
-            <button onClick={() => setTab('parts')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'parts' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('parts')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'parts' ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Peças{wo!.parts.length > 0 ? ` (${wo!.parts.length})` : ''}
             </button>
-            <button onClick={() => setTab('swap')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'swap' ? 'border-green-600 text-green-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('swap')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'swap' ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Swap{collectedParts.filter(p => p.preSwapped).length > 0 ? ` (${collectedParts.filter(p => p.preSwapped).length})` : ''}
             </button>
-            <button onClick={() => setTab('client-repair')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'client-repair' ? 'border-amber-500 text-amber-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <button onClick={() => setTab('client-repair')} className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${tab === 'client-repair' ? 'border-[#1e3a5f] text-[#1e3a5f]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               Rep. Cliente{collectedParts.filter(p => !p.preSwapped).length > 0 ? ` (${collectedParts.filter(p => !p.preSwapped).length})` : ''}
             </button>
           </div>
@@ -537,18 +551,14 @@ export default function WorkOrderPanel({
               {showSessionForm ? (
                 <div className="border border-blue-200 rounded-lg p-4 bg-blue-50 space-y-3">
                   <h4 className="font-medium text-gray-800">Nova Sessão</h4>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Data início</label>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Data</label>
                       <input type="date" className="input text-gray-800" value={sessionForm.startDate} onChange={e => updateSessionForm({ startDate: e.target.value })} />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Hora início</label>
                       <input type="time" className="input text-gray-800" value={sessionForm.startTime} onChange={e => updateSessionForm({ startTime: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">Data fim</label>
-                      <input type="date" className="input text-gray-800" value={sessionForm.endDate} onChange={e => updateSessionForm({ endDate: e.target.value })} />
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Hora fim</label>
@@ -563,11 +573,11 @@ export default function WorkOrderPanel({
                     <button onClick={handleAddSession} disabled={sessionSaving || !sessionForm.duration} className="btn btn-primary text-sm disabled:opacity-50">
                       {sessionSaving ? 'A guardar...' : 'Adicionar'}
                     </button>
-                    <button onClick={() => { setShowSessionForm(false); setSessionForm({ startDate: '', startTime: '', endDate: '', endTime: '', duration: '' }) }} className="btn btn-secondary text-sm">Cancelar</button>
+                    <button onClick={() => setShowSessionForm(false)} className="btn btn-secondary text-sm">Cancelar</button>
                   </div>
                 </div>
               ) : canEdit && (
-                <button onClick={() => setShowSessionForm(true)} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                <button onClick={openSessionForm} className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
                   + Adicionar Sessão
                 </button>
               )}
