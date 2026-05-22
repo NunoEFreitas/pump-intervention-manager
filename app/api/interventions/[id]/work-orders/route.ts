@@ -74,8 +74,8 @@ export async function GET(
 
   // Fetch extra scalar fields
   const extraRows = woIds.length > 0
-    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; interventionType: string | null; transportGuide: string | null; fromAddress: string | null; internal: boolean }[]>`
-        SELECT wo.id, wo.reference, wo.km, wo."locationEquipmentId", wo."interventionType", wo."transportGuide", wo."fromAddress", wo."internal"
+    ? await prisma.$queryRaw<{ id: string; reference: string | null; km: number | null; locationEquipmentId: string | null; regulador: string | null; interventionType: string | null; transportGuide: string | null; fromAddress: string | null; internal: boolean }[]>`
+        SELECT wo.id, wo.reference, wo.km, wo."locationEquipmentId", wo.regulador, wo."interventionType", wo."transportGuide", wo."fromAddress", wo."internal"
         FROM "WorkOrder" wo
         WHERE wo.id::text = ANY(${woIds}::text[])
       `
@@ -127,6 +127,21 @@ export async function GET(
     helperMap[r.workOrderId].push(r)
   }
 
+  // Count repair job parts per work order
+  const repairPartCountRows = woIds.length > 0
+    ? await prisma.$queryRaw<{ workOrderId: string; count: bigint }[]>`
+        SELECT sn."workOrderId", COUNT(rjp.id) AS count
+        FROM "SerialNumberStock" sn
+        JOIN "PartRepairJob" rj  ON rj.id  = sn."clientRepairJobId"
+        JOIN "RepairJobPart"  rjp ON rjp."jobId" = rj.id
+        WHERE sn."workOrderId"::text = ANY(${woIds}::text[])
+          AND sn."isClientPart" = true
+          AND sn."clientRepairJobId" IS NOT NULL
+        GROUP BY sn."workOrderId"
+      `
+    : []
+  const repairPartCountMap = Object.fromEntries(repairPartCountRows.map(r => [r.workOrderId, Number(r.count)]))
+
   // Enrich parts with serial numbers
   const enrichedParts: Record<string, any[]> = {}
   for (const wo of workOrders) {
@@ -149,6 +164,7 @@ export async function GET(
     reference: extraMap[wo.id]?.reference ?? null,
     km: extraMap[wo.id]?.km ?? null,
     locationEquipmentId: extraMap[wo.id]?.locationEquipmentId ?? null,
+    regulador: extraMap[wo.id]?.regulador ?? null,
     interventionType: extraMap[wo.id]?.interventionType ?? null,
     transportGuide: extraMap[wo.id]?.transportGuide ?? null,
     fromAddress: extraMap[wo.id]?.fromAddress ?? null,
@@ -157,6 +173,7 @@ export async function GET(
     vehicles: vehicleMap[wo.id] ?? [],
     helpers: helperMap[wo.id] ?? [],
     parts: enrichedParts[wo.id] ?? [],
+    repairPartsCount: repairPartCountMap[wo.id] ?? 0,
   }))
 
   return NextResponse.json(enriched)
@@ -171,7 +188,7 @@ export async function POST(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id: interventionId } = await params
-  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
+  const { description, timeSpent, km, equipmentId, regulador, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
 
   if (!description?.trim()) {
     return NextResponse.json({ error: 'Description is required' }, { status: 400 })
@@ -199,6 +216,7 @@ export async function POST(
     SET reference             = ${reference},
         km                    = ${km !== undefined && km !== null && km !== '' ? parseFloat(km) : null},
         "locationEquipmentId" = ${equipmentId || null},
+        regulador             = ${regulador || null},
         "interventionType"    = ${interventionType || null},
         "transportGuide"      = ${transportGuide || null},
         "fromAddress"         = ${fromAddress || null},
@@ -241,6 +259,7 @@ export async function POST(
     reference,
     km: km ? parseFloat(km) : null,
     locationEquipmentId: equipmentId || null,
+    regulador: regulador || null,
     interventionType: interventionType || null,
     transportGuide: transportGuide || null,
     fromAddress: fromAddress || null,

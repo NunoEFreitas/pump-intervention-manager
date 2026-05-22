@@ -146,7 +146,7 @@ export default function InterventionDetailPage() {
   const [showDateForm, setShowDateForm] = useState(false)
   const [dateFormData, setDateFormData] = useState({ scheduledDate: '', scheduledTime: '' })
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
-  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number; noStock?: boolean }[]>([])
   const [editData, setEditData] = useState({
     status: '',
     breakdown: '',
@@ -158,7 +158,9 @@ export default function InterventionDetailPage() {
     warranty: false,
   })
   const [printCompany, setPrintCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string } | null>(null)
+  const [ovmRegulators, setOvmRegulators] = useState<{ id: string; name: string }[]>([])
   const [signatureModalWO, setSignatureModalWO] = useState<WorkOrder | null>(null)
+  const [modalRepairParts, setModalRepairParts] = useState<any[]>([])
   const [savedPdfs, setSavedPdfs] = useState<Record<string, { id: string; createdAt: string; clientSignature: string | null; techSignature: string | null }[]>>({})
   const [ovms, setOvms] = useState<{ id: string; data: OVMData; createdAt: string }[]>([])
   const [showOVMForm, setShowOVMForm] = useState(false)
@@ -218,6 +220,11 @@ export default function InterventionDetailPage() {
         setPrintCompany({ name: '', email: '', address: '', phones: [], faxes: [], logo: '' })
       }
     }
+    try {
+      const token = localStorage.getItem('token')
+      const rp = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } })
+      setModalRepairParts(rp.ok ? await rp.json() : [])
+    } catch { setModalRepairParts([]) }
     setSignatureModalWO(wo)
   }
 
@@ -239,6 +246,9 @@ export default function InterventionDetailPage() {
       fetchPartRequests()
       fetchPhotos()
       fetchHistory()
+      const token = localStorage.getItem('token')
+      fetch('/api/admin/ovm-regulators', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : []).then(setOvmRegulators).catch(() => {})
     }
   }, [params.id])
 
@@ -533,7 +543,7 @@ export default function InterventionDetailPage() {
       })
       const data = await response.json()
       const list = Array.isArray(data) ? data : (data.items ?? [])
-      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0 })))
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0, noStock: !!i.noStock })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     }
@@ -1290,27 +1300,7 @@ export default function InterventionDetailPage() {
               <div className="space-y-2 mt-2">
                 {workOrders.map((wo) => (
                   <div key={wo.id}>
-                    <button
-                      onClick={() => setActiveWOId(activeWOId === wo.id ? null : wo.id)}
-                      className={`w-full text-left border rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors group ${activeWOId === wo.id ? 'border-blue-300 bg-blue-50' : ''}`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {wo.reference && <span className="font-mono font-semibold text-gray-700 text-sm shrink-0">{wo.reference}</span>}
-                          <span className={wo.internal ? 'shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700' : 'shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700'}>
-                            {wo.internal ? t('internal') : t('external')}
-                          </span>
-                          <span className="text-gray-800 text-sm truncate">{wo.description}</span>
-                        </div>
-                        <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
-                          {wo.timeSpent ? <span className="text-blue-700 font-medium">{wo.timeSpent}h</span> : null}
-                          {wo.parts.length > 0 && <span>{wo.parts.length} pç</span>}
-                          <svg className={`w-4 h-4 transition-transform ${activeWOId === wo.id ? 'rotate-90 text-blue-500' : 'text-gray-400 group-hover:text-gray-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </div>
-                      </div>
-                    </button>
-
-                    {activeWOId === wo.id && (
+                    {activeWOId === wo.id ? (
                       <WorkOrderPanel
                         wo={wo}
                         interventionId={intervention.id}
@@ -1327,6 +1317,26 @@ export default function InterventionDetailPage() {
                         onDelete={() => { deleteWorkOrder(wo.id); setActiveWOId(null) }}
                         onPrint={handlePrintWorkOrder}
                       />
+                    ) : (
+                      <button
+                        onClick={() => setActiveWOId(wo.id)}
+                        className="w-full text-left border rounded-lg px-4 py-3 hover:bg-gray-50 transition-colors group"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {wo.reference && <span className="font-mono font-semibold text-gray-700 text-sm shrink-0">{wo.reference}</span>}
+                            <span className={wo.internal ? 'shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700' : 'shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700'}>
+                              {wo.internal ? t('internal') : t('external')}
+                            </span>
+                            <span className="text-gray-800 text-sm truncate">{wo.description}</span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0 text-xs text-gray-500">
+                            {wo.timeSpent ? <span className="text-blue-700 font-medium">{wo.timeSpent}h</span> : null}
+                            {(wo.parts.length + (wo.repairPartsCount ?? 0)) > 0 && <span>{wo.parts.length + (wo.repairPartsCount ?? 0)} pç</span>}
+                            <svg className="w-4 h-4 text-gray-400 group-hover:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </div>
+                        </div>
+                      </button>
                     )}
                   </div>
                 ))}
@@ -1357,7 +1367,7 @@ export default function InterventionDetailPage() {
               saving={ovmSaving}
               onSave={saveOVM}
               onCancel={() => setShowOVMForm(false)}
-              onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+              onPrint={(data, regulatorName) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, regulatorName)}
               equipment={intervention?.location?.equipment ?? []}
               locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
             />
@@ -1376,7 +1386,12 @@ export default function InterventionDetailPage() {
                 </span>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => intervention && printOVMPDF(ovm.data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                    onClick={() => {
+                      if (!intervention) return
+                      const effectiveId = intervention.location?.ovmRegulatorId || ovm.data.regulatorId
+                      const regulatorName = effectiveId ? ovmRegulators.find(r => r.id === effectiveId)?.name : undefined
+                      printOVMPDF(ovm.data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, regulatorName)
+                    }}
                     className="text-xs text-gray-500 hover:text-gray-700 font-medium"
                   >
                     PDF
@@ -1402,7 +1417,7 @@ export default function InterventionDetailPage() {
                   saving={ovmSaving}
                   onSave={saveOVM}
                   onCancel={() => setEditingOVMId(null)}
-                  onPrint={(data) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' })}
+                  onPrint={(data, regulatorName) => intervention && printOVMPDF(data, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, regulatorName)}
                   equipment={intervention?.location?.equipment ?? []}
                   locationOvmRegulatorId={intervention?.location?.ovmRegulatorId ?? null}
                 />
@@ -1771,11 +1786,18 @@ export default function InterventionDetailPage() {
       {signatureModalWO && intervention && (
         <WorkOrderSignatureModal
           workOrder={signatureModalWO}
+          repairParts={modalRepairParts}
           intervention={intervention}
           onClose={() => setSignatureModalWO(null)}
           onGenerate={async (clientSig, techSig) => {
             const wo = signatureModalWO
-            printWorkOrderPDF(wo, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, clientSig, techSig)
+            let repairParts: any[] = []
+            try {
+              const token = localStorage.getItem('token')
+              const rp = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } })
+              if (rp.ok) repairParts = await rp.json()
+            } catch { /* non-blocking */ }
+            printWorkOrderPDF({ ...wo, repairParts }, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, clientSig, techSig)
             setSignatureModalWO(null)
             try {
               const token = localStorage.getItem('token')

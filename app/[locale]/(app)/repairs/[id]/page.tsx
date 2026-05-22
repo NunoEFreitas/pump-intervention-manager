@@ -73,7 +73,7 @@ interface Technician { id: string; name: string }
 
 interface Photo { id: string; filename: string; mimeType: string; createdAt: string }
 interface RepairPart { id: string; itemId: string; quantity: number; notes: string | null; addedAt: string; itemName: string; partNumber: string; addedByName: string }
-interface WarehouseItem { id: string; itemName: string; partNumber: string; mainWarehouse: number }
+interface WarehouseItem { id: string; itemName: string; partNumber: string; mainWarehouse: number; noStock?: boolean }
 interface PhotoData extends Photo { data: string }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -264,7 +264,7 @@ export default function RepairDetailPage() {
       const res = await fetch('/api/warehouse?limit=100', { headers: { Authorization: `Bearer ${token()}` } })
       const d = await res.json()
       const list = Array.isArray(d) ? d : (d.items ?? [])
-      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, mainWarehouse: i.mainWarehouse })))
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, mainWarehouse: i.mainWarehouse, noStock: !!i.noStock })))
     } catch { /* ignore */ }
   }
 
@@ -989,10 +989,11 @@ export default function RepairDetailPage() {
             </div>
             <div className="border border-gray-200 rounded-lg max-h-48 overflow-y-auto mb-4">
               {warehouseItems.filter(i => { if (!partSearch) return true; const s = partSearch.toLowerCase(); return i.itemName.toLowerCase().includes(s) || i.partNumber.toLowerCase().includes(s) }).map(i => (
-                <button key={i.id} onClick={() => setSelectedItemId(i.id)} className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 hover:bg-gray-50 transition-colors ${selectedItemId === i.id ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-800'}`}>
-                  <span>{i.itemName}</span>
-                  <span className="text-gray-400 ml-1.5 text-xs">{i.partNumber}</span>
-                  <span className={`ml-2 text-xs font-semibold ${i.mainWarehouse > 0 ? 'text-green-600' : 'text-red-500'}`}>Stock: {i.mainWarehouse}</span>
+                <button key={i.id} onClick={() => setSelectedItemId(i.id)} className={`w-full text-left px-3 py-2 text-sm border-b last:border-0 hover:bg-gray-50 transition-colors flex items-center gap-2 ${selectedItemId === i.id ? 'bg-blue-50 font-medium text-blue-700' : 'text-gray-800'}`}>
+                  {i.noStock && <span className="shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700">Livre</span>}
+                  <span className="flex-1 truncate">{i.itemName}</span>
+                  {!i.noStock && <span className="text-gray-400 text-xs shrink-0">{i.partNumber}</span>}
+                  {!i.noStock && <span className={`text-xs font-semibold shrink-0 ${i.mainWarehouse > 0 ? 'text-green-600' : 'text-red-500'}`}>Stock: {i.mainWarehouse}</span>}
                 </button>
               ))}
             </div>

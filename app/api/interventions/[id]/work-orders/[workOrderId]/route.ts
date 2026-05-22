@@ -11,7 +11,7 @@ export async function PUT(
   if (!payload) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { workOrderId } = await params
-  const { description, timeSpent, km, equipmentId, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
+  const { description, timeSpent, km, equipmentId, regulador, interventionType, transportGuide, fromAddress, internal, vehicleIds, helperIds } = await request.json()
 
   if (!description?.trim()) {
     return NextResponse.json({ error: 'Description is required' }, { status: 400 })
@@ -27,6 +27,7 @@ export async function PUT(
     UPDATE "WorkOrder"
     SET km                    = ${km !== undefined && km !== null && km !== '' ? parseFloat(km) : null},
         "locationEquipmentId" = ${equipmentId || null},
+        regulador             = ${regulador || null},
         "interventionType"    = ${interventionType || null},
         "transportGuide"      = ${transportGuide || null},
         "fromAddress"         = ${fromAddress || null},

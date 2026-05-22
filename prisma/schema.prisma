@@ -217,6 +217,7 @@ model WarehouseItem {
   destructionStock    Int                 @default(0)  // Count of items in destruction
   categoryId          String?
   category            ItemCategory?       @relation(fields: [categoryId], references: [id])
+  noStock             Boolean             @default(false) // Item has no stock tracking — designation only
   tracksSerialNumbers Boolean             @default(false) // Whether this item uses SN tracking
   autoSn              Boolean             @default(false) // Auto-generate serial numbers on add stock
   snExample           String?             // Prefix for auto-generated SNs (e.g. "PTT" → "PTT-1", "PTT-2")
@@ -363,6 +364,8 @@ model WorkOrder {
   timeSpent             Float?
   km                    Float?
   locationEquipmentId   String?
+  regulador             String?
+  isq                   String?
   interventionType      String?
   transportGuide        String?
   fromAddress           String?

@@ -49,7 +49,8 @@ function ensaioTable(idx: number, ensaio: OVMData['ensaios'][number], fuelColumn
 export function printOVMPDF(
   data: OVMData,
   intervention: PrintIntervention,
-  company: PrintCompany
+  company: PrintCompany,
+  regulatorName?: string
 ): void {
   const fuelColumns: [string, string, string, string] = Array.isArray(data.fuelColumns) && data.fuelColumns.length === 4
     ? data.fuelColumns as [string, string, string, string]
@@ -111,7 +112,8 @@ export function printOVMPDF(
 
   <div class="main-title">
     <div class="t1">boletin de intervenção CMAC</div>
-    ${equipmentLine ? `<div style="font-size:9pt">${equipmentLine}</div>` : ''}
+    ${equipmentLine ? `<div style="font-size:9pt">equipamento do cliente: ${equipmentLine}</div>` : ''}
+    ${regulatorName ? `<div style="font-size:9pt">regulador: ${esc(regulatorName)}</div>` : ''}
     <div>Registo de erros dos ensaios efetuados</div>
   </div>
 

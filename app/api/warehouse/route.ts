@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
       }>>`
         SELECT w.id, w."itemName", w."partNumber", w.value, w."mainWarehouse", w."repairStock", w."destructionStock",
                w."tracksSerialNumbers", w."autoSn", w."snExample", w."equipmentTypeId", w."brandId",
-               w."ean13", w."createdAt", w."updatedAt",
+               w."ean13", w."noStock", w."createdAt", w."updatedAt",
                et.name AS "equipmentTypeName", eb.name AS "brandName",
                w."categoryId", ic.name AS "categoryName"
         FROM "WarehouseItem" w
@@ -174,6 +174,22 @@ export async function POST(request: NextRequest) {
 
     const data = await request.json()
 
+    const isNoStock = data.noStock === true || data.noStock === 'true'
+
+    if (isNoStock) {
+      // No-stock item: only needs a name
+      if (!data.itemName?.trim()) {
+        return NextResponse.json({ error: 'Item name is required' }, { status: 400 })
+      }
+      const itemId = crypto.randomUUID()
+      const now = new Date()
+      await prisma.$executeRaw`
+        INSERT INTO "WarehouseItem" (id, "itemName", "partNumber", value, "mainWarehouse", "tracksSerialNumbers", "noStock", "createdAt", "updatedAt")
+        VALUES (${itemId}, ${data.itemName.trim()}, '', 0, 0, false, true, ${now}::timestamptz, ${now}::timestamptz)
+      `
+      return NextResponse.json({ id: itemId, itemName: data.itemName.trim(), partNumber: '', value: 0, mainWarehouse: 0, noStock: true }, { status: 201 })
+    }
+
     if (!data.partNumber) {
       return NextResponse.json(
         { error: 'Part number is required' },
@@ -234,7 +250,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    return NextResponse.json({ ...item, autoSn, snExample, equipmentTypeId, brandId }, { status: 201 })
+    return NextResponse.json({ ...item, autoSn, snExample, equipmentTypeId, brandId, noStock: false }, { status: 201 })
   } catch (error) {
     console.error('Error creating warehouse item:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

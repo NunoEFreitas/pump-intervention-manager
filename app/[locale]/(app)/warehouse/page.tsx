@@ -16,6 +16,7 @@ interface WarehouseItem {
   activeRepairJobsCount: number
   ean13: string | null
   tracksSerialNumbers: boolean
+  noStock: boolean
   totalTechnicianStock: number
   totalStock: number
   equipmentTypeName: string | null
@@ -651,6 +652,7 @@ export default function WarehousePage() {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <h3 className="text-sm font-semibold text-gray-900 truncate">{item.itemName}</h3>
+                        {item.noStock && <span className="shrink-0 px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded">Livre</span>}
                         {item.tracksSerialNumbers && <span className="shrink-0 px-1.5 py-0.5 text-xs font-medium bg-purple-100 text-purple-800 rounded">SN</span>}
                         {item.ean13 && <span className="shrink-0 text-xs font-mono text-gray-400 hidden sm:inline">{item.ean13}</span>}
                       </div>
@@ -661,13 +663,13 @@ export default function WarehousePage() {
                         {item.partNumber && <span className="text-xs font-mono text-gray-400">{item.partNumber}</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    {!item.noStock && <div className="flex items-center gap-1.5 shrink-0">
                       {item.mainWarehouse > 0 && <div className="px-2.5 py-1 bg-blue-50 rounded-lg text-center"><p className="text-xs text-blue-600 font-medium leading-none mb-0.5">Arm.</p><p className="text-sm font-bold text-blue-900 leading-none">{item.mainWarehouse}</p></div>}
                       {item.totalTechnicianStock > 0 && <div className="px-2.5 py-1 bg-green-50 rounded-lg text-center"><p className="text-xs text-green-600 font-medium leading-none mb-0.5">Téc.</p><p className="text-sm font-bold text-green-900 leading-none">{item.totalTechnicianStock}</p></div>}
                       {item.activeRepairJobsCount > 0 && <div className="px-2.5 py-1 bg-orange-50 rounded-lg text-center"><p className="text-xs text-orange-600 font-medium leading-none mb-0.5">Rep.</p><p className="text-sm font-bold text-orange-900 leading-none">{item.activeRepairJobsCount}</p></div>}
                       {item.clientPartsCount > 0 && <div className="px-2.5 py-1 bg-yellow-50 rounded-lg text-center"><p className="text-xs text-yellow-600 font-medium leading-none mb-0.5">Cli.</p><p className="text-sm font-bold text-yellow-900 leading-none">{item.clientPartsCount}</p></div>}
                       {item.destructionStock > 0 && <div className="px-2.5 py-1 bg-red-50 rounded-lg text-center"><p className="text-xs text-red-600 font-medium leading-none mb-0.5">Dest.</p><p className="text-sm font-bold text-red-900 leading-none">{item.destructionStock}</p></div>}
-                    </div>
+                    </div>}
                   </div>
                 </div>
               ))}

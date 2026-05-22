@@ -26,6 +26,11 @@ interface PrintWorkOrder {
     item: { itemName: string; partNumber: string }
     serialNumbers?: { serialNumber: string }[]
   }[]
+  repairParts?: {
+    repairReference: string | null
+    clientItemName: string
+    parts: { itemName: string; partNumber: string; quantity: number; notes?: string | null }[]
+  }[]
 }
 
 interface PrintIntervention {
@@ -51,24 +56,64 @@ interface PrintIntervention {
 
 function esc(s: string | null | undefined): string {
   if (!s) return ''
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-function calcDuration(start: string | null, end: string | null): string {
-  if (!start || !end) return ''
-  const [sh, sm] = start.split(':').map(Number)
-  const [eh, em] = end.split(':').map(Number)
-  const diff = eh * 60 + em - (sh * 60 + sm)
-  if (diff <= 0) return ''
-  return `${Math.floor(diff / 60)}h ${diff % 60}m`
+const STYLE = `
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; font-size:12px; color:#111; padding:24px; }
+  table { width:100%; border-collapse:collapse; }
+  th { background:#1e3a5f; color:#fff; font-size:10px; font-weight:600; text-transform:uppercase;
+       letter-spacing:.04em; padding:6px 8px; text-align:left; }
+  td { padding:6px 8px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+  tr:last-child td { border-bottom:none; }
+  tr:nth-child(even) td { background:#f9fafb; }
+  .lbl { font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;
+         color:#6b7280;white-space:nowrap;width:1%;padding-right:14px; }
+  .info-table td { border-bottom:none; padding:3px 8px; }
+  .info-table tr:nth-child(even) td { background:transparent; }
+  .section { font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+             color:#1e3a5f;border-bottom:2px solid #1e3a5f;padding-bottom:3px;margin:18px 0 10px; }
+  .badge { padding:2px 7px;border-radius:999px;font-size:9px;font-weight:600; }
+  .sig-page { page-break-before:always; }
+  .sig-row { display:flex;justify-content:space-around;margin-top:40px; }
+  .sig-box { text-align:center; }
+  .sig-label { font-size:11px;font-weight:600;color:#374151;margin-bottom:24px; }
+  .sig-line { width:200px;border-top:1px solid #374151;margin:0 auto; }
+  @media print { body { padding:0; } @page { margin:14mm 12mm; } }
+`
+
+const IV_TYPE_LABEL: Record<string, string> = {
+  ELECTRONIC: 'Eletrónica', HYDRAULIC: 'Hidráulica', COMPUTING: 'Informática', OTHERS: 'Outros',
 }
 
-function sectionHeader(label: string, colspan = 2): string {
-  return `<tr><td colspan="${colspan}" style="border:none;border-top:2px solid #000;border-bottom:2px solid #000;text-align:center;font-weight:bold;font-size:9pt;padding:4px 0;">${label}</td></tr>`
+function companyHeader(company: PrintCompany, title: string, subtitle?: string): string {
+  const logoHtml = company.logo
+    ? `<img src="${esc(company.logo)}" alt="" style="height:44px;object-fit:contain;display:block;">`
+    : ''
+  const info = [
+    company.address ? esc(company.address) : '',
+    company.phones.length ? `Tel: ${company.phones.map(esc).join(' / ')}` : '',
+    company.faxes.length ? `Fax: ${company.faxes.map(esc).join(' / ')}` : '',
+    company.email ? esc(company.email) : '',
+  ].filter(Boolean).join(' &nbsp;·&nbsp; ')
+
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;
+              border-bottom:2px solid #1e3a5f;padding-bottom:12px;margin-bottom:18px;">
+    <div>
+      ${logoHtml}
+      ${!company.logo && company.name ? `<div style="font-size:17px;font-weight:700;color:#1e3a5f">${esc(company.name)}</div>` : ''}
+      ${info ? `<div style="font-size:10px;color:#6b7280;margin-top:3px">${info}</div>` : ''}
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:17px;font-weight:700;color:#1e3a5f">${esc(title)}</div>
+      ${subtitle ? `<div style="font-size:11px;color:#6b7280;margin-top:2px">${esc(subtitle)}</div>` : ''}
+      <div style="font-size:10px;color:#9ca3af;margin-top:3px">
+        ${new Date().toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' })}
+      </div>
+    </div>
+  </div>`
 }
 
 export function printWorkOrderPDF(
@@ -82,251 +127,187 @@ export function printWorkOrderPDF(
   const locationAddr = [intervention.location?.address, intervention.location?.city].filter(Boolean).join(', ')
   const clientAddr = [intervention.client.address, intervention.client.city, intervention.client.postalCode].filter(Boolean).join(', ')
   const destAddr = locationAddr || (intervention.location ? esc(intervention.location.name) : clientAddr)
-  const locationEquipment = intervention.location?.equipment.find((e) => e.id === workOrder.locationEquipmentId)
+  const locationEquipment = intervention.location?.equipment.find(e => e.id === workOrder.locationEquipmentId)
   const firstSession = workOrder.sessions?.[0] ?? null
   const techName = intervention.assignedTo?.name || workOrder.createdBy.name
+  const typeColor = workOrder.internal ? '#1d4ed8' : '#c2410c'
+  const typeBg    = workOrder.internal ? '#eff6ff' : '#fff7ed'
+  const typeBorder = workOrder.internal ? '#bfdbfe' : '#fed7aa'
+  const typeLabel = workOrder.internal ? 'Interno' : 'Externo'
+  const ivTypeLabel = workOrder.interventionType ? IV_TYPE_LABEL[workOrder.interventionType] ?? workOrder.interventionType : ''
 
-  const footerLines = [
-    company.address ? esc(company.address) : '',
-    company.phones.length ? `Telefones: ${company.phones.map(esc).join(' / ')}` : '',
-    company.faxes.length ? `Fax: ${company.faxes.map(esc).join(' / ')}` : '',
-    company.email ? `E-mail: ${esc(company.email)}` : '',
-  ].filter(Boolean)
+  // Info grid rows
+  const infoRows = [
+    `<tr><td class="lbl">Cliente</td><td style="font-weight:600">${esc(intervention.client.name)}</td></tr>`,
+    destAddr ? `<tr><td class="lbl">Morada</td><td>${esc(destAddr)}</td></tr>` : '',
+    intervention.client.phone ? `<tr><td class="lbl">Contacto</td><td>${esc(intervention.client.phone)}</td></tr>` : '',
+    firstSession?.startDate ? `<tr><td class="lbl">Data</td><td>${esc(firstSession.startDate)}</td></tr>` : '',
+    workOrder.transportGuide ? `<tr><td class="lbl">Guia transporte</td><td>${esc(workOrder.transportGuide)}</td></tr>` : '',
+    `<tr><td class="lbl">Técnico</td><td style="font-weight:600">${esc(techName)}</td></tr>`,
+    workOrder.helpers.length > 0 ? `<tr><td class="lbl">Ajudantes</td><td>${esc(workOrder.helpers.map(h => h.name).join(', '))}</td></tr>` : '',
+  ].filter(Boolean).join('')
 
-  const footerHtml = footerLines.join(' &nbsp;—&nbsp; ')
+  const travelRows = [
+    workOrder.vehicles.length > 0 ? `<tr><td class="lbl">Viatura</td><td>${esc(workOrder.vehicles.map(v => [v.plateNumber, v.brand, v.model].filter(Boolean).join(' ')).join(', '))}</td></tr>` : '',
+    workOrder.km != null ? `<tr><td class="lbl">Km</td><td>${workOrder.km}</td></tr>` : '',
+    workOrder.fromAddress ? `<tr><td class="lbl">Origem</td><td>${esc(workOrder.fromAddress)}</td></tr>` : '',
+    destAddr ? `<tr><td class="lbl">Destino</td><td>${esc(destAddr)}</td></tr>` : '',
+    ivTypeLabel ? `<tr><td class="lbl">Tipo intervenção</td><td>${ivTypeLabel}</td></tr>` : '',
+    intervention.bill ? `<tr><td class="lbl">Faturar</td><td>${esc(intervention.client.name)}</td></tr>` : '',
+  ].filter(Boolean).join('')
 
-  const partsRows =
-    workOrder.parts.length > 0
-      ? workOrder.parts
-          .map((p) => {
-            const snText = p.serialNumbers?.length
-              ? ` <span style="color:#555;font-size:8pt;">SN: ${p.serialNumbers.map((s) => esc(s.serialNumber)).join(', ')}</span>`
-              : ''
-            const pn = p.item.partNumber ? ` <span style="color:#666;">(${esc(p.item.partNumber)})</span>` : ''
-            return `<tr><td>${esc(p.item.itemName)}${pn}${snText}</td><td style="text-align:center;width:60px">${p.quantity}</td></tr>`
-          })
-          .join('')
-      : `<tr><td colspan="2" style="text-align:center;color:#aaa;">—</td></tr>`
-
-  const equipmentSection = locationEquipment
-    ? `<table>
-        ${sectionHeader('BOMBAS / EQUIPAMENTOS', 4)}
-        <tr>
-          <th style="width:25%">Tipo</th>
-          <th style="width:25%">Marca</th>
-          <th style="width:25%">Modelo</th>
-          <th style="width:25%">Série</th>
-        </tr>
-        <tr>
-          <td>${esc(locationEquipment.equipmentType.name)}</td>
-          <td>${esc(locationEquipment.brand.name)}</td>
-          <td>${esc(locationEquipment.model)}</td>
-          <td>${esc(locationEquipment.serialNumber)}</td>
-        </tr>
-      </table>`
+  // Sessions
+  const sessionRows = workOrder.sessions.map((s, i) => {
+    const dur = s.duration != null ? `${s.duration.toFixed(2)}h` : ''
+    return `<tr>
+      <td>${i === 0 ? esc(techName) : ''}</td>
+      <td style="text-align:center">${esc(s.startDate || '')}</td>
+      <td style="text-align:center">${esc(s.startTime || '')}</td>
+      <td style="text-align:center">${esc(s.endTime || '')}</td>
+      <td style="text-align:right;font-weight:600;color:#1d4ed8">${esc(dur)}</td>
+    </tr>`
+  }).join('') || `<tr>
+    <td>${esc(techName)}</td><td></td><td></td><td></td><td></td>
+  </tr>`
+  const sessionTotal = workOrder.sessions.reduce((s, x) => s + (x.duration ?? 0), 0)
+  const sessionTotalRow = workOrder.sessions.length > 0
+    ? `<tfoot><tr>
+        <td colspan="4" style="text-align:right;font-weight:700;border-top:1px solid #d1d5db">Total</td>
+        <td style="text-align:right;font-weight:700;color:#1d4ed8;border-top:1px solid #d1d5db">${sessionTotal.toFixed(2)}h</td>
+      </tr></tfoot>`
     : ''
 
-  const helperRow =
-    workOrder.helpers.length > 0
-      ? `<tr><td class="lbl">Nome Ajudante</td><td>${esc(workOrder.helpers.map((h) => h.name).join(', '))}</td></tr>`
+  // Parts — direct
+  const directPartRows = workOrder.parts.map(p => {
+    const sns = p.serialNumbers?.length
+      ? ` <span style="font-size:10px;color:#7c3aed;font-family:monospace">SN: ${p.serialNumbers.map(s => esc(s.serialNumber)).join(', ')}</span>`
       : ''
+    return `<tr>
+      <td>${esc(p.item.itemName)} <span style="font-size:10px;color:#6b7280">${esc(p.item.partNumber)}</span>${sns}</td>
+      <td style="text-align:center;width:60px">${p.quantity}</td>
+    </tr>`
+  })
 
-  const vehicleText = workOrder.vehicles
-    .map((v) => [v.plateNumber, v.brand, v.model].filter(Boolean).join(' '))
-    .join(', ')
+  // Parts — from repair jobs
+  const repairPartRows = (workOrder.repairParts ?? []).flatMap(job => {
+    const header = `<tr>
+      <td colspan="2" style="background:#fffbeb;color:#92400e;font-size:10px;font-style:italic;font-weight:600;padding:4px 8px;border-top:1px solid #fde68a">
+        Rep. cliente${job.repairReference ? ` ${esc(job.repairReference)}` : ''} — ${esc(job.clientItemName)}
+      </td>
+    </tr>`
+    const rows = job.parts.map(p => {
+      const note = p.notes ? ` <span style="color:#6b7280;font-size:10px">${esc(p.notes)}</span>` : ''
+      return `<tr>
+        <td style="padding-left:16px">${esc(p.itemName)} <span style="font-size:10px;color:#6b7280">${esc(p.partNumber)}</span>${note}</td>
+        <td style="text-align:center;width:60px">${p.quantity}</td>
+      </tr>`
+    })
+    return [header, ...rows]
+  })
+
+  const allPartRows = [...directPartRows, ...repairPartRows]
+  const partsSection = allPartRows.length > 0 ? `
+    <div class="section">Materiais Aplicados</div>
+    <table>
+      <thead><tr><th>Denominação</th><th style="text-align:center;width:60px">Qtd</th></tr></thead>
+      <tbody>${allPartRows.join('')}</tbody>
+    </table>` : ''
+
+  // Equipment
+  const equipmentSection = locationEquipment ? `
+    <div class="section">Equipamento</div>
+    <table>
+      <thead><tr><th>Tipo</th><th>Marca</th><th>Modelo</th><th>Nº Série</th></tr></thead>
+      <tbody><tr>
+        <td>${esc(locationEquipment.equipmentType.name)}</td>
+        <td>${esc(locationEquipment.brand.name)}</td>
+        <td>${esc(locationEquipment.model)}</td>
+        <td style="font-family:monospace">${esc(locationEquipment.serialNumber)}</td>
+      </tr></tbody>
+    </table>` : ''
 
   const html = `<!DOCTYPE html>
 <html lang="pt">
 <head>
 <meta charset="UTF-8">
-<title>FICHA TÉCNICA ${esc(ref)}</title>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; color: #000; background: #fff; }
-  .page { padding: 14mm 14mm 10mm; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 7mm; }
-  .logo img { max-height: 20mm; max-width: 65mm; object-fit: contain; }
-  .doc-title { font-size: 14pt; font-weight: bold; text-align: right; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
-  td, th { border: 1px solid #000; padding: 3px 5px; vertical-align: middle; font-size: 9pt; }
-  th { font-weight: bold; background: #fff; }
-  .lbl { font-weight: bold; white-space: nowrap; }
-  .text-td { padding: 5px; vertical-align: top; min-height: 18mm; white-space: pre-wrap; line-height: 1.5; }
-  .footer { text-align: center; font-size: 7.5pt; border-top: 1px solid #000; padding-top: 3px; margin-top: 6mm; }
-  .sig-page { page-break-before: always; padding: 14mm; display: flex; flex-direction: column; min-height: 267mm; }
-  .sig-content { flex: 1; }
-  .sig-row { display: flex; justify-content: space-around; margin-top: 25mm; }
-  .sig-box { text-align: center; }
-  .sig-label { font-size: 9pt; margin-bottom: 18mm; }
-  .sig-line { width: 70mm; border-top: 1px solid #000; }
-  @media print {
-    @page { size: A4 portrait; margin: 0; }
-  }
-</style>
+<title>Ficha Técnica ${esc(ref)}</title>
+<style>${STYLE}</style>
 </head>
 <body>
-<div class="page">
 
-  <!-- Header -->
-  <div class="header">
-    <div class="logo">
-      ${company.logo
-        ? `<img src="${company.logo}" alt="Logo" />`
-        : `<div style="font-size:12pt;font-weight:bold;">${esc(company.name)}</div>`}
-    </div>
-    <div class="doc-title">FICHA TÉCNICA ${esc(ref)}</div>
+  ${companyHeader(company, `Ficha Técnica ${esc(ref)}`, `${esc(intervention.client.name)}${firstSession?.startDate ? ' — ' + esc(firstSession.startDate) : ''}`)}
+
+  <!-- Type badge -->
+  <div style="margin-bottom:14px">
+    <span class="badge" style="background:${typeBg};color:${typeColor};border:1px solid ${typeBorder};font-size:10px">${typeLabel}</span>
+    ${intervention.bill ? '<span class="badge" style="background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;font-size:10px;margin-left:6px">Faturar</span>' : ''}
   </div>
 
-  <!-- Client / date info -->
+  <!-- Info + Travel side by side -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:4px">
+    <div>
+      <div class="section" style="margin-top:0">Informação</div>
+      <table class="info-table"><tbody>${infoRows}</tbody></table>
+    </div>
+    <div>
+      <div class="section" style="margin-top:0">Deslocação</div>
+      ${travelRows ? `<table class="info-table"><tbody>${travelRows}</tbody></table>` : '<p style="font-size:11px;color:#9ca3af">—</p>'}
+    </div>
+  </div>
+
+  <!-- Sessions -->
+  <div class="section">Mão-de-Obra</div>
   <table>
-    <tr>
-      <td class="lbl" style="width:17%">CLIENTE</td>
-      <td style="width:33%">${esc(intervention.client.name)}</td>
-      <td class="lbl" style="width:17%">Cliente a Faturar</td>
-      <td style="width:33%">${intervention.bill ? esc(intervention.client.name) : ''}</td>
-    </tr>
-    <tr>
-      <td class="lbl">MORADA</td>
-      <td>${esc(destAddr)}</td>
-      <td class="lbl">CONTACTO</td>
-      <td>${esc(intervention.client.phone || '')}</td>
-    </tr>
-    <tr>
-      <td class="lbl">DATA</td>
-      <td>${esc(firstSession?.startDate || '')}</td>
-      <td class="lbl">GUIA DE TRANSPORTE</td>
-      <td>${esc(workOrder.transportGuide || '')}</td>
-    </tr>
+    <thead><tr><th>Colaborador</th><th style="text-align:center">Data Início</th><th style="text-align:center">Hora Início</th><th style="text-align:center">Hora Fim</th><th style="text-align:right">Duração</th></tr></thead>
+    <tbody>${sessionRows}</tbody>
+    ${sessionTotalRow}
   </table>
 
-  <!-- Task info -->
-  <table>
-    ${sectionHeader('INFORMAÇÕES DA TAREFA', 2)}
-    <tr>
-      <td class="lbl" style="width:42%">Tipo da Tarefa</td>
-      <td>${workOrder.internal ? 'Interna' : 'Externa'}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Trabalho Finalizado</td>
-      <td>${intervention.status === 'COMPLETED' ? 'Sim' : 'Não'}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Houve Ajudante</td>
-      <td>${workOrder.helpers.length > 0 ? 'Sim' : 'Não'}</td>
-    </tr>
-    ${helperRow}
-  </table>
-
-  <!-- Labor -->
-  <table>
-    ${sectionHeader('MÃO-DE-OBRA', 5)}
-    <tr>
-      <th>Colaborador</th>
-      <th style="width:14%">Data Início</th>
-      <th style="width:14%">Hora Início</th>
-      <th style="width:14%">Hora Fim</th>
-      <th style="width:14%">Duração</th>
-    </tr>
-    ${workOrder.sessions && workOrder.sessions.length > 0
-      ? workOrder.sessions.map((s, i) => {
-          const dur = s.duration != null ? `${s.duration.toFixed(2)}h` : calcDuration(s.startTime, s.endTime)
-          return `<tr>
-            <td>${i === 0 ? esc(techName) : ''}</td>
-            <td style="text-align:center">${esc(s.startDate || '')}</td>
-            <td style="text-align:center">${esc(s.startTime || '')}</td>
-            <td style="text-align:center">${esc(s.endTime || '')}</td>
-            <td style="text-align:center">${esc(dur)}</td>
-          </tr>`
-        }).join('')
-      : `<tr><td>${esc(techName)}</td><td></td><td></td><td></td><td></td></tr>`
-    }
-  </table>
-
-  <!-- Travel -->
-  <table>
-    ${sectionHeader('DESLOCAÇÕES', 4)}
-    <tr>
-      <td class="lbl" style="width:25%">Viatura</td>
-      <td style="width:25%">${esc(vehicleText)}</td>
-      <td class="lbl" style="width:25%">Total KM</td>
-      <td style="width:25%">${workOrder.km !== null && workOrder.km !== undefined ? workOrder.km : ''}</td>
-    </tr>
-    <tr>
-      <td class="lbl">Origem</td>
-      <td>${esc(workOrder.fromAddress || '')}</td>
-      <td class="lbl">Destino</td>
-      <td>${esc(destAddr)}</td>
-    </tr>
-  </table>
-
-  <!-- Materials -->
-  <table>
-    ${sectionHeader('MATERIAIS APLICADOS', 2)}
-    <tr>
-      <th>Denominação</th>
-      <th style="width:60px">Qtd</th>
-    </tr>
-    ${partsRows}
-  </table>
-
+  ${partsSection}
   ${equipmentSection}
 
   <!-- Anomalias -->
-  <table>
-    ${sectionHeader('ANOMALIAS ENCONTRADAS', 1)}
-    <tr><td class="text-td">${esc(intervention.breakdown)}</td></tr>
-  </table>
+  <div class="section">Anomalias Encontradas</div>
+  <p style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#374151;padding:4px 0;min-height:32px">${esc(intervention.breakdown)}</p>
 
   <!-- Work done -->
-  <table>
-    ${sectionHeader('TRABALHO EFETUADO', 1)}
-    <tr><td class="text-td">${esc(workOrder.description)}</td></tr>
-  </table>
+  <div class="section">Trabalho Efetuado</div>
+  <p style="white-space:pre-wrap;font-size:12px;line-height:1.6;color:#374151;padding:4px 0;min-height:48px">${esc(workOrder.description)}</p>
 
-  <!-- Work completed reason (empty) -->
-  <table>
-    ${sectionHeader('TRABALHO FINALIZADO - PORQUE?', 1)}
-    <tr><td class="text-td" style="min-height:12mm;">&nbsp;</td></tr>
-  </table>
+  <!-- Work completed reason -->
+  <div class="section">Trabalho Finalizado — Porque?</div>
+  <p style="min-height:32px">&nbsp;</p>
 
-  <div class="footer">${footerHtml}</div>
-</div>
-
-<!-- Signature page -->
-<div class="sig-page">
-  <div class="sig-content">
+  <!-- Signature page -->
+  <div class="sig-page">
+    <div style="border-bottom:2px solid #1e3a5f;padding-bottom:8px;margin-bottom:32px">
+      <span style="font-size:14px;font-weight:700;color:#1e3a5f">Ficha Técnica ${esc(ref)}</span>
+      <span style="font-size:11px;color:#6b7280;margin-left:12px">${esc(intervention.client.name)}</span>
+    </div>
     <div class="sig-row">
       <div class="sig-box">
         <div class="sig-label">Assinatura do Cliente</div>
         ${clientSignature
-          ? `<img src="${clientSignature}" style="width:70mm;height:30mm;object-fit:contain;display:block;margin:0 auto;" />`
-          : `<div style="height:30mm;"></div>`}
+          ? `<img src="${clientSignature}" style="width:200px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;" />`
+          : `<div style="height:80px;"></div>`}
         <div class="sig-line"></div>
       </div>
       <div class="sig-box">
         <div class="sig-label">Assinatura do Técnico</div>
         ${techSignature
-          ? `<img src="${techSignature}" style="width:70mm;height:30mm;object-fit:contain;display:block;margin:0 auto;" />`
-          : `<div style="height:30mm;"></div>`}
+          ? `<img src="${techSignature}" style="width:200px;height:80px;object-fit:contain;display:block;margin:0 auto 8px;" />`
+          : `<div style="height:80px;"></div>`}
         <div class="sig-line"></div>
       </div>
     </div>
   </div>
-  <div class="footer">${footerHtml}</div>
-</div>
 
 </body>
 </html>`
 
-  const win = window.open('', '_blank', 'width=850,height=950')
-  if (!win) {
-    alert('Por favor permita popups para gerar o PDF.')
-    return
-  }
+  const win = window.open('', '_blank', 'width=1050,height=800')
+  if (!win) { alert('Por favor permita popups para gerar o PDF.'); return }
   win.document.write(html)
   win.document.close()
-  setTimeout(() => {
-    win.focus()
-    win.print()
-  }, 600)
+  setTimeout(() => { win.focus(); win.print() }, 500)
 }

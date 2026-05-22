@@ -29,6 +29,7 @@ export interface WorkOrder {
   timeSpent: number | null
   km: number | null
   locationEquipmentId: string | null
+  regulador: string | null
   interventionType: string | null
   transportGuide: string | null
   fromAddress: string | null
@@ -39,6 +40,7 @@ export interface WorkOrder {
   createdAt: string
   createdBy: { id: string; name: string }
   parts: WorkOrderPart[]
+  repairPartsCount?: number
 }
 
 interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
@@ -107,6 +109,7 @@ export default function WorkOrderPanel({
     km: wo?.km != null ? String(wo.km) : '',
     fromAddress: wo?.fromAddress ?? '',
     equipmentId: wo?.locationEquipmentId ?? '',
+    regulador: wo?.regulador ?? '',
     interventionType: wo?.interventionType ?? '',
     transportGuide: wo?.transportGuide ?? '',
     internal: wo?.internal ?? false,
@@ -124,6 +127,28 @@ export default function WorkOrderPanel({
   const [sessionSaving, setSessionSaving] = useState(false)
 
   const [showAddPart, setShowAddPart] = useState(false)
+
+  interface RepairJobGroup {
+    repairJobId: string
+    repairReference: string | null
+    repairStatus: string
+    clientItemName: string
+    clientPartNumber: string
+    parts: { id: string; itemId: string; itemName: string; partNumber: string; quantity: number; notes: string | null; addedAt: string }[]
+  }
+  const [repairParts, setRepairParts] = useState<RepairJobGroup[]>([])
+
+  const fetchRepairParts = async () => {
+    if (!wo) return
+    try {
+      const token = localStorage.getItem('token')
+      const data = await fetch(
+        `/api/interventions/${interventionId}/work-orders/${wo.id}/repair-parts`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      ).then(r => r.json())
+      setRepairParts(Array.isArray(data) ? data : [])
+    } catch { /* ignore */ }
+  }
 
   const [collectedParts, setCollectedParts] = useState<CollectedPart[]>([])
   const [collectedLoading, setCollectedLoading] = useState(false)
@@ -167,6 +192,12 @@ export default function WorkOrderPanel({
       setWarehouseSnOptions(Array.isArray(data) ? data.map((s: any) => ({ id: s.id, serialNumber: s.serialNumber })) : [])
     } catch {} finally { setWarehouseSnLoading(false) }
   }
+
+  useEffect(() => {
+    if (tab === 'parts' && wo) {
+      fetchRepairParts()
+    }
+  }, [tab])
 
   useEffect(() => {
     if ((tab === 'swap' || tab === 'client-repair') && wo) {
@@ -257,6 +288,7 @@ export default function WorkOrderPanel({
           km: form.km ? parseFloat(form.km) : null,
           fromAddress: form.fromAddress || null,
           equipmentId: form.equipmentId || null,
+          regulador: form.regulador || null,
           interventionType: form.interventionType || null,
           transportGuide: form.transportGuide || null,
           internal: form.internal,
@@ -585,6 +617,35 @@ export default function WorkOrderPanel({
                 >
                   + Adicionar Peça
                 </button>
+              )}
+
+              {repairParts.length > 0 && (
+                <div className="border-t pt-4 space-y-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Peças usadas em reparações de cliente</p>
+                  {repairParts.map(job => (
+                    <div key={job.repairJobId} className="rounded-lg border border-amber-200 bg-amber-50 overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-amber-100 border-b border-amber-200">
+                        <span className="text-xs font-semibold text-amber-800">Rep. Cliente</span>
+                        {job.repairReference && (
+                          <span className="text-xs font-mono text-amber-700">{job.repairReference}</span>
+                        )}
+                        <span className="text-xs text-amber-700 truncate flex-1">{job.clientItemName}</span>
+                      </div>
+                      <div className="divide-y divide-amber-100">
+                        {job.parts.map(part => (
+                          <div key={part.id} className="flex items-center justify-between px-3 py-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-800">{part.itemName}</p>
+                              <p className="text-xs font-mono text-gray-400">{part.partNumber}</p>
+                              {part.notes && <p className="text-xs text-gray-500 italic">{part.notes}</p>}
+                            </div>
+                            <span className="text-xs text-gray-500 shrink-0 ml-3">{part.quantity} un.</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </>
           )}

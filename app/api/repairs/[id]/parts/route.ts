@@ -71,35 +71,37 @@ export async function POST(
     }
 
     // Verify item and check stock
-    const itemRows = await prisma.$queryRaw<{ id: string; itemName: string; partNumber: string; mainWarehouse: number }[]>`
-      SELECT id, "itemName", "partNumber", "mainWarehouse" FROM "WarehouseItem" WHERE id = ${itemId}
+    const itemRows = await prisma.$queryRaw<{ id: string; itemName: string; partNumber: string; mainWarehouse: number; noStock: boolean }[]>`
+      SELECT id, "itemName", "partNumber", "mainWarehouse", "noStock" FROM "WarehouseItem" WHERE id = ${itemId}
     `
     const item = itemRows[0]
     if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
-    if (item.mainWarehouse < parsedQty) {
-      return NextResponse.json({ error: `Stock insuficiente. Disponível: ${item.mainWarehouse}` }, { status: 400 })
-    }
 
     const now = new Date()
     const partId = crypto.randomUUID()
-    const movId = crypto.randomUUID()
 
-    // Deduct from main warehouse
-    await prisma.$executeRaw`
-      UPDATE "WarehouseItem"
-      SET "mainWarehouse" = "mainWarehouse" - ${parsedQty}, "updatedAt" = ${now}::timestamptz
-      WHERE id = ${itemId}
-    `
+    if (!item.noStock) {
+      if (item.mainWarehouse < parsedQty) {
+        return NextResponse.json({ error: `Stock insuficiente. Disponível: ${item.mainWarehouse}` }, { status: 400 })
+      }
 
-    // Create USE movement referencing the repair job
-    const movNote = job.reference
-      ? `[${job.reference}] ${notes || 'Utilizado em reparação'}`
-      : (notes || 'Utilizado em reparação')
+      // Deduct from main warehouse
+      await prisma.$executeRaw`
+        UPDATE "WarehouseItem"
+        SET "mainWarehouse" = "mainWarehouse" - ${parsedQty}, "updatedAt" = ${now}::timestamptz
+        WHERE id = ${itemId}
+      `
 
-    await prisma.$executeRaw`
-      INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, notes, "createdById", "createdAt")
-      VALUES (${movId}, ${itemId}, 'USE', ${parsedQty}, ${movNote}, ${payload.userId}, ${now}::timestamptz)
-    `
+      // Create USE movement referencing the repair job
+      const movNote = job.reference
+        ? `[${job.reference}] ${notes || 'Utilizado em reparação'}`
+        : (notes || 'Utilizado em reparação')
+      const movId = crypto.randomUUID()
+      await prisma.$executeRaw`
+        INSERT INTO "ItemMovement" (id, "itemId", "movementType", quantity, notes, "createdById", "createdAt")
+        VALUES (${movId}, ${itemId}, 'USE', ${parsedQty}, ${movNote}, ${payload.userId}, ${now}::timestamptz)
+      `
+    }
 
     // Create RepairJobPart record
     await prisma.$executeRaw`

@@ -23,6 +23,7 @@ export default function NewWarehouseItemPage() {
   const [equipmentBrands, setEquipmentBrands] = useState<EquipmentBrand[]>([])
   const [itemCategories, setItemCategories] = useState<ItemCategory[]>([])
   const [itemNameEdited, setItemNameEdited] = useState(false)
+  const [noStock, setNoStock] = useState(false)
   const [formData, setFormData] = useState({
     equipmentTypeId: '',
     brandId: '',
@@ -95,7 +96,7 @@ export default function NewWarehouseItemPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({ ...formData, noStock }),
       })
 
       const data = await response.json()
@@ -123,205 +124,244 @@ export default function NewWarehouseItemPage() {
 
       <form onSubmit={handleSubmit} className="card space-y-4">
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('equipmentType')} *
-          </label>
-          <select
-            className="input text-gray-800"
-            value={formData.equipmentTypeId}
-            onChange={(e) => updateSourceField({ equipmentTypeId: e.target.value })}
-            required
-          >
-            <option value="">{t('selectType')}</option>
-            {equipmentTypes.map(type => (
-              <option key={type.id} value={type.id}>{type.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-          <select
-            className="input text-gray-800"
-            value={formData.categoryId}
-            onChange={(e) => setFormData(f => ({ ...f, categoryId: e.target.value }))}
-          >
-            <option value="">— Sem categoria —</option>
-            {itemCategories.map(cat => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('equipmentBrand')} *
-          </label>
-          <select
-            className="input text-gray-800"
-            value={formData.brandId}
-            onChange={(e) => updateSourceField({ brandId: e.target.value })}
-            required
-          >
-            <option value="">{t('selectBrand')}</option>
-            {equipmentBrands.map(brand => (
-              <option key={brand.id} value={brand.id}>{brand.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('partNumber')} *
-          </label>
+        {/* No-stock toggle */}
+        <div className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <input
-            type="text"
-            className="input text-gray-800"
-            value={formData.partNumber}
-            onChange={(e) => updateSourceField({ partNumber: e.target.value })}
-            placeholder="e.g., PS-2024-001"
-            required
+            type="checkbox"
+            id="noStock"
+            checked={noStock}
+            onChange={e => setNoStock(e.target.checked)}
+            className="mt-1"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              className="input text-gray-800 font-mono flex-1"
-              value={formData.ean13}
-              onChange={(e) => setFormData({ ...formData, ean13: e.target.value })}
-              placeholder="0000000000000"
-              maxLength={13}
-            />
-            <button
-              type="button"
-              onClick={generateEan13}
-              disabled={generatingEan}
-              className="btn btn-secondary shrink-0"
-            >
-              {generatingEan ? '...' : 'Gerar'}
-            </button>
+          <div>
+            <label htmlFor="noStock" className="text-sm font-semibold text-amber-800 cursor-pointer">
+              Sem controlo de stock
+            </label>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Apenas designação — sem referência, valor ou quantidades. Pode ser usado em work orders e reparações.
+            </p>
           </div>
         </div>
 
+        {/* Item name — always shown */}
         <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-sm font-medium text-gray-700">{t('itemNamePreview')}</label>
-            {itemNameEdited && computedItemName && (
-              <button type="button" onClick={() => { setFormData(f => ({ ...f, itemName: computedItemName })); setItemNameEdited(false) }}
-                className="text-xs text-blue-600 hover:text-blue-800">↺ Repor automático</button>
-            )}
-          </div>
-          <input
-            type="text"
-            className="input text-gray-800"
-            value={formData.itemName}
-            onChange={e => { setFormData(f => ({ ...f, itemName: e.target.value })); setItemNameEdited(true) }}
-            placeholder={computedItemName || 'Nome do artigo'}
-          />
-          {!itemNameEdited && computedItemName && (
-            <p className="text-xs text-gray-400 mt-1">Gerado automaticamente a partir do tipo, marca e referência</p>
+          {noStock ? (
+            <>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Designação *</label>
+              <input
+                type="text"
+                className="input text-gray-800"
+                value={formData.itemName}
+                onChange={e => setFormData(f => ({ ...f, itemName: e.target.value }))}
+                placeholder="Ex: Mão de obra, Deslocação, Serviço especial..."
+                required
+              />
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">{t('itemNamePreview')}</label>
+                {itemNameEdited && computedItemName && (
+                  <button type="button" onClick={() => { setFormData(f => ({ ...f, itemName: computedItemName })); setItemNameEdited(false) }}
+                    className="text-xs text-blue-600 hover:text-blue-800">↺ Repor automático</button>
+                )}
+              </div>
+              <input
+                type="text"
+                className="input text-gray-800"
+                value={formData.itemName}
+                onChange={e => { setFormData(f => ({ ...f, itemName: e.target.value })); setItemNameEdited(true) }}
+                placeholder={computedItemName || 'Nome do artigo'}
+              />
+              {!itemNameEdited && computedItemName && (
+                <p className="text-xs text-gray-400 mt-1">Gerado automaticamente a partir do tipo, marca e referência</p>
+              )}
+            </>
           )}
         </div>
 
-        <div className="border-t pt-4 space-y-3">
-          <div className="flex items-start gap-3">
+        {/* Standard stock fields — hidden when noStock */}
+        {!noStock && <>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('equipmentType')} *
+            </label>
+            <select
+              className="input text-gray-800"
+              value={formData.equipmentTypeId}
+              onChange={(e) => updateSourceField({ equipmentTypeId: e.target.value })}
+              required
+            >
+              <option value="">{t('selectType')}</option>
+              {equipmentTypes.map(type => (
+                <option key={type.id} value={type.id}>{type.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+            <select
+              className="input text-gray-800"
+              value={formData.categoryId}
+              onChange={(e) => setFormData(f => ({ ...f, categoryId: e.target.value }))}
+            >
+              <option value="">— Sem categoria —</option>
+              {itemCategories.map(cat => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('equipmentBrand')} *
+            </label>
+            <select
+              className="input text-gray-800"
+              value={formData.brandId}
+              onChange={(e) => updateSourceField({ brandId: e.target.value })}
+              required
+            >
+              <option value="">{t('selectBrand')}</option>
+              {equipmentBrands.map(brand => (
+                <option key={brand.id} value={brand.id}>{brand.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('partNumber')} *
+            </label>
             <input
-              type="checkbox"
-              id="tracksSerialNumbers"
-              checked={formData.tracksSerialNumbers}
-              onChange={(e) => setFormData({ ...formData, tracksSerialNumbers: e.target.checked, autoSn: false })}
-              className="mt-1"
+              type="text"
+              className="input text-gray-800"
+              value={formData.partNumber}
+              onChange={(e) => updateSourceField({ partNumber: e.target.value })}
+              placeholder="e.g., PS-2024-001"
+              required
             />
-            <div className="flex-1">
-              <label htmlFor="tracksSerialNumbers" className="text-sm font-medium text-gray-700 cursor-pointer">
-                {t('tracksSerialNumbers')}
-              </label>
-              <p className="text-xs text-gray-500 mt-1">{t('tracksSnHelp')}</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">EAN-13</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="input text-gray-800 font-mono flex-1"
+                value={formData.ean13}
+                onChange={(e) => setFormData({ ...formData, ean13: e.target.value })}
+                placeholder="0000000000000"
+                maxLength={13}
+              />
+              <button
+                type="button"
+                onClick={generateEan13}
+                disabled={generatingEan}
+                className="btn btn-secondary shrink-0"
+              >
+                {generatingEan ? '...' : 'Gerar'}
+              </button>
             </div>
           </div>
 
-          {formData.tracksSerialNumbers && (
-            <div className="ml-6 flex items-start gap-3">
+          <div className="border-t pt-4 space-y-3">
+            <div className="flex items-start gap-3">
               <input
                 type="checkbox"
-                id="autoSn"
-                checked={formData.autoSn}
-                onChange={(e) => setFormData({ ...formData, autoSn: e.target.checked })}
+                id="tracksSerialNumbers"
+                checked={formData.tracksSerialNumbers}
+                onChange={(e) => setFormData({ ...formData, tracksSerialNumbers: e.target.checked, autoSn: false })}
                 className="mt-1"
               />
               <div className="flex-1">
-                <label htmlFor="autoSn" className="text-sm font-medium text-gray-700 cursor-pointer">
-                  {t('autoSnGeneration')}
+                <label htmlFor="tracksSerialNumbers" className="text-sm font-medium text-gray-700 cursor-pointer">
+                  {t('tracksSerialNumbers')}
                 </label>
-                <p className="text-xs text-gray-500 mt-1">{t('autoSnGenerationHelp')}</p>
-                {formData.autoSn && (
-                  <div className="mt-2 space-y-2">
-                    <input
-                      type="text"
-                      className="input text-gray-800"
-                      value={formData.snExample}
-                      onChange={(e) => setFormData({ ...formData, snExample: e.target.value })}
-                      placeholder="e.g., PUMP-GF-PS001"
-                    />
-                    {formData.snExample && (
-                      <div className="p-2 bg-blue-50 border border-blue-200 rounded">
-                        <p className="text-xs text-blue-800">
-                          {t('snFormatPreview')}: <span className="font-mono font-semibold">{formData.snExample}-1</span>, <span className="font-mono font-semibold">{formData.snExample}-2</span>…
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {!formData.autoSn && (
-                  <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
-                    <p className="text-xs text-blue-800">{t('manualSnNote')}</p>
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 mt-1">{t('tracksSnHelp')}</p>
               </div>
             </div>
-          )}
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {t('value')} (€)
-          </label>
-          <input
-            type="number"
-            step="0.01"
-            className="input text-gray-800"
-            value={formData.value}
-            onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-            placeholder="0.00"
-          />
-        </div>
+            {formData.tracksSerialNumbers && (
+              <div className="ml-6 flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  id="autoSn"
+                  checked={formData.autoSn}
+                  onChange={(e) => setFormData({ ...formData, autoSn: e.target.checked })}
+                  className="mt-1"
+                />
+                <div className="flex-1">
+                  <label htmlFor="autoSn" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    {t('autoSnGeneration')}
+                  </label>
+                  <p className="text-xs text-gray-500 mt-1">{t('autoSnGenerationHelp')}</p>
+                  {formData.autoSn && (
+                    <div className="mt-2 space-y-2">
+                      <input
+                        type="text"
+                        className="input text-gray-800"
+                        value={formData.snExample}
+                        onChange={(e) => setFormData({ ...formData, snExample: e.target.value })}
+                        placeholder="e.g., PUMP-GF-PS001"
+                      />
+                      {formData.snExample && (
+                        <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                          <p className="text-xs text-blue-800">
+                            {t('snFormatPreview')}: <span className="font-mono font-semibold">{formData.snExample}-1</span>, <span className="font-mono font-semibold">{formData.snExample}-2</span>…
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!formData.autoSn && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded">
+                      <p className="text-xs text-blue-800">{t('manualSnNote')}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
-        {!formData.tracksSerialNumbers && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('mainWarehouse')}
+              {t('value')} (€)
             </label>
             <input
               type="number"
+              step="0.01"
               className="input text-gray-800"
-              value={formData.mainWarehouse}
-              onChange={(e) => setFormData({ ...formData, mainWarehouse: e.target.value })}
-              placeholder="0"
-              min="0"
+              value={formData.value}
+              onChange={(e) => setFormData({ ...formData, value: e.target.value })}
+              placeholder="0.00"
             />
-            <p className="text-xs text-gray-500 mt-1">{t('initialStockHelp')}</p>
           </div>
-        )}
 
-        {formData.tracksSerialNumbers && (
-          <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-            <p className="text-sm text-yellow-800">{t('snInitialStockNote')}</p>
-          </div>
-        )}
+          {!formData.tracksSerialNumbers && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('mainWarehouse')}
+              </label>
+              <input
+                type="number"
+                className="input text-gray-800"
+                value={formData.mainWarehouse}
+                onChange={(e) => setFormData({ ...formData, mainWarehouse: e.target.value })}
+                placeholder="0"
+                min="0"
+              />
+              <p className="text-xs text-gray-500 mt-1">{t('initialStockHelp')}</p>
+            </div>
+          )}
+
+          {formData.tracksSerialNumbers && (
+            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-sm text-yellow-800">{t('snInitialStockNote')}</p>
+            </div>
+          )}
+        </>}
 
         {error && (
           <div className="text-red-600 text-sm bg-red-50 p-3 rounded">{error}</div>

@@ -20,6 +20,7 @@ interface WarehouseItem {
   tracksSerialNumbers: boolean
   ean13?: string | null
   mainWarehouse: number
+  noStock?: boolean
 }
 
 type UnifiedItem =
@@ -152,12 +153,14 @@ export default function AddPartModal({
     (selected.source === 'warehouse' && selected.item.tracksSerialNumbers)
   )
 
+  const isNoStock = selected?.source === 'warehouse' && (selected.item as WarehouseItem).noStock
+
   const maxQty = selected
     ? selected.source === 'tech'
       ? selected.item.tracksSerialNumbers
         ? selected.item.serialNumbers?.length || 0
         : selected.item.quantity
-      : undefined
+      : isNoStock ? undefined : undefined
     : 1
 
   const canConfirm = selected
@@ -224,7 +227,7 @@ export default function AddPartModal({
     .map(s => ({ source: 'tech' as const, item: s }))
 
   const whResults: UnifiedItem[] = warehouseItems
-    .filter(i => i.mainWarehouse > 0 && (!q || i.itemName.toLowerCase().includes(q) || i.partNumber.toLowerCase().includes(q)))
+    .filter(i => (i.noStock || i.mainWarehouse > 0) && (!q || i.itemName.toLowerCase().includes(q) || i.partNumber.toLowerCase().includes(q)))
     .map(i => ({ source: 'warehouse' as const, item: i }))
 
   const results: UnifiedItem[] = [...techResults, ...whResults]
@@ -286,8 +289,11 @@ export default function AddPartModal({
               </button>
 
               <div className="bg-gray-50 rounded-lg px-4 py-3 flex items-center gap-3">
-                <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${selected.source === 'tech' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                  {selected.source === 'tech' ? 'Técnico' : 'Armazém'}
+                <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  isNoStock ? 'bg-orange-100 text-orange-700' :
+                  selected.source === 'tech' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                }`}>
+                  {isNoStock ? 'Livre' : selected.source === 'tech' ? 'Técnico' : 'Armazém'}
                 </span>
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{selected.item.itemName}</p>
@@ -311,6 +317,9 @@ export default function AddPartModal({
                     <p className="text-xs text-gray-400 mt-1">
                       Disponível: {selected.item.tracksSerialNumbers ? selected.item.serialNumbers?.length || 0 : selected.item.quantity}
                     </p>
+                  )}
+                  {isNoStock && (
+                    <p className="text-xs text-orange-600 mt-1">Artigo sem controlo de stock</p>
                   )}
                 </div>
               ) : snLoading ? (
@@ -387,6 +396,7 @@ export default function AddPartModal({
               ) : (
                 <div className="space-y-1.5">
                   {results.map((r, i) => {
+                    const itemIsNoStock = r.source === 'warehouse' && (r.item as WarehouseItem).noStock
                     const available = r.source === 'tech'
                       ? r.item.tracksSerialNumbers ? r.item.serialNumbers?.length || 0 : r.item.quantity
                       : null
@@ -397,14 +407,17 @@ export default function AddPartModal({
                         onClick={() => selectItem(r)}
                         className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
                       >
-                        <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${r.source === 'tech' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}`}>
-                          {r.source === 'tech' ? 'Técnico' : 'Armazém'}
+                        <span className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          itemIsNoStock ? 'bg-orange-100 text-orange-700' :
+                          r.source === 'tech' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {itemIsNoStock ? 'Livre' : r.source === 'tech' ? 'Técnico' : 'Armazém'}
                         </span>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{r.item.itemName}</p>
                           {r.item.partNumber && <p className="text-xs text-gray-400">{r.item.partNumber}</p>}
                         </div>
-                        {available !== null && (
+                        {!itemIsNoStock && available !== null && (
                           <span className="shrink-0 text-xs font-semibold text-gray-500">{available} un.</span>
                         )}
                       </button>

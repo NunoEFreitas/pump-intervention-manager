@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 
 interface WorkOrderSignatureModalProps {
   workOrder: {
@@ -37,6 +37,12 @@ interface WorkOrderSignatureModalProps {
       equipment: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
     } | null
   }
+  repairParts?: {
+    repairJobId: string
+    repairReference: string | null
+    clientItemName: string
+    parts: { id: string; itemName: string; partNumber: string; quantity: number; notes: string | null }[]
+  }[]
   onGenerate: (clientSig: string | null, techSig: string | null) => void
   onClose: () => void
 }
@@ -44,7 +50,6 @@ interface WorkOrderSignatureModalProps {
 function SignaturePad({ label, onChanged }: { label: string; onChanged: (data: string | null) => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
-  const hasDrawn = useRef(false)
 
   const getPos = (e: MouseEvent | TouchEvent, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect()
@@ -85,9 +90,6 @@ function SignaturePad({ label, onChanged }: { label: string; onChanged: (data: s
       const pos = getPos(e, canvas)
       ctx.lineTo(pos.x, pos.y)
       ctx.stroke()
-      if (!hasDrawn.current) {
-        hasDrawn.current = true
-      }
     }
 
     const end = () => {
@@ -118,27 +120,21 @@ function SignaturePad({ label, onChanged }: { label: string; onChanged: (data: s
   const clear = () => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')!
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    hasDrawn.current = false
+    canvas.getContext('2d')!.clearRect(0, 0, canvas.width, canvas.height)
     onChanged(null)
   }
 
   return (
     <div className="flex flex-col items-center gap-2 flex-1">
-      <div className="text-sm font-semibold text-gray-700">{label}</div>
+      <div className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</div>
       <canvas
         ref={canvasRef}
         width={320}
-        height={150}
-        className="border border-gray-400 rounded bg-white w-full touch-none cursor-crosshair"
+        height={140}
+        className="border border-gray-300 rounded bg-white w-full touch-none cursor-crosshair"
         style={{ maxWidth: 320 }}
       />
-      <button
-        type="button"
-        onClick={clear}
-        className="text-xs text-gray-500 underline hover:text-red-500"
-      >
+      <button type="button" onClick={clear} className="text-xs text-gray-400 underline hover:text-red-500">
         Limpar
       </button>
     </div>
@@ -154,7 +150,29 @@ function calcDuration(start: string | null, end: string | null): string {
   return `${Math.floor(diff / 60)}h ${diff % 60}m`
 }
 
-export default function WorkOrderSignatureModal({ workOrder, intervention, onGenerate, onClose }: WorkOrderSignatureModalProps) {
+// Navy colour shared with PDF style
+const NAVY = '#1e3a5f'
+
+function Section({ title }: { title: string }) {
+  return (
+    <div
+      style={{ background: NAVY, color: '#fff', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', padding: '5px 10px', marginTop: 14, marginBottom: 6, borderRadius: 3 }}
+    >
+      {title}
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', fontSize: 11, marginBottom: 3 }}>
+      <span style={{ color: '#64748b', minWidth: 130, fontWeight: 600 }}>{label}</span>
+      <span style={{ color: '#1e293b' }}>{value || '—'}</span>
+    </div>
+  )
+}
+
+export default function WorkOrderSignatureModal({ workOrder, repairParts, intervention, onGenerate, onClose }: WorkOrderSignatureModalProps) {
   const [clientSig, setClientSig] = useState<string | null>(null)
   const [techSig, setTechSig] = useState<string | null>(null)
 
@@ -166,204 +184,222 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
   const firstSession = workOrder.sessions?.[0] ?? null
   const locationEquipment = intervention.location?.equipment.find(e => e.id === workOrder.locationEquipmentId)
   const locationAddr = [intervention.location?.address, intervention.location?.city].filter(Boolean).join(', ')
-  const clientAddr = [intervention.client.phone].filter(Boolean).join(', ')
+  const hasTravel = vehicleText || workOrder.km || workOrder.fromAddress || locationAddr
+  const hasMaterials = workOrder.parts.length > 0 || (repairParts && repairParts.length > 0)
+
+  const totalDuration = workOrder.sessions.reduce((acc, s) => {
+    if (s.duration != null) return acc + s.duration
+    if (s.startTime && s.endTime) {
+      const [sh, sm] = s.startTime.split(':').map(Number)
+      const [eh, em] = s.endTime.split(':').map(Number)
+      const diff = (eh * 60 + em - (sh * 60 + sm)) / 60
+      return acc + (diff > 0 ? diff : 0)
+    }
+    return acc
+  }, 0)
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[95vh]">
-        {/* Header */}
+
+        {/* Modal header */}
         <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h2 className="text-lg font-bold text-gray-800">
+          <h2 className="text-base font-bold text-gray-800" style={{ color: NAVY }}>
             Ficha Técnica {workOrder.reference ? `— ${workOrder.reference}` : ''}
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">&times;</button>
         </div>
 
-        {/* Preview + signatures */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 text-sm text-gray-800">
+        {/* Scrollable preview */}
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ fontSize: 12 }}>
 
-          {/* Client / date */}
-          <table className="w-full border-collapse text-xs">
+          {/* Client + reference row */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: 4 }}>
+            <div style={{ flex: 1 }}>
+              <InfoRow label="Cliente" value={intervention.client.name} />
+              <InfoRow label="Contacto" value={intervention.client.phone} />
+              <InfoRow label="Local" value={intervention.location ? `${intervention.location.name}${locationAddr ? ` — ${locationAddr}` : ''}` : null} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <InfoRow label="Referência" value={workOrder.reference} />
+              <InfoRow label="Intervenção" value={intervention.reference} />
+              <InfoRow label="Data" value={firstSession?.startDate} />
+              {workOrder.transportGuide && <InfoRow label="Guia de transporte" value={workOrder.transportGuide} />}
+            </div>
+          </div>
+
+          {/* Badges row */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 2 }}>
+            {workOrder.interventionType && (
+              <span style={{ background: '#dbeafe', color: '#1d4ed8', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 8px' }}>
+                {workOrder.interventionType}
+              </span>
+            )}
+            <span style={{ background: workOrder.internal ? '#f3f4f6' : '#dcfce7', color: workOrder.internal ? '#374151' : '#166534', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 8px' }}>
+              {workOrder.internal ? 'Interna' : 'Externa'}
+            </span>
+            {intervention.status === 'COMPLETED' && (
+              <span style={{ background: '#dcfce7', color: '#166534', fontSize: 10, fontWeight: 700, borderRadius: 4, padding: '2px 8px' }}>
+                Concluída
+              </span>
+            )}
+          </div>
+
+          {/* Sessions / Labor */}
+          <Section title="MÃO-DE-OBRA" />
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Colaborador</th>
+                <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Data</th>
+                <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Início</th>
+                <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Fim</th>
+                <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Duração</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr>
-                <td className="border border-gray-400 px-2 py-1 font-bold w-1/4">CLIENTE</td>
-                <td className="border border-gray-400 px-2 py-1 w-1/4">{intervention.client.name}</td>
-                <td className="border border-gray-400 px-2 py-1 font-bold w-1/4">CONTACTO</td>
-                <td className="border border-gray-400 px-2 py-1 w-1/4">{intervention.client.phone || ''}</td>
-              </tr>
-              <tr>
-                <td className="border border-gray-400 px-2 py-1 font-bold">DATA</td>
-                <td className="border border-gray-400 px-2 py-1">{firstSession?.startDate || ''}</td>
-                <td className="border border-gray-400 px-2 py-1 font-bold">GUIA DE TRANSPORTE</td>
-                <td className="border border-gray-400 px-2 py-1">{workOrder.transportGuide || ''}</td>
-              </tr>
+              {workOrder.sessions && workOrder.sessions.length > 0
+                ? workOrder.sessions.map((s, i) => {
+                    const dur = s.duration != null
+                      ? `${s.duration.toFixed(2)}h`
+                      : calcDuration(s.startTime, s.endTime)
+                    return (
+                      <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                        <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9' }}>{i === 0 ? techName : ''}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{s.startDate || ''}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{s.startTime || ''}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{s.endTime || ''}</td>
+                        <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{dur}</td>
+                      </tr>
+                    )
+                  })
+                : (
+                  <tr>
+                    <td style={{ padding: '4px 8px' }}>{techName}</td>
+                    <td /><td /><td /><td />
+                  </tr>
+                )
+              }
+              {totalDuration > 0 && (
+                <tr style={{ background: '#eff6ff', fontWeight: 700 }}>
+                  <td colSpan={4} style={{ padding: '4px 8px', textAlign: 'right', color: NAVY }}>Total</td>
+                  <td style={{ padding: '4px 8px', textAlign: 'center', color: NAVY }}>{totalDuration.toFixed(2)}h</td>
+                </tr>
+              )}
+              {workOrder.helpers.length > 0 && (
+                <tr>
+                  <td colSpan={5} style={{ padding: '3px 8px', fontSize: 10, color: '#64748b', fontStyle: 'italic' }}>
+                    Ajudantes: {workOrder.helpers.map(h => h.name).join(', ')}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
 
-          {/* Task info */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">INFORMAÇÕES DA TAREFA</div>
-            <table className="w-full border-collapse text-xs">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-2 py-1 font-bold w-1/2">Tipo da Tarefa</td>
-                  <td className="border border-gray-400 px-2 py-1">{workOrder.internal ? 'Interna' : 'Externa'}</td>
-                </tr>
-                <tr>
-                  <td className="border border-gray-400 px-2 py-1 font-bold">Trabalho Finalizado</td>
-                  <td className="border border-gray-400 px-2 py-1">{intervention.status === 'COMPLETED' ? 'Sim' : 'Não'}</td>
-                </tr>
-                {workOrder.helpers.length > 0 && (
-                  <>
-                    <tr>
-                      <td className="border border-gray-400 px-2 py-1 font-bold">Houve Ajudante</td>
-                      <td className="border border-gray-400 px-2 py-1">Sim</td>
-                    </tr>
-                    <tr>
-                      <td className="border border-gray-400 px-2 py-1 font-bold">Nome Ajudante</td>
-                      <td className="border border-gray-400 px-2 py-1">{workOrder.helpers.map(h => h.name).join(', ')}</td>
-                    </tr>
-                  </>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Labor */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">MÃO-DE-OBRA</div>
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr>
-                  <th className="border border-gray-400 px-2 py-1 font-bold text-left">Colaborador</th>
-                  <th className="border border-gray-400 px-2 py-1 font-bold">Data</th>
-                  <th className="border border-gray-400 px-2 py-1 font-bold">Início</th>
-                  <th className="border border-gray-400 px-2 py-1 font-bold">Fim</th>
-                  <th className="border border-gray-400 px-2 py-1 font-bold">Duração</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workOrder.sessions && workOrder.sessions.length > 0
-                  ? workOrder.sessions.map((s, i) => {
-                      const dur = s.duration != null
-                        ? `${s.duration.toFixed(2)}h`
-                        : calcDuration(s.startTime, s.endTime)
-                      return (
-                        <tr key={i}>
-                          <td className="border border-gray-400 px-2 py-1">{i === 0 ? techName : ''}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{s.startDate || ''}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{s.startTime || ''}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{s.endTime || ''}</td>
-                          <td className="border border-gray-400 px-2 py-1 text-center">{dur}</td>
-                        </tr>
-                      )
-                    })
-                  : (
-                    <tr>
-                      <td className="border border-gray-400 px-2 py-1">{techName}</td>
-                      <td className="border border-gray-400 px-2 py-1" />
-                      <td className="border border-gray-400 px-2 py-1" />
-                      <td className="border border-gray-400 px-2 py-1" />
-                      <td className="border border-gray-400 px-2 py-1" />
-                    </tr>
-                  )
-                }
-              </tbody>
-            </table>
-          </div>
-
           {/* Travel */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">DESLOCAÇÕES</div>
-            <table className="w-full border-collapse text-xs">
-              <tbody>
-                <tr>
-                  <td className="border border-gray-400 px-2 py-1 font-bold w-1/4">Viatura</td>
-                  <td className="border border-gray-400 px-2 py-1 w-1/4">{vehicleText}</td>
-                  <td className="border border-gray-400 px-2 py-1 font-bold w-1/4">Total KM</td>
-                  <td className="border border-gray-400 px-2 py-1 w-1/4">{workOrder.km ?? ''}</td>
-                </tr>
-                <tr>
-                  <td className="border border-gray-400 px-2 py-1 font-bold">Origem</td>
-                  <td className="border border-gray-400 px-2 py-1">{workOrder.fromAddress || ''}</td>
-                  <td className="border border-gray-400 px-2 py-1 font-bold">Destino</td>
-                  <td className="border border-gray-400 px-2 py-1">{locationAddr || (intervention.location?.name || '')}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {hasTravel && (
+            <>
+              <Section title="DESLOCAÇÕES" />
+              <div style={{ display: 'flex', gap: 24 }}>
+                <div style={{ flex: 1 }}>
+                  <InfoRow label="Viatura" value={vehicleText} />
+                  <InfoRow label="Total KM" value={workOrder.km != null ? String(workOrder.km) : null} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <InfoRow label="Origem" value={workOrder.fromAddress} />
+                  <InfoRow label="Destino" value={locationAddr || intervention.location?.name} />
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Materials */}
-          {workOrder.parts.length > 0 && (
-            <div>
-              <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">MATERIAIS APLICADOS</div>
-              <table className="w-full border-collapse text-xs">
+          {hasMaterials && (
+            <>
+              <Section title="MATERIAIS APLICADOS" />
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
-                  <tr>
-                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Denominação</th>
-                    <th className="border border-gray-400 px-2 py-1 font-bold w-16 text-center">Qtd</th>
+                  <tr style={{ background: '#f8fafc' }}>
+                    <th style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>Denominação</th>
+                    <th style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569', width: 50 }}>Qtd</th>
                   </tr>
                 </thead>
                 <tbody>
                   {workOrder.parts.map((p, i) => (
-                    <tr key={i}>
-                      <td className="border border-gray-400 px-2 py-1">
+                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                      <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9' }}>
                         {p.item.itemName}
-                        {p.item.partNumber && <span className="text-gray-500 ml-1">({p.item.partNumber})</span>}
-                        {p.serialNumbers?.length ? <span className="text-gray-500 ml-1 text-[10px]">SN: {p.serialNumbers.map(s => s.serialNumber).join(', ')}</span> : null}
+                        {p.item.partNumber && <span style={{ color: '#94a3b8', marginLeft: 4 }}>({p.item.partNumber})</span>}
+                        {p.serialNumbers?.length ? <span style={{ color: '#94a3b8', marginLeft: 4, fontSize: 10 }}>SN: {p.serialNumbers.map(s => s.serialNumber).join(', ')}</span> : null}
                       </td>
-                      <td className="border border-gray-400 px-2 py-1 text-center">{p.quantity}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{p.quantity}</td>
                     </tr>
+                  ))}
+                  {repairParts?.map(job => (
+                    <React.Fragment key={job.repairJobId}>
+                      <tr>
+                        <td colSpan={2} style={{ padding: '4px 8px', background: '#fffbeb', color: '#92400e', fontSize: 10, fontStyle: 'italic', borderBottom: '1px solid #fde68a' }}>
+                          Rep. cliente{job.repairReference ? ` ${job.repairReference}` : ''} — {job.clientItemName}
+                        </td>
+                      </tr>
+                      {job.parts.map((p, i) => (
+                        <tr key={i} style={{ background: i % 2 === 0 ? '#fffdf7' : '#fff' }}>
+                          <td style={{ padding: '4px 8px 4px 20px', borderBottom: '1px solid #f1f5f9' }}>
+                            {p.itemName}
+                            {p.partNumber && <span style={{ color: '#94a3b8', marginLeft: 4 }}>({p.partNumber})</span>}
+                            {p.notes && <span style={{ color: '#94a3b8', marginLeft: 4, fontStyle: 'italic' }}>{p.notes}</span>}
+                          </td>
+                          <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{p.quantity}</td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </>
           )}
 
           {/* Equipment */}
           {locationEquipment && (
-            <div>
-              <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">BOMBAS / EQUIPAMENTOS</div>
-              <table className="w-full border-collapse text-xs">
+            <>
+              <Section title="BOMBAS / EQUIPAMENTOS" />
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
                 <thead>
-                  <tr>
-                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Tipo</th>
-                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Marca</th>
-                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Modelo</th>
-                    <th className="border border-gray-400 px-2 py-1 font-bold text-left">Série</th>
+                  <tr style={{ background: '#f8fafc' }}>
+                    {['Tipo', 'Marca', 'Modelo', 'Série'].map(h => (
+                      <th key={h} style={{ padding: '4px 8px', textAlign: 'left', borderBottom: '1px solid #e2e8f0', fontWeight: 600, color: '#475569' }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td className="border border-gray-400 px-2 py-1">{locationEquipment.equipmentType.name}</td>
-                    <td className="border border-gray-400 px-2 py-1">{locationEquipment.brand.name}</td>
-                    <td className="border border-gray-400 px-2 py-1">{locationEquipment.model}</td>
-                    <td className="border border-gray-400 px-2 py-1">{locationEquipment.serialNumber ?? '—'}</td>
+                    <td style={{ padding: '4px 8px' }}>{locationEquipment.equipmentType.name}</td>
+                    <td style={{ padding: '4px 8px' }}>{locationEquipment.brand.name}</td>
+                    <td style={{ padding: '4px 8px' }}>{locationEquipment.model}</td>
+                    <td style={{ padding: '4px 8px' }}>{locationEquipment.serialNumber ?? '—'}</td>
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </>
           )}
 
           {/* Anomalias */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">ANOMALIAS ENCONTRADAS</div>
-            <div className="border border-gray-400 px-3 py-2 text-xs min-h-[40px] whitespace-pre-wrap">{intervention.breakdown}</div>
+          <Section title="ANOMALIAS ENCONTRADAS" />
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '8px 10px', fontSize: 11, minHeight: 36, whiteSpace: 'pre-wrap', color: '#1e293b' }}>
+            {intervention.breakdown || '—'}
           </div>
 
           {/* Work done */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-1">TRABALHO EFETUADO</div>
-            <div className="border border-gray-400 px-3 py-2 text-xs min-h-[40px] whitespace-pre-wrap">{workOrder.description}</div>
+          <Section title="TRABALHO EFETUADO" />
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 4, padding: '8px 10px', fontSize: 11, minHeight: 36, whiteSpace: 'pre-wrap', color: '#1e293b' }}>
+            {workOrder.description || '—'}
           </div>
 
           {/* Signatures */}
-          <div>
-            <div className="text-center font-bold text-xs border-t-2 border-b-2 border-gray-800 py-1 mb-3">ASSINATURAS</div>
-            <div className="flex gap-6">
-              <SignaturePad label="Assinatura do Cliente" onChanged={handleClientSig} />
-              <SignaturePad label="Assinatura do Técnico" onChanged={handleTechSig} />
-            </div>
+          <Section title="ASSINATURAS" />
+          <div className="flex gap-6 mt-2 mb-1">
+            <SignaturePad label="Assinatura do Cliente" onChanged={handleClientSig} />
+            <SignaturePad label="Assinatura do Técnico" onChanged={handleTechSig} />
           </div>
         </div>
 
@@ -377,7 +413,8 @@ export default function WorkOrderSignatureModal({ workOrder, intervention, onGen
           </button>
           <button
             onClick={() => onGenerate(clientSig, techSig)}
-            className="px-5 py-2 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700"
+            className="px-5 py-2 text-sm rounded-lg text-white font-semibold hover:opacity-90"
+            style={{ background: NAVY }}
           >
             Gerar PDF
           </button>

@@ -65,7 +65,7 @@ interface OVMFormProps {
   initial?: OVMData
   onSave: (data: OVMData) => Promise<void>
   onCancel: () => void
-  onPrint?: (data: OVMData) => void
+  onPrint?: (data: OVMData, regulatorName?: string) => void
   saving?: boolean
   equipment?: { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }[]
   locationOvmRegulatorId?: string | null
@@ -346,7 +346,11 @@ export default function OVMForm({ initial, onSave, onCancel, onPrint, saving, eq
         </button>
         {onPrint && (
           <button
-            onClick={() => onPrint(data)}
+            onClick={() => {
+              const effectiveId = locationOvmRegulatorId || data.regulatorId
+              const name = effectiveId ? ovmRegulators.find(r => r.id === effectiveId)?.name : undefined
+              onPrint(data, name)
+            }}
             className="btn btn-secondary text-sm px-4 py-1.5"
           >
             Imprimir

@@ -17,13 +17,26 @@ export async function POST(
     return NextResponse.json({ error: 'Item and quantity are required' }, { status: 400 })
   }
 
-  const item = await prisma.warehouseItem.findUnique({ where: { id: itemId } })
+  const itemRows = await prisma.$queryRaw<{ id: string; itemName: string; partNumber: string; mainWarehouse: number; tracksSerialNumbers: boolean; noStock: boolean }[]>`
+    SELECT id, "itemName", "partNumber", "mainWarehouse", "tracksSerialNumbers", "noStock"
+    FROM "WarehouseItem" WHERE id = ${itemId}
+  `
+  const item = itemRows[0]
   if (!item) return NextResponse.json({ error: 'Item not found' }, { status: 404 })
 
   const workOrderRef = await prisma.$queryRaw<{ reference: string | null }[]>`
     SELECT reference FROM "WorkOrder" WHERE id::text = ${workOrderId}
   `
   const woLabel = workOrderRef[0]?.reference || workOrderId
+
+  // No-stock items: just create the part record, no stock deduction
+  if (item.noStock) {
+    const part = await (prisma as any).workOrderPart.create({
+      data: { workOrderId, itemId, quantity, serialNumberIds: [] },
+    })
+    await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+    return NextResponse.json(part, { status: 201 })
+  }
 
   if (item.tracksSerialNumbers) {
     if (!serialNumberIds || serialNumberIds.length !== quantity) {
