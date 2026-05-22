@@ -24,7 +24,7 @@ export async function POST(
     // Fetch the client part
     const [clientPart] = await prisma.$queryRaw<any[]>`
       SELECT sn.id, sn."itemId", sn."technicianId", sn."interventionId", sn."clientPartStatus",
-             sn."serialNumber", sn.location, sn."preSwapped",
+             sn."serialNumber", sn."clientItemSn", sn.location, sn."preSwapped",
              wi."itemName", wi."partNumber"
       FROM "SerialNumberStock" sn
       JOIN "WarehouseItem" wi ON wi.id = sn."itemId"
@@ -64,12 +64,17 @@ export async function POST(
       )
     `
 
-    // Update serial number: mark as in repair, link repair job
+    // Update serial number: mark as in repair, link repair job.
+    // For preSwapped parts the record's serialNumber is the replacement given to the client;
+    // clientItemSn is the broken part received. Promote clientItemSn to serialNumber so the
+    // repair job displays the correct (received) SN throughout.
+    const receivedSn = isPreSwapped && clientPart.clientItemSn ? clientPart.clientItemSn : null
     await prisma.$executeRaw`
       UPDATE "SerialNumberStock"
       SET location = 'REPAIR',
           "clientPartStatus" = 'REPAIR',
           "clientRepairJobId" = ${repairJobId},
+          "serialNumber" = CASE WHEN ${receivedSn}::text IS NOT NULL THEN ${receivedSn}::text ELSE "serialNumber" END,
           "updatedAt" = ${now}::timestamptz
       WHERE id = ${serialNumberId}
     `

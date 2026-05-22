@@ -541,6 +541,7 @@ export default function RepairDetailPage() {
         clientName:   job.clientName,
         date:         new Date(job.sentAt).toLocaleDateString('pt-PT'),
         status:       (({ PENDING: 'Criada', IN_REPAIR: 'Em Progresso', QUOTE: 'Orçamento', OVM: 'Sujeito a OVM', REPAIRED: 'Dev. ao Stock', NOT_REPAIRED: 'Não Reparado', WRITTEN_OFF: 'Abate', RETURNED_TO_CLIENT: 'Reparado' } as Record<string, string>)[job.status] ?? job.status),
+        problem:      job.problem,
       }, template)
     } catch { /* ignore */ } finally { setLabelLoading(false) }
   }

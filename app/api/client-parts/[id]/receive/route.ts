@@ -51,11 +51,11 @@ export async function POST(
       `
     }
 
-    if (clientPart.technicianId) {
+    // For non-preSwapped client parts only: record receipt as a stock movement.
+    // preSwapped broken parts arriving at warehouse are NOT a stock addition — the
+    // actual +1 happens later when the repair is completed (return_to_stock action).
+    if (!clientPart.preSwapped && clientPart.technicianId) {
       const sn = clientPart.serialNumber as string | null
-      const notes = clientPart.preSwapped
-        ? `Sub. imediata — peça avariada recebida no armazém${sn ? ` (SN: ${sn})` : ''}`
-        : `Peça de cliente recebida no armazém${sn ? ` (SN: ${sn})` : ''}`
       await prisma.itemMovement.create({
         data: {
           itemId: clientPart.itemId,
@@ -63,7 +63,7 @@ export async function POST(
           quantity: 1,
           toUserId: null,
           fromUserId: clientPart.technicianId,
-          notes,
+          notes: `Peça de cliente recebida no armazém${sn ? ` (SN: ${sn})` : ''}`,
           createdById: payload.userId,
         },
       })

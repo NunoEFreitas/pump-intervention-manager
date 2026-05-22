@@ -562,7 +562,7 @@ export default function WorkOrderModal({
                           <span className="font-semibold text-gray-800">{part.itemName}</span>
                           {part.partNumber !== '__GENERIC__' && <span className="text-xs text-gray-400 font-mono">{part.partNumber}</span>}
                           {part.partNumber === '__GENERIC__' && <span className="text-xs font-semibold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Genérico</span>}
-                          {part.preSwapped && <span className="text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Sub. Imediata</span>}
+                          {part.preSwapped && <span className="text-xs font-semibold bg-green-100 text-green-800 px-1.5 py-0.5 rounded">Swap</span>}
                           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ml-auto ${
                             part.preSwapped ? 'bg-green-100 text-green-800' :
                             part.clientPartStatus === 'IN_TRANSIT' ? 'bg-yellow-100 text-yellow-800' :
@@ -758,7 +758,7 @@ export default function WorkOrderModal({
                           className="mt-0.5 w-4 h-4 text-green-600"
                         />
                         <div>
-                          <p className="text-sm font-semibold text-green-900">Substituição imediata</p>
+                          <p className="text-sm font-semibold text-green-900">Swap</p>
                           <p className="text-xs text-green-700 mt-0.5">O técnico já levou uma peça de substituição para o cliente. A peça recolhida será reparada e entrará para o stock da empresa.</p>
                         </div>
                       </label>

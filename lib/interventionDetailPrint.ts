@@ -405,7 +405,7 @@ export function printInterventionDetail(
         <td style="font-family:monospace;font-size:10px">${esc(p.serialNumber)}</td>
         <td style="font-size:11px;color:#374151">${esc(p.faultDescription)}</td>
         <td>${badge}${p.repairReference ? `<br><span style="font-family:monospace;font-size:10px;color:#1d4ed8">${esc(p.repairReference)}</span>` : ''}
-        ${p.preSwapped ? '<br><span style="font-size:9px;font-weight:600;color:#15803d">Sub. Imediata</span>' : ''}</td>
+        ${p.preSwapped ? '<br><span style="font-size:9px;font-weight:600;color:#15803d">Swap</span>' : ''}</td>
         <td style="font-size:10px;color:#6b7280">${timeline}</td>
       </tr>`
     }).join('')

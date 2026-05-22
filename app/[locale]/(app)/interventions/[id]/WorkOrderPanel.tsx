@@ -366,7 +366,7 @@ export default function WorkOrderPanel({
 
   return (
     <>
-      <div className="mt-4 rounded-xl bg-white shadow-lg ring-1 ring-black/8 overflow-hidden">
+      <div className="mt-4 rounded-xl bg-white shadow-lg ring-1 ring-black/8">
 
         {/* Panel header — navy strip */}
         <div className="flex items-center justify-between px-5 py-3.5" style={{ background: '#1e3a5f' }}>

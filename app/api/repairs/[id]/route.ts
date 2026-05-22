@@ -125,6 +125,7 @@ export async function PUT(
         await prisma.$executeRaw`
           UPDATE "SerialNumberStock"
           SET location = 'MAIN_WAREHOUSE', status = 'AVAILABLE',
+              "isClientPart" = false,
               "clientPartStatus" = CASE WHEN "isClientPart" = true THEN 'RESOLVED' ELSE "clientPartStatus" END,
               "updatedAt" = ${now}::timestamptz
           WHERE id = ${job.serialNumberId}

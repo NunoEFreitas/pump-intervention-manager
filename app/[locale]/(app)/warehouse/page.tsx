@@ -787,7 +787,7 @@ export default function WarehousePage() {
                         </span>
                       )}
                       {part.preSwapped && (
-                        <span className="text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded">Sub. Imediata</span>
+                        <span className="text-xs font-semibold bg-green-100 text-green-800 px-2 py-1 rounded">Swap</span>
                       )}
                       {part.repairReference && (
                         <span className="font-mono text-xs bg-orange-50 text-orange-700 border border-orange-200 px-2 py-1 rounded">{part.repairReference}</span>
@@ -1297,13 +1297,16 @@ export default function WarehousePage() {
       )}
 
       {/* ── Repair modal ────────────────────────────────────────────────────── */}
-      {cpModal === 'repair' && cpSelected && (
+      {cpModal === 'repair' && cpSelected && (() => {
+        const isSwapRepair = cpSelected.preSwapped
+        const displaySn = isSwapRepair ? (cpSelected.clientItemSn || '—') : cpSelected.serialNumber
+        return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
             <div className="p-6">
-              <h2 className="text-lg font-bold text-gray-900 mb-1">Abrir Reparação de Cliente</h2>
+              <h2 className="text-lg font-bold text-gray-900 mb-1">{isSwapRepair ? 'Abrir Reparação de Stock' : 'Abrir Reparação de Cliente'}</h2>
               <p className="text-sm text-gray-500 mb-4">
-                Será aberta uma reparação <strong>REC-xxx</strong> para <strong>{cpSelected.itemName}</strong> — série <strong>{cpSelected.serialNumber}</strong>. Após conclusão a peça volta ao técnico para entrega ao cliente.
+                Será aberta uma reparação <strong>{isSwapRepair ? 'REP-xxx' : 'REC-xxx'}</strong> para <strong>{cpSelected.itemName}</strong>{displaySn !== '—' ? <> — série <strong>{displaySn}</strong></> : null}. {isSwapRepair ? 'A peça fica no armazém stock após reparação.' : 'Após conclusão a peça volta ao técnico para entrega ao cliente.'}
               </p>
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Problema / Descrição</label>
@@ -1317,7 +1320,8 @@ export default function WarehousePage() {
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* ── Assign Item to Generic Client Part modal ──────────────────────────── */}
       {assignModal && (

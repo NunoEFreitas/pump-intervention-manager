@@ -24,6 +24,7 @@ export const REPAIR_FIELD_DEFS = [
   { key: 'clientName',   label: 'Cliente' },
   { key: 'date',         label: 'Data' },
   { key: 'status',       label: 'Estado' },
+  { key: 'problem',      label: 'Avaria' },
 ]
 
 export const RECEPTION_FIELD_DEFS = [
@@ -50,6 +51,7 @@ export interface RepairLabelData {
   clientName: string | null
   date: string
   status: string
+  problem?: string | null
 }
 
 export interface ReceptionLabelData {
@@ -139,6 +141,7 @@ function repairRows(fields: string[], data: RepairLabelData): Row[] {
       case 'clientName':   return row(key, data.clientName,   'small')
       case 'date':         return row(key, data.date,         'small')
       case 'status':       return row(key, data.status,       'small')
+      case 'problem':      return row(key, data.problem,      'small')
       default:             return []
     }
   })

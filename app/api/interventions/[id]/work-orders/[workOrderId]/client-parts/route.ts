@@ -27,6 +27,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       LEFT JOIN "User" u ON u.id = sn."pickedUpById"
       LEFT JOIN "PartRepairJob" rj ON rj.id = sn."clientRepairJobId"
       WHERE sn."workOrderId" = ${workOrderId} AND sn."isClientPart" = true
+        AND (sn."preSwapped" = false OR sn."clientPartStatus" = 'IN_TRANSIT')
       ORDER BY sn."createdAt" ASC
     `
 
@@ -246,7 +247,7 @@ export async function POST(request: NextRequest, { params }: Params) {
             movementType: 'USE',
             quantity: 1,
             fromUserId: resolvedTechId,
-            notes: `Sub. imediata — entregue ao cliente${fd ? `: ${fd}` : ''}${sn ? ` (SN: ${sn})` : ''}`,
+            notes: `Swap — entregue ao cliente${fd ? `: ${fd}` : ''}${sn ? ` (SN: ${sn})` : ''}`,
             createdById: payload.userId,
           },
         })
@@ -305,7 +306,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           movementType: 'USE',
           quantity: 1,
           fromUserId: resolvedTechId,
-          notes: `Sub. imediata — entregue ao cliente${fd ? `: ${fd}` : ''}${sn ? ` (SN: ${sn})` : ''}`,
+          notes: `Swap — entregue ao cliente${fd ? `: ${fd}` : ''}${sn ? ` (SN: ${sn})` : ''}`,
           createdById: payload.userId,
         },
       })

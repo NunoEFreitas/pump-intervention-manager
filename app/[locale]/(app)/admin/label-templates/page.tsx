@@ -73,6 +73,7 @@ function LabelPreview({ template, tab }: { template: LabelTemplate; tab: TabKey 
             : d.key === 'clientName'   ? 'Cliente Exemplo'
             : d.key === 'date'         ? '01/01/2025'
             : d.key === 'status'       ? 'Em Progresso'
+            : d.key === 'problem'      ? 'Não liga'
             : d.label}
           </div>
         ))}
@@ -216,6 +217,7 @@ export default function LabelTemplatesPage() {
       reference: 'REP-0001', itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345',
       serialNumber: 'SN20240001', clientName: 'Cliente Exemplo Lda',
       date: new Date().toLocaleDateString('pt-PT'), status: 'Em Progresso',
+      problem: 'Não liga',
     },
     reception: { itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345', serialNumber: 'SN20240001', date: new Date().toLocaleDateString('pt-PT') },
     product:   { itemName: 'Bomba Hidráulica XL', partNumber: 'BH-12345', serialNumber: 'SN20240001', barcode: '4006381333931' },
