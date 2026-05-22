@@ -27,10 +27,9 @@ interface PrintWorkOrder {
     serialNumbers?: { serialNumber: string }[]
   }[]
   repairParts?: {
-    repairReference: string | null
-    clientItemName: string
     parts: { itemName: string; partNumber: string; quantity: number; notes?: string | null }[]
   }[]
+  swapItems?: { itemName: string; partNumber: string; serialNumber: string | null }[]
 }
 
 interface PrintIntervention {
@@ -188,24 +187,22 @@ export function printWorkOrderPDF(
     </tr>`
   })
 
-  // Parts — from repair jobs
-  const repairPartRows = (workOrder.repairParts ?? []).flatMap(job => {
-    const header = `<tr>
-      <td colspan="2" style="background:#fffbeb;color:#92400e;font-size:10px;font-style:italic;font-weight:600;padding:4px 8px;border-top:1px solid #fde68a">
-        Rep. cliente${job.repairReference ? ` ${esc(job.repairReference)}` : ''} — ${esc(job.clientItemName)}
-      </td>
+  const repairPartRows = (workOrder.repairParts ?? []).flatMap(job =>
+    job.parts.map(p => `<tr>
+      <td>${esc(p.itemName)} <span style="font-size:10px;color:#6b7280">${esc(p.partNumber)}</span></td>
+      <td style="text-align:center;width:60px">${p.quantity}</td>
+    </tr>`)
+  )
+
+  const swapPartRows = (workOrder.swapItems ?? []).map(s => {
+    const sn = s.serialNumber ? ` <span style="font-size:10px;color:#7c3aed;font-family:monospace">SN: ${esc(s.serialNumber)}</span>` : ''
+    return `<tr>
+      <td>${esc(s.itemName)} <span style="font-size:10px;color:#6b7280">${esc(s.partNumber)}</span>${sn}</td>
+      <td style="text-align:center;width:60px">1</td>
     </tr>`
-    const rows = job.parts.map(p => {
-      const note = p.notes ? ` <span style="color:#6b7280;font-size:10px">${esc(p.notes)}</span>` : ''
-      return `<tr>
-        <td style="padding-left:16px">${esc(p.itemName)} <span style="font-size:10px;color:#6b7280">${esc(p.partNumber)}</span>${note}</td>
-        <td style="text-align:center;width:60px">${p.quantity}</td>
-      </tr>`
-    })
-    return [header, ...rows]
   })
 
-  const allPartRows = [...directPartRows, ...repairPartRows]
+  const allPartRows = [...directPartRows, ...repairPartRows, ...swapPartRows]
   const partsSection = allPartRows.length > 0 ? `
     <div class="section">Materiais Aplicados</div>
     <table>

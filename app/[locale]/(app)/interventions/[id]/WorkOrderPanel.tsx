@@ -64,6 +64,7 @@ interface Props {
   onRefresh: () => void
   onDelete: () => void
   onPrint: (wo: WorkOrder) => void
+  onReprint?: (wo: WorkOrder, pdf: SavedPdf) => void
   onCreated?: (id: string) => void
 }
 
@@ -98,7 +99,7 @@ export default function WorkOrderPanel({
   wo, interventionId, assignedTechnicianId, canEdit,
   equipment, technicians, vehicles, warehouseItems,
   savedPdfs, printCompany,
-  onClose, onRefresh, onDelete, onPrint, onCreated,
+  onClose, onRefresh, onDelete, onPrint, onReprint, onCreated,
 }: Props) {
   const isEdit = wo !== null
   const [tab, setTab] = useState<Tab>('details')
@@ -504,7 +505,7 @@ export default function WorkOrderPanel({
                     {savedPdfs.map((pdf, idx) => (
                       <div key={pdf.id} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
                         <span className="text-xs text-gray-600">#{savedPdfs.length - idx} — {new Date(pdf.createdAt).toLocaleString()}</span>
-                        <button onClick={() => wo && onPrint(wo)} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-imprimir</button>
+                        <button onClick={() => wo && (onReprint ? onReprint(wo, pdf) : onPrint(wo))} className="text-xs text-blue-600 hover:text-blue-800 font-medium">Re-imprimir</button>
                       </div>
                     ))}
                   </div>

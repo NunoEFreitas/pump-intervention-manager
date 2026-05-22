@@ -38,11 +38,9 @@ interface WorkOrderSignatureModalProps {
     } | null
   }
   repairParts?: {
-    repairJobId: string
-    repairReference: string | null
-    clientItemName: string
     parts: { id: string; itemName: string; partNumber: string; quantity: number; notes: string | null }[]
   }[]
+  swapItems?: { itemName: string; partNumber: string; serialNumber: string | null }[]
   onGenerate: (clientSig: string | null, techSig: string | null) => void
   onClose: () => void
 }
@@ -172,7 +170,7 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   )
 }
 
-export default function WorkOrderSignatureModal({ workOrder, repairParts, intervention, onGenerate, onClose }: WorkOrderSignatureModalProps) {
+export default function WorkOrderSignatureModal({ workOrder, repairParts, swapItems, intervention, onGenerate, onClose }: WorkOrderSignatureModalProps) {
   const [clientSig, setClientSig] = useState<string | null>(null)
   const [techSig, setTechSig] = useState<string | null>(null)
 
@@ -185,7 +183,7 @@ export default function WorkOrderSignatureModal({ workOrder, repairParts, interv
   const locationEquipment = intervention.location?.equipment.find(e => e.id === workOrder.locationEquipmentId)
   const locationAddr = [intervention.location?.address, intervention.location?.city].filter(Boolean).join(', ')
   const hasTravel = vehicleText || workOrder.km || workOrder.fromAddress || locationAddr
-  const hasMaterials = workOrder.parts.length > 0 || (repairParts && repairParts.length > 0)
+  const hasMaterials = workOrder.parts.length > 0 || (repairParts && repairParts.some(j => j.parts.length > 0)) || (swapItems && swapItems.length > 0)
 
   const totalDuration = workOrder.sessions.reduce((acc, s) => {
     if (s.duration != null) return acc + s.duration
@@ -325,34 +323,27 @@ export default function WorkOrderSignatureModal({ workOrder, repairParts, interv
                   </tr>
                 </thead>
                 <tbody>
-                  {workOrder.parts.map((p, i) => (
-                    <tr key={i} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  {[
+                    ...workOrder.parts.map(p => ({
+                      key: `d-${p.item.partNumber}`,
+                      name: p.item.itemName,
+                      pn: p.item.partNumber,
+                      qty: p.quantity,
+                      sn: p.serialNumbers?.length ? p.serialNumbers.map(s => s.serialNumber).join(', ') : null,
+                    })),
+                    ...(repairParts ?? []).flatMap(job =>
+                      job.parts.map(p => ({ key: `r-${p.id}`, name: p.itemName, pn: p.partNumber, qty: p.quantity, sn: null }))
+                    ),
+                    ...(swapItems ?? []).map((s, i) => ({ key: `sw-${i}`, name: s.itemName, pn: s.partNumber, qty: 1, sn: s.serialNumber })),
+                  ].map((row, i) => (
+                    <tr key={row.key} style={{ background: i % 2 === 0 ? '#fff' : '#f8fafc' }}>
                       <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                        {p.item.itemName}
-                        {p.item.partNumber && <span style={{ color: '#94a3b8', marginLeft: 4 }}>({p.item.partNumber})</span>}
-                        {p.serialNumbers?.length ? <span style={{ color: '#94a3b8', marginLeft: 4, fontSize: 10 }}>SN: {p.serialNumbers.map(s => s.serialNumber).join(', ')}</span> : null}
+                        {row.name}
+                        {row.pn && <span style={{ color: '#94a3b8', marginLeft: 4 }}>({row.pn})</span>}
+                        {row.sn && <span style={{ color: '#94a3b8', marginLeft: 4, fontSize: 10 }}>SN: {row.sn}</span>}
                       </td>
-                      <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{p.quantity}</td>
+                      <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{row.qty}</td>
                     </tr>
-                  ))}
-                  {repairParts?.map(job => (
-                    <React.Fragment key={job.repairJobId}>
-                      <tr>
-                        <td colSpan={2} style={{ padding: '4px 8px', background: '#fffbeb', color: '#92400e', fontSize: 10, fontStyle: 'italic', borderBottom: '1px solid #fde68a' }}>
-                          Rep. cliente{job.repairReference ? ` ${job.repairReference}` : ''} — {job.clientItemName}
-                        </td>
-                      </tr>
-                      {job.parts.map((p, i) => (
-                        <tr key={i} style={{ background: i % 2 === 0 ? '#fffdf7' : '#fff' }}>
-                          <td style={{ padding: '4px 8px 4px 20px', borderBottom: '1px solid #f1f5f9' }}>
-                            {p.itemName}
-                            {p.partNumber && <span style={{ color: '#94a3b8', marginLeft: 4 }}>({p.partNumber})</span>}
-                            {p.notes && <span style={{ color: '#94a3b8', marginLeft: 4, fontStyle: 'italic' }}>{p.notes}</span>}
-                          </td>
-                          <td style={{ padding: '4px 8px', textAlign: 'center', borderBottom: '1px solid #f1f5f9' }}>{p.quantity}</td>
-                        </tr>
-                      ))}
-                    </React.Fragment>
                   ))}
                 </tbody>
               </table>

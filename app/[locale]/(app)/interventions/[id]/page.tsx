@@ -160,7 +160,8 @@ export default function InterventionDetailPage() {
   const [printCompany, setPrintCompany] = useState<{ name: string; email: string; address: string; phones: string[]; faxes: string[]; logo: string } | null>(null)
   const [ovmRegulators, setOvmRegulators] = useState<{ id: string; name: string }[]>([])
   const [signatureModalWO, setSignatureModalWO] = useState<WorkOrder | null>(null)
-  const [modalRepairParts, setModalRepairParts] = useState<any[]>([])
+  const [modalRepairParts, setModalRepairParts] = useState<{ parts: { id: string; itemName: string; partNumber: string; quantity: number; notes: string | null }[] }[]>([])
+  const [modalSwapItems, setModalSwapItems] = useState<{ itemName: string; partNumber: string; serialNumber: string | null }[]>([])
   const [savedPdfs, setSavedPdfs] = useState<Record<string, { id: string; createdAt: string; clientSignature: string | null; techSignature: string | null }[]>>({})
   const [ovms, setOvms] = useState<{ id: string; data: OVMData; createdAt: string }[]>([])
   const [showOVMForm, setShowOVMForm] = useState(false)
@@ -222,10 +223,46 @@ export default function InterventionDetailPage() {
     }
     try {
       const token = localStorage.getItem('token')
-      const rp = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } })
+      const [rp, sp] = await Promise.all([
+        fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/client-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+      ])
       setModalRepairParts(rp.ok ? await rp.json() : [])
-    } catch { setModalRepairParts([]) }
+      const clientParts: ClientPart[] = sp.ok ? await sp.json() : []
+      setModalSwapItems(clientParts.filter(p => p.preSwapped).map(p => ({ itemName: p.itemName, partNumber: p.partNumber, serialNumber: p.serialNumber })))
+    } catch { setModalRepairParts([]); setModalSwapItems([]) }
     setSignatureModalWO(wo)
+  }
+
+  const handleReprintWorkOrder = async (wo: WorkOrder, pdf: { clientSignature: string | null; techSignature: string | null }) => {
+    if (!intervention) return
+    let company = printCompany
+    if (!company) {
+      try {
+        const token = localStorage.getItem('token')
+        const res = await fetch('/api/admin/company', { headers: { Authorization: `Bearer ${token}` } })
+        const d = await res.json()
+        company = { name: d.name || '', email: d.email || '', address: d.address || '', phones: Array.isArray(d.phones) ? d.phones : [], faxes: Array.isArray(d.faxes) ? d.faxes : [], logo: d.logo || '' }
+        setPrintCompany(company)
+      } catch {
+        company = { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }
+      }
+    }
+    let repairParts: { parts: { itemName: string; partNumber: string; quantity: number }[] }[] = []
+    let swapItems: { itemName: string; partNumber: string; serialNumber: string | null }[] = []
+    try {
+      const token = localStorage.getItem('token')
+      const [rp, sp] = await Promise.all([
+        fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/client-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+      ])
+      if (rp.ok) repairParts = await rp.json()
+      if (sp.ok) {
+        const cp: ClientPart[] = await sp.json()
+        swapItems = cp.filter(p => p.preSwapped).map(p => ({ itemName: p.itemName, partNumber: p.partNumber, serialNumber: p.serialNumber }))
+      }
+    } catch { /* non-blocking */ }
+    printWorkOrderPDF({ ...wo, repairParts, swapItems }, intervention, company, pdf.clientSignature, pdf.techSignature)
   }
 
   useEffect(() => {
@@ -1316,6 +1353,7 @@ export default function InterventionDetailPage() {
                         onRefresh={() => { fetchWorkOrders(); fetchIntervention() }}
                         onDelete={() => { deleteWorkOrder(wo.id); setActiveWOId(null) }}
                         onPrint={handlePrintWorkOrder}
+                        onReprint={handleReprintWorkOrder}
                       />
                     ) : (
                       <button
@@ -1787,17 +1825,26 @@ export default function InterventionDetailPage() {
         <WorkOrderSignatureModal
           workOrder={signatureModalWO}
           repairParts={modalRepairParts}
+          swapItems={modalSwapItems}
           intervention={intervention}
           onClose={() => setSignatureModalWO(null)}
           onGenerate={async (clientSig, techSig) => {
             const wo = signatureModalWO
-            let repairParts: any[] = []
+            let repairParts: { parts: { itemName: string; partNumber: string; quantity: number }[] }[] = []
+            let swapItems: { itemName: string; partNumber: string; serialNumber: string | null }[] = []
             try {
               const token = localStorage.getItem('token')
-              const rp = await fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } })
+              const [rp, sp] = await Promise.all([
+                fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/repair-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+                fetch(`/api/interventions/${params.id}/work-orders/${wo.id}/client-parts`, { headers: { Authorization: `Bearer ${token}` } }),
+              ])
               if (rp.ok) repairParts = await rp.json()
+              if (sp.ok) {
+                const cp: ClientPart[] = await sp.json()
+                swapItems = cp.filter(p => p.preSwapped).map(p => ({ itemName: p.itemName, partNumber: p.partNumber, serialNumber: p.serialNumber }))
+              }
             } catch { /* non-blocking */ }
-            printWorkOrderPDF({ ...wo, repairParts }, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, clientSig, techSig)
+            printWorkOrderPDF({ ...wo, repairParts, swapItems }, intervention, printCompany ?? { name: '', email: '', address: '', phones: [], faxes: [], logo: '' }, clientSig, techSig)
             setSignatureModalWO(null)
             try {
               const token = localStorage.getItem('token')
