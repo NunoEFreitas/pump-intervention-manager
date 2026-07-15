@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pump Intervention Manager – Deployment Guide</title>
+<style>
+  body {
+    font-family: Calibri, Arial, sans-serif;
+    font-size: 11pt;
+    color: #222;
+    max-width: 900px;
+    margin: 40px auto;
+    line-height: 1.6;
+  }
+  h1 {
+    font-size: 22pt;
+    color: #1a3a5c;
+    border-bottom: 3px solid #1a3a5c;
+    padding-bottom: 8px;
+    margin-top: 40px;
+  }
+  h2 {
+    font-size: 16pt;
+    color: #1a6b9a;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 4px;
+    margin-top: 32px;
+  }
+  h3 {
+    font-size: 13pt;
+    color: #2e6da4;
+    margin-top: 24px;
+  }
+  h4 {
+    font-size: 11pt;
+    color: #444;
+    margin-top: 16px;
+    font-weight: bold;
+  }
+  pre {
+    background: #f4f4f4;
+    border: 1px solid #ccc;
+    border-left: 4px solid #1a6b9a;
+    padding: 12px 16px;
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 9.5pt;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin: 8px 0 16px 0;
+    border-radius: 3px;
+  }
+  code {
+    font-family: Consolas, "Courier New", monospace;
+    background: #f0f0f0;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 9.5pt;
+    color: #c0392b;
+  }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+    font-size: 10pt;
+  }
+  th {
+    background: #1a3a5c;
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: bold;
+  }
+  td {
+    padding: 7px 12px;
+    border: 1px solid #ccc;
+  }
+  tr:nth-child(even) td {
+    background: #f7f9fc;
+  }
+  .note {
+    background: #fff8dc;
+    border-left: 4px solid #f0ad4e;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 3px;
+    font-size: 10pt;
+  }
+  .warning {
+    background: #fdecea;
+    border-left: 4px solid #d9534f;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 3px;
+    font-size: 10pt;
+  }
+  .success {
+    background: #eafaf1;
+    border-left: 4px solid #27ae60;
+    padding: 10px 14px;
+    margin: 12px 0;
+    border-radius: 3px;
+    font-size: 10pt;
+  }
+  ol, ul {
+    margin: 8px 0;
+    padding-left: 28px;
+  }
+  li {
+    margin: 4px 0;
+  }
+  .page-break {
+    page-break-before: always;
+  }
+  .title-block {
+    text-align: center;
+    padding: 40px 0 30px 0;
+    border-bottom: 2px solid #1a3a5c;
+    margin-bottom: 30px;
+  }
+  .title-block h1 {
+    font-size: 28pt;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+  .title-block .subtitle {
+    font-size: 14pt;
+    color: #666;
+    margin-top: 8px;
+  }
+  .title-block .meta {
+    font-size: 10pt;
+    color: #999;
+    margin-top: 16px;
+  }
+  .toc {
+    background: #f7f9fc;
+    border: 1px solid #ccc;
+    padding: 20px 28px;
+    margin: 24px 0;
+    border-radius: 4px;
+  }
+  .toc h3 {
+    margin-top: 0;
+    color: #1a3a5c;
+  }
+  .toc ol {
+    margin: 0;
+  }
+  .toc li {
+    margin: 5px 0;
+  }
+  .phase-badge {
+    display: inline-block;
+    background: #1a3a5c;
+    color: white;
+    font-size: 9pt;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<div class="title-block">
+  <h1>Pump Intervention Manager</h1>
+  <div class="subtitle">Windows Server 2019 — Deployment Guide</div>
+  <div class="meta">Next.js 15 · PostgreSQL 16 · GitHub Actions CI/CD · IIS Reverse Proxy</div>
+  <div class="meta">Generated: June 2026</div>
+</div>
+
+<div class="toc">
+  <h3>Table of Contents</h3>
+  <ol>
+    <li>Prerequisites &amp; Overview</li>
+    <li>Phase 1 — Install Server Software</li>
+    <li>Phase 2 — PostgreSQL Database Setup</li>
+    <li>Phase 3 — Configure GitHub Actions Self-Hosted Runner</li>
+    <li>Phase 4 — Set Up the Application Directory</li>
+    <li>Phase 5 — GitHub Actions Deployment Workflow</li>
+    <li>Phase 6 — First Manual Deploy</li>
+    <li>Phase 7 — IIS Reverse Proxy (port 80/443)</li>
+    <li>Phase 8 — Firewall Configuration</li>
+    <li>Phase 9 — Automatic Database Backups</li>
+    <li>Phase 10 — SSL / HTTPS (optional)</li>
+    <li>Phase 11 — Subdomain Setup (guimabombas.com)</li>
+    <li>Phase 12 — First Login &amp; Admin Account</li>
+    <li>Phase 13 — PM2 Log Rotation</li>
+    <li>Phase 14 — Post-Reboot Verification Checklist</li>
+    <li>Phase 15 — Manual Emergency Deploy</li>
+    <li>Phase 16 — Remote Desktop (RDP) Access</li>
+    <li>Phase 17 — Basic Uptime Monitoring</li>
+    <li>Ongoing Deployment Flow</li>
+    <li>Services Summary</li>
+    <li>Troubleshooting</li>
+
+  </ol>
+</div>
+
+<!-- ============================================================ -->
+<h1>1. Prerequisites &amp; Overview</h1>
+
+<h3>What will be installed on the server</h3>
+<table>
+  <tr><th>Software</th><th>Purpose</th><th>Runs as</th></tr>
+  <tr><td>Node.js 20 LTS</td><td>Runtime for Next.js</td><td>—</td></tr>
+  <tr><td>PostgreSQL 16</td><td>Database</td><td>Windows Service</td></tr>
+  <tr><td>Git</td><td>Source control</td><td>CLI tool</td></tr>
+  <tr><td>PM2</td><td>Keep app running, auto-restart on reboot</td><td>Windows Service</td></tr>
+  <tr><td>GitHub Actions Runner</td><td>Receives deploy jobs from GitHub</td><td>Windows Service</td></tr>
+  <tr><td>IIS + ARR + URL Rewrite</td><td>Reverse proxy (port 80 → app port 3000)</td><td>Windows Service</td></tr>
+</table>
+
+<h3>Architecture overview</h3>
+<pre>Internet
+    │
+    ▼
+IIS (port 80 / 443)          ← reverse proxy
+    │
+    ▼
+PM2 → Next.js app (port 3000)
+    │
+    ▼
+PostgreSQL (port 5432, localhost only)
+</pre>
+
+<h3>Requirements before you start</h3>
+<ul>
+  <li>Windows Server 2019 machine with Administrator access</li>
+  <li>A GitHub repository with the application code</li>
+  <li>Internet access on the server (for downloading installers and pulling from GitHub)</li>
+  <li>A domain name or static IP address for the server (to configure <code>NEXTAUTH_URL</code>)</li>
+</ul>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>2. Phase 1 — Install Server Software</h1>
+
+<h2><span class="phase-badge">STEP 1</span> Install Node.js</h2>
+<ol>
+  <li>Open a browser on the server and go to <strong>nodejs.org</strong></li>
+  <li>Download the <strong>LTS</strong> installer (Windows 64-bit .msi)</li>
+  <li>Run the installer with all default options. Make sure <strong>"Add to PATH"</strong> is checked.</li>
+  <li>Open PowerShell as Administrator and verify:</li>
+</ol>
+<pre>node -v
+npm -v</pre>
+<p>Both commands should print version numbers (e.g. <code>v20.x.x</code> and <code>10.x.x</code>).</p>
+
+<h2><span class="phase-badge">STEP 2</span> Install Git</h2>
+<ol>
+  <li>Go to <strong>git-scm.com/download/win</strong> and download the 64-bit installer.</li>
+  <li>Run the installer. During setup:
+    <ul>
+      <li>Select <strong>"Git from the command line and also from 3rd-party software"</strong></li>
+      <li>All other options can stay as defaults.</li>
+    </ul>
+  </li>
+  <li>Verify in PowerShell:</li>
+</ol>
+<pre>git --version</pre>
+
+<h2><span class="phase-badge">STEP 3</span> Install PM2 (process manager)</h2>
+<p>PM2 keeps the Next.js app running and restarts it automatically if it crashes or the server reboots.</p>
+<pre>npm install -g pm2
+npm install -g pm2-windows-startup
+pm2-startup install</pre>
+
+<div class="note"><strong>Note:</strong> If PowerShell blocks npm global installs, run: <code>Set-ExecutionPolicy RemoteSigned -Scope CurrentUser</code></div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>3. Phase 2 — PostgreSQL Database Setup</h1>
+
+<h2><span class="phase-badge">STEP 4</span> Install PostgreSQL 16</h2>
+<ol>
+  <li>Go to <strong>postgresql.org/download/windows</strong> and download the PostgreSQL 16 installer.</li>
+  <li>Run the installer as Administrator. During setup:
+    <ul>
+      <li>Components to install: <strong>PostgreSQL Server, pgAdmin 4, Command Line Tools</strong></li>
+      <li>Data directory: leave as default (<code>C:\Program Files\PostgreSQL\16\data</code>)</li>
+      <li><strong>Set a strong password for the <code>postgres</code> superuser — write it down!</strong></li>
+      <li>Port: <strong>5432</strong> (default)</li>
+      <li>Locale: leave as default</li>
+    </ul>
+  </li>
+  <li>Finish the installer. PostgreSQL will start automatically as a Windows Service.</li>
+  <li>Verify the service is running:</li>
+</ol>
+<pre>Get-Service -Name "postgresql*"</pre>
+<p>You should see <code>postgresql-x64-16</code> with Status <strong>Running</strong>.</p>
+
+<h2><span class="phase-badge">STEP 5</span> Create the Application Database and User</h2>
+<p>Open PowerShell as Administrator and connect to PostgreSQL:</p>
+<pre>& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres</pre>
+<p>Enter the postgres password you set during installation. Then run these SQL commands:</p>
+<pre>CREATE DATABASE pump_intervention_db;
+CREATE USER pump_user WITH ENCRYPTED PASSWORD 'replace_with_strong_password';
+GRANT ALL PRIVILEGES ON DATABASE pump_intervention_db TO pump_user;
+\q</pre>
+
+<div class="warning"><strong>Important:</strong> Replace <code>replace_with_strong_password</code> with a real strong password. You will need this in the <code>.env</code> file later.</div>
+
+<h2><span class="phase-badge">STEP 6</span> Configure PostgreSQL for Production</h2>
+<p>Edit the configuration file at <code>C:\Program Files\PostgreSQL\16\data\postgresql.conf</code>.</p>
+<p>Open it with Notepad as Administrator and find and update these lines:</p>
+<pre># Only accept connections from this machine (security)
+listen_addresses = 'localhost'
+
+# Performance (adjust shared_buffers based on available RAM)
+max_connections = 100
+shared_buffers = 256MB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+
+# Logging
+log_min_duration_statement = 1000
+log_line_prefix = '%t [%p]: '</pre>
+
+<p>Also edit <code>C:\Program Files\PostgreSQL\16\data\pg_hba.conf</code> and make sure this line exists:</p>
+<pre>host    all             all             127.0.0.1/32            scram-sha-256</pre>
+
+<p>Restart PostgreSQL to apply changes:</p>
+<pre>Restart-Service -Name "postgresql-x64-16"</pre>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>4. Phase 3 — GitHub Actions Self-Hosted Runner</h1>
+
+<p>The self-hosted runner is a small agent that runs on your server and listens for deployment jobs from GitHub. Every time you push to <code>main</code>, GitHub sends a job to this runner which pulls the code and deploys it.</p>
+
+<h2><span class="phase-badge">STEP 7</span> Register the Runner on GitHub</h2>
+<ol>
+  <li>Go to your GitHub repository in a browser.</li>
+  <li>Click <strong>Settings</strong> → <strong>Actions</strong> → <strong>Runners</strong> → <strong>New self-hosted runner</strong>.</li>
+  <li>Select <strong>Windows</strong> as the operating system.</li>
+  <li>GitHub will show you a set of PowerShell commands. <strong>Copy them exactly.</strong></li>
+</ol>
+
+<h2><span class="phase-badge">STEP 8</span> Install the Runner on the Server</h2>
+<p>Open PowerShell <strong>as Administrator</strong> on the server and run the commands GitHub gave you. They will look similar to this (use the exact commands from GitHub, not these):</p>
+<pre># Example — use the real commands from GitHub
+mkdir C:\actions-runner ; cd C:\actions-runner
+Invoke-WebRequest -Uri https://github.com/actions/runner/releases/download/v2.xxx/actions-runner-win-x64-2.xxx.zip -OutFile actions-runner-win-x64-2.xxx.zip
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD\actions-runner-win-x64-2.xxx.zip", "$PWD")
+.\config.cmd --url https://github.com/YOUR_USERNAME/pump-intervention-manager --token YOUR_TOKEN</pre>
+
+<p>During the <code>config.cmd</code> prompts:</p>
+<ul>
+  <li>Runner group: press Enter (default)</li>
+  <li>Runner name: type something like <code>windows-server-prod</code></li>
+  <li>Labels: press Enter (default)</li>
+  <li>Work folder: press Enter (default)</li>
+</ul>
+
+<h2><span class="phase-badge">STEP 9</span> Install the Runner as a Windows Service</h2>
+<p>This ensures the runner starts automatically when the server reboots:</p>
+<pre>.\svc.cmd install
+.\svc.cmd start</pre>
+
+<p>Verify it appears as <strong>Online</strong> in your GitHub repo under Settings → Actions → Runners.</p>
+
+<h2><span class="phase-badge">STEP 9b</span> Fix Node.js and PM2 PATH for the Runner</h2>
+<p>This step is critical and often missed. The runner service runs under the Windows SYSTEM account, which does not automatically inherit the PATH of the user that installed Node.js and PM2. Without this fix, every deployment will fail with errors like <code>'npm' is not recognized as a command</code>.</p>
+<ol>
+  <li>Open File Explorer and navigate to <code>C:\actions-runner\</code></li>
+  <li>Look for a file named <code>.env</code> in that folder. If it does not exist, create a new text file and name it exactly <code>.env</code> (make sure Windows did not add <code>.txt</code> to the end — enable "Show file extensions" in Explorer to verify).</li>
+  <li>Open the file in Notepad as Administrator and add this single line:</li>
+</ol>
+<pre>PATH=C:\Program Files\nodejs;C:\Users\Administrator\AppData\Roaming\npm;%PATH%</pre>
+<div class="note"><strong>Note:</strong> If Node.js was installed for "all users" the path above is correct. If it was installed for a specific user, the npm folder may be at a different path. You can find it by running <code>(Get-Command npm).Source</code> in PowerShell.</div>
+<ol start="4">
+  <li>Save the file, then restart the runner service:</li>
+</ol>
+<pre>Restart-Service -Name (Get-Service | Where-Object { $_.DisplayName -like "*actions.runner*" }).Name</pre>
+<div class="success"><strong>How to verify:</strong> After restarting, trigger a test deployment by pushing any small change to GitHub. In the Actions tab, the <code>npm ci</code> step should complete without errors.</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>5. Phase 4 — Set Up the Application Directory</h1>
+
+<h2><span class="phase-badge">STEP 10</span> Clone the Repository</h2>
+<p>Do this once manually. All future updates will happen automatically via GitHub Actions.</p>
+<pre>mkdir C:\apps
+cd C:\apps
+git clone https://github.com/YOUR_USERNAME/pump-intervention-manager.git
+cd pump-intervention-manager</pre>
+
+<h2><span class="phase-badge">STEP 11</span> Create the Environment File</h2>
+<p>Create the file <code>C:\apps\pump-intervention-manager\.env</code> with Notepad as Administrator. This file holds all sensitive configuration — <strong>it is never committed to GitHub.</strong></p>
+
+<pre># Database (PostgreSQL — running on this same server)
+DATABASE_URL="postgresql://pump_user:replace_with_strong_password@localhost:5432/pump_intervention_db"
+
+# NextAuth — set this to your server's IP or domain
+NEXTAUTH_URL="http://YOUR_SERVER_IP_OR_DOMAIN"
+NEXTAUTH_SECRET="paste_a_random_64_char_string_here"
+
+# JWT
+JWT_SECRET="paste_another_random_64_char_string_here"
+
+# Microsoft Graph API (for email sending)
+MICROSOFT_TENANT_ID="your-azure-tenant-id"
+MICROSOFT_CLIENT_ID="your-azure-app-client-id"
+MICROSOFT_CLIENT_SECRET="your-azure-app-client-secret"
+MICROSOFT_SENDER_EMAIL="noreply@yourdomain.com"</pre>
+
+<h3>Generate the secret keys</h3>
+<p>Run this command twice in PowerShell (use each output for <code>NEXTAUTH_SECRET</code> and <code>JWT_SECRET</code>):</p>
+<pre>node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"</pre>
+
+<h2><span class="phase-badge">STEP 12</span> Add Secrets to GitHub</h2>
+<p>Go to your GitHub repository → <strong>Settings</strong> → <strong>Secrets and variables</strong> → <strong>Actions</strong> → <strong>New repository secret</strong>.</p>
+<p>Add each of these secrets (copy the values from your <code>.env</code> file):</p>
+<table>
+  <tr><th>Secret Name</th><th>Value</th></tr>
+  <tr><td>DATABASE_URL</td><td>Your full PostgreSQL connection string</td></tr>
+  <tr><td>NEXTAUTH_URL</td><td>http://YOUR_SERVER_IP_OR_DOMAIN</td></tr>
+  <tr><td>NEXTAUTH_SECRET</td><td>The 64-char random string</td></tr>
+  <tr><td>JWT_SECRET</td><td>The other 64-char random string</td></tr>
+  <tr><td>MICROSOFT_TENANT_ID</td><td>Your Azure tenant ID</td></tr>
+  <tr><td>MICROSOFT_CLIENT_ID</td><td>Your Azure app client ID</td></tr>
+  <tr><td>MICROSOFT_CLIENT_SECRET</td><td>Your Azure app client secret</td></tr>
+  <tr><td>MICROSOFT_SENDER_EMAIL</td><td>The sender email address</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>6. Phase 5 — GitHub Actions Deployment Workflow</h1>
+
+<h2><span class="phase-badge">STEP 13</span> Create the Workflow File</h2>
+<p>In your local development machine, create the following file in your repository:</p>
+<p>Path: <code>.github/workflows/deploy.yml</code></p>
+
+<pre>name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_SENDER_EMAIL: ${{ secrets.MICROSOFT_SENDER_EMAIL }}
+
+      - name: Restart application
+        run: |
+          pm2 restart pump-app --update-env || pm2 start npm --name "pump-app" -- start
+          pm2 save</pre>
+
+<p>Commit and push this file to your repository:</p>
+<pre>git add .github/workflows/deploy.yml
+git commit -m "ci: add production deployment workflow"
+git push origin main</pre>
+
+<div class="success"><strong>Result:</strong> From this point on, every <code>git push</code> to the <code>main</code> branch will automatically deploy the latest version to the server.</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>7. Phase 6 — First Manual Deploy</h1>
+
+<p>Do this once to initialize the database and start the app for the first time. After this, all deployments happen automatically via GitHub Actions.</p>
+
+<h2><span class="phase-badge">STEP 14</span> Run Initial Setup on the Server</h2>
+<p>Open PowerShell as Administrator on the server:</p>
+<pre>cd C:\apps\pump-intervention-manager
+
+# Install all npm dependencies
+npm ci
+
+# Generate Prisma client
+npx prisma generate
+
+# Run all database migrations (creates tables)
+npx prisma migrate deploy
+
+# Build the Next.js application
+npm run build
+
+# Start the app with PM2
+pm2 start npm --name "pump-app" -- start
+
+# Save PM2 process list so it survives reboots
+pm2 save</pre>
+
+<h2><span class="phase-badge">STEP 15</span> Verify the App is Running</h2>
+<pre># Check PM2 process status
+pm2 list
+
+# View live logs
+pm2 logs pump-app --lines 50</pre>
+
+<p>You should see <code>pump-app</code> listed with status <strong>online</strong>. The app is now accessible at <code>http://localhost:3000</code> on the server.</p>
+
+<div class="note"><strong>Note:</strong> If you see errors in the logs, the most common causes are: wrong <code>DATABASE_URL</code> in the <code>.env</code> file, or PostgreSQL service not running. Check with <code>Get-Service postgresql*</code>.</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>8. Phase 7 — IIS Reverse Proxy (Port 80)</h1>
+
+<p>IIS forwards incoming requests on port 80 to the Next.js app on port 3000. This is required so users can access the app without typing <code>:3000</code> in the URL, and is also needed later for SSL/HTTPS.</p>
+
+<h2><span class="phase-badge">STEP 16</span> Install IIS</h2>
+<ol>
+  <li>Open <strong>Server Manager</strong>.</li>
+  <li>Click <strong>Manage</strong> → <strong>Add Roles and Features</strong>.</li>
+  <li>Click Next until you reach <strong>Server Roles</strong>.</li>
+  <li>Check <strong>Web Server (IIS)</strong> and click Next through all the screens.</li>
+  <li>Click <strong>Install</strong> and wait for it to finish.</li>
+</ol>
+
+<h2><span class="phase-badge">STEP 17</span> Install ARR and URL Rewrite Modules</h2>
+<p>These two free Microsoft modules are required for IIS to act as a reverse proxy.</p>
+<ol>
+  <li>Download <strong>URL Rewrite</strong> from: <code>iis.net/downloads/microsoft/url-rewrite</code></li>
+  <li>Download <strong>Application Request Routing (ARR)</strong> from: <code>iis.net/downloads/microsoft/application-request-routing</code></li>
+  <li>Install both (run the installers, accept all defaults).</li>
+  <li>Restart IIS after installing:</li>
+</ol>
+<pre>iisreset</pre>
+
+<h2><span class="phase-badge">STEP 18</span> Enable ARR Proxy</h2>
+<ol>
+  <li>Open <strong>IIS Manager</strong> (search for it in the Start menu).</li>
+  <li>Click on the server name in the left panel (top level).</li>
+  <li>Double-click <strong>Application Request Routing Cache</strong>.</li>
+  <li>In the right panel click <strong>Server Proxy Settings</strong>.</li>
+  <li>Check <strong>Enable proxy</strong> and click <strong>Apply</strong>.</li>
+</ol>
+
+<h2><span class="phase-badge">STEP 18b</span> Stop the IIS Default Web Site</h2>
+<p>IIS installs with a pre-existing site called <strong>Default Web Site</strong> that is already listening on port 80. If it is still running when you create the pump-app site, IIS will refuse to start the new site because two sites cannot share the same port. You must stop it first.</p>
+<ol>
+  <li>In IIS Manager, expand the server node on the left → expand <strong>Sites</strong>.</li>
+  <li>Click once on <strong>Default Web Site</strong> to select it.</li>
+  <li>In the right-hand <strong>Actions</strong> panel, click <strong>Stop</strong>.</li>
+  <li>The green arrow icon next to "Default Web Site" should disappear, confirming it is stopped.</li>
+</ol>
+<div class="warning"><strong>Important:</strong> Do not delete the Default Web Site — just stop it. Stopping is reversible; deleting is not.</div>
+
+<h2><span class="phase-badge">STEP 19</span> Configure the Website in IIS</h2>
+<ol>
+  <li>In IIS Manager, expand the server node on the left.</li>
+  <li>Right-click <strong>Sites</strong> → <strong>Add Website</strong>.</li>
+  <li>Fill in:
+    <ul>
+      <li>Site name: <code>pump-app</code></li>
+      <li>Physical path: <code>C:\apps\pump-intervention-manager\public</code></li>
+      <li>Binding type: <strong>http</strong></li>
+      <li>IP address: <strong>All Unassigned</strong></li>
+      <li>Port: <strong>80</strong></li>
+      <li>Host name: your domain (or leave blank for IP access)</li>
+    </ul>
+  </li>
+  <li>Click <strong>OK</strong>.</li>
+</ol>
+
+<h2><span class="phase-badge">STEP 20</span> Add URL Rewrite Rule</h2>
+<ol>
+  <li>Click on the <strong>pump-app</strong> site in IIS Manager.</li>
+  <li>Double-click <strong>URL Rewrite</strong>.</li>
+  <li>Click <strong>Add Rule(s)</strong> → <strong>Blank rule</strong> (under Inbound rules).</li>
+  <li>Fill in:
+    <ul>
+      <li>Name: <code>Proxy to Next.js</code></li>
+      <li>Match URL — Requested URL: <strong>Matches the Pattern</strong></li>
+      <li>Using: <strong>Regular Expressions</strong></li>
+      <li>Pattern: <code>(.*)</code></li>
+      <li>Action type: <strong>Rewrite</strong></li>
+      <li>Rewrite URL: <code>http://localhost:3000/{R:1}</code></li>
+    </ul>
+  </li>
+  <li>Click <strong>Apply</strong>.</li>
+</ol>
+
+<div class="success"><strong>Result:</strong> The app is now accessible at <code>http://YOUR_SERVER_IP</code> (no port number needed).</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>9. Phase 8 — Firewall Configuration</h1>
+
+<h2><span class="phase-badge">STEP 21</span> Open Port 80 for HTTP</h2>
+<pre>New-NetFirewallRule -DisplayName "HTTP" -Direction Inbound -Protocol TCP -LocalPort 80 -Action Allow</pre>
+
+<h2><span class="phase-badge">STEP 22</span> Open Port 443 for HTTPS (when ready)</h2>
+<pre>New-NetFirewallRule -DisplayName "HTTPS" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow</pre>
+
+<h2><span class="phase-badge">STEP 23</span> Keep PostgreSQL Port Closed</h2>
+<p>Since the app and database are on the same machine, PostgreSQL port 5432 should <strong>NOT</strong> be open to the internet. This is the default and you do not need to do anything — just verify:</p>
+<pre># This should return nothing (no rule for port 5432)
+Get-NetFirewallRule | Where-Object { $_.LocalPort -eq "5432" -and $_.Direction -eq "Inbound" }</pre>
+
+<div class="warning"><strong>Security:</strong> Never open port 5432 to the public internet. If you need to access the database remotely (e.g. from pgAdmin on your laptop), only allow your specific IP address and use a strong password.</div>
+
+<h2><span class="phase-badge">STEP 23b</span> Configure Port Forwarding on the Router</h2>
+<p>Opening the Windows Firewall (steps 21 and 22) is not enough on its own. If the server is connected to the internet through a router or modem (which is almost always the case in an office), the router also needs to be configured to forward incoming web traffic to the server.</p>
+<div class="note"><strong>When is this needed?</strong> If the server's IP address starts with <code>192.168.</code> or <code>10.</code> it is behind a router and you must do this step.</div>
+
+<h3>Find the server's local IP address</h3>
+<pre>ipconfig</pre>
+<p>Look for <strong>IPv4 Address</strong> under the active network adapter. It will be something like <code>192.168.1.50</code>. Write this down.</p>
+
+<h3>Set a static local IP (important)</h3>
+<p>Before configuring the router, make sure the server always gets the same local IP address. Otherwise the port forwarding will stop working after a reboot.</p>
+<ol>
+  <li>Open <strong>Control Panel</strong> → <strong>Network and Sharing Center</strong> → <strong>Change adapter settings</strong>.</li>
+  <li>Right-click the active network adapter → <strong>Properties</strong>.</li>
+  <li>Double-click <strong>Internet Protocol Version 4 (TCP/IPv4)</strong>.</li>
+  <li>Select <strong>Use the following IP address</strong> and enter:
+    <ul>
+      <li>IP address: the current IP of the server (e.g. <code>192.168.1.50</code>)</li>
+      <li>Subnet mask: <code>255.255.255.0</code></li>
+      <li>Default gateway: the router's IP (usually <code>192.168.1.1</code>)</li>
+      <li>Preferred DNS: <code>8.8.8.8</code></li>
+    </ul>
+  </li>
+  <li>Click OK.</li>
+</ol>
+
+<h3>Configure port forwarding on the router</h3>
+<p>Every router brand has a different interface, but the steps are similar:</p>
+<ol>
+  <li>Open a browser on the server and go to <code>http://192.168.1.1</code> (or whatever the router's IP is — printed on the router label).</li>
+  <li>Log in with the router admin credentials (also on the router label if never changed).</li>
+  <li>Find the section called <strong>Port Forwarding</strong>, <strong>Virtual Server</strong>, or <strong>NAT</strong> (depends on the router brand).</li>
+  <li>Add two forwarding rules:</li>
+</ol>
+<table>
+  <tr><th>Rule name</th><th>External port</th><th>Internal IP</th><th>Internal port</th><th>Protocol</th></tr>
+  <tr><td>HTTP</td><td>80</td><td>192.168.1.50 (server IP)</td><td>80</td><td>TCP</td></tr>
+  <tr><td>HTTPS</td><td>443</td><td>192.168.1.50 (server IP)</td><td>443</td><td>TCP</td></tr>
+</table>
+<ol start="5">
+  <li>Save and apply. The router may reboot.</li>
+</ol>
+<div class="success"><strong>How to verify:</strong> From a phone on mobile data (not the same WiFi), open a browser and go to <code>http://YOUR_PUBLIC_IP</code>. You should see the app login page. Find the public IP by running: <code>(Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing).Content</code></div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>10. Phase 9 — Automatic Database Backups</h1>
+
+<h2><span class="phase-badge">STEP 24</span> Create the Backup Script</h2>
+<p>Create the directory and script file:</p>
+<pre>mkdir C:\scripts
+mkdir C:\backups\postgres</pre>
+
+<p>Create the file <code>C:\scripts\backup-db.ps1</code> with this content:</p>
+<pre>$date = Get-Date -Format "yyyy-MM-dd_HH-mm"
+$backupDir = "C:\backups\postgres"
+$backupFile = "$backupDir\pump_db_$date.dump"
+$pgDump = "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe"
+
+if (!(Test-Path $backupDir)) { New-Item -ItemType Directory -Path $backupDir }
+
+$env:PGPASSWORD = "replace_with_strong_password"
+& $pgDump -U pump_user -h localhost -Fc pump_intervention_db -f $backupFile
+
+# Keep only the last 30 backups (30 days)
+Get-ChildItem $backupDir -Filter "*.dump" |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -Skip 30 |
+    Remove-Item -Force
+
+Write-Host "Backup completed: $backupFile"</pre>
+
+<div class="warning"><strong>Important:</strong> Replace <code>replace_with_strong_password</code> in the script with your actual <code>pump_user</code> database password.</div>
+
+<h2><span class="phase-badge">STEP 25</span> Schedule Daily Backups</h2>
+<p>Run this in PowerShell as Administrator to create a scheduled task that runs every day at 2:00 AM:</p>
+<pre>$action = New-ScheduledTaskAction `
+    -Execute "PowerShell.exe" `
+    -Argument "-NonInteractive -File C:\scripts\backup-db.ps1"
+
+$trigger = New-ScheduledTaskTrigger -Daily -At "02:00AM"
+
+$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Hours 1)
+
+Register-ScheduledTask `
+    -TaskName "PostgreSQL Daily Backup" `
+    -Action $action `
+    -Trigger $trigger `
+    -Settings $settings `
+    -RunLevel Highest `
+    -Force</pre>
+
+<h2>Test the backup manually</h2>
+<pre>& "C:\scripts\backup-db.ps1"</pre>
+<p>Check that a <code>.dump</code> file appears in <code>C:\backups\postgres\</code>.</p>
+
+<h2>How to restore from a backup</h2>
+<pre>$env:PGPASSWORD = "replace_with_strong_password"
+& "C:\Program Files\PostgreSQL\16\bin\pg_restore.exe" `
+    -U pump_user `
+    -h localhost `
+    -d pump_intervention_db `
+    -c `
+    "C:\backups\postgres\pump_db_2026-06-01_02-00.dump"</pre>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>11. Phase 10 — SSL / HTTPS (Recommended)</h1>
+
+<p>If the server has a domain name, you can add a free SSL certificate using <strong>Win-ACME</strong> (Let's Encrypt for Windows IIS).</p>
+
+<h2><span class="phase-badge">STEP 26</span> Install Win-ACME</h2>
+<ol>
+  <li>Download Win-ACME from <strong>github.com/win-acme/win-acme/releases</strong> (download the <code>win-acme.v2.x.x.x64.pluggable.zip</code>)</li>
+  <li>Extract to <code>C:\tools\win-acme\</code></li>
+  <li>Open PowerShell as Administrator and run:</li>
+</ol>
+<pre>cd C:\tools\win-acme
+.\wacs.exe</pre>
+<ol start="4">
+  <li>Follow the interactive prompts:
+    <ul>
+      <li>Choose <strong>N</strong> — Create certificate (default settings)</li>
+      <li>Choose <strong>1</strong> — IIS</li>
+      <li>Select your <code>pump-app</code> site</li>
+      <li>Enter your domain name and email address</li>
+    </ul>
+  </li>
+</ol>
+<p>Win-ACME will automatically install the certificate in IIS and set up auto-renewal.</p>
+
+<h2><span class="phase-badge">STEP 27</span> Update NEXTAUTH_URL to HTTPS</h2>
+<p>After adding SSL, update the <code>NEXTAUTH_URL</code> in both places:</p>
+<ol>
+  <li>In <code>C:\apps\pump-intervention-manager\.env</code>: change to <code>https://yourdomain.com</code></li>
+  <li>In GitHub repository secrets: update <code>NEXTAUTH_URL</code> to <code>https://yourdomain.com</code></li>
+</ol>
+<p>Then restart the app:</p>
+<pre>pm2 restart pump-app</pre>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>12. Phase 11 — Subdomain Setup (guimabombas.com)</h1>
+
+<p>The app can be hosted on a subdomain of <strong>guimabombas.com</strong>, for example <code>app.guimabombas.com</code>. This requires a DNS record, an IIS binding update, and a new SSL certificate.</p>
+
+<h2><span class="phase-badge">STEP 28</span> Choose a Subdomain</h2>
+<p>Decide on the subdomain prefix. Common options:</p>
+<table>
+  <tr><th>Example URL</th><th>When to use</th></tr>
+  <tr><td>app.guimabombas.com</td><td>Generic, works for any application</td></tr>
+  <tr><td>manutencao.guimabombas.com</td><td>Descriptive in Portuguese</td></tr>
+  <tr><td>bombas.guimabombas.com</td><td>Short and domain-related</td></tr>
+  <tr><td>gestao.guimabombas.com</td><td>Management-focused naming</td></tr>
+</table>
+<p>The examples below use <code>app.guimabombas.com</code> — replace with whichever prefix the client chooses.</p>
+
+<h2><span class="phase-badge">STEP 29</span> Add a DNS Record</h2>
+<p>Log in to the DNS provider or domain registrar where <strong>guimabombas.com</strong> is managed (e.g. GoDaddy, Cloudflare, OVH, etc.) and add the following record:</p>
+<table>
+  <tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th></tr>
+  <tr><td><strong>A</strong></td><td><code>app</code></td><td>The server's <strong>public IP address</strong></td><td>3600</td></tr>
+</table>
+
+<div class="note"><strong>How to find the server's public IP:</strong> On the server, open PowerShell and run: <code>(Invoke-WebRequest -Uri "https://api.ipify.org" -UseBasicParsing).Content</code></div>
+<div class="note"><strong>DNS propagation:</strong> The DNS change can take between a few minutes and 48 hours to be visible worldwide. You can check propagation progress at <code>dnschecker.org</code>.</div>
+
+<h2><span class="phase-badge">STEP 30</span> Update the IIS Site Binding</h2>
+<ol>
+  <li>Open <strong>IIS Manager</strong>.</li>
+  <li>Expand Sites and click on <strong>pump-app</strong>.</li>
+  <li>In the right panel, click <strong>Bindings</strong>.</li>
+  <li>Select the existing HTTP binding and click <strong>Edit</strong>.</li>
+  <li>In the <strong>Host name</strong> field type: <code>app.guimabombas.com</code></li>
+  <li>Click <strong>OK</strong>.</li>
+</ol>
+
+<h2><span class="phase-badge">STEP 31</span> Get an SSL Certificate for the Subdomain</h2>
+<p>Once the DNS record is live and pointing to the server, run Win-ACME to issue a Let's Encrypt certificate for the subdomain:</p>
+<pre>cd C:\tools\win-acme
+.\wacs.exe</pre>
+<p>Follow the prompts:</p>
+<ol>
+  <li>Choose <strong>N</strong> — Create certificate (default settings)</li>
+  <li>Choose <strong>1</strong> — IIS</li>
+  <li>Select the <code>pump-app</code> site</li>
+  <li>Confirm the domain <code>app.guimabombas.com</code></li>
+  <li>Enter the client's email address (for certificate expiry alerts)</li>
+</ol>
+<p>Win-ACME will install the certificate in IIS and configure auto-renewal automatically. It will also add an HTTPS binding (port 443) to the IIS site.</p>
+
+<div class="success"><strong>Result:</strong> The app is now accessible at <code>https://app.guimabombas.com</code> with a valid SSL certificate.</div>
+
+<h2><span class="phase-badge">STEP 32</span> Update NEXTAUTH_URL to the Subdomain</h2>
+<p>Update the URL in both places:</p>
+
+<p><strong>1. On the server</strong> — edit <code>C:\apps\pump-intervention-manager\.env</code> and change:</p>
+<pre>NEXTAUTH_URL="https://app.guimabombas.com"</pre>
+
+<p><strong>2. On GitHub</strong> — go to your repository → Settings → Secrets and variables → Actions → update the <code>NEXTAUTH_URL</code> secret to <code>https://app.guimabombas.com</code>.</p>
+
+<p>Then restart the app to apply the change:</p>
+<pre>pm2 restart pump-app --update-env</pre>
+
+<h2><span class="phase-badge">STEP 33</span> Add HTTPS Redirect in IIS (optional but recommended)</h2>
+<p>Force all HTTP traffic to redirect to HTTPS automatically:</p>
+<ol>
+  <li>In IIS Manager, click on the <strong>pump-app</strong> site.</li>
+  <li>Double-click <strong>URL Rewrite</strong>.</li>
+  <li>Click <strong>Add Rule(s)</strong> → <strong>Blank rule</strong>.</li>
+  <li>Fill in:
+    <ul>
+      <li>Name: <code>Force HTTPS</code></li>
+      <li>Match URL — Pattern: <code>(.*)</code></li>
+      <li>Add a <strong>Condition</strong>: Input <code>{HTTPS}</code>, Pattern <code>^OFF$</code></li>
+      <li>Action type: <strong>Redirect</strong></li>
+      <li>Redirect URL: <code>https://{HTTP_HOST}/{R:1}</code></li>
+      <li>Redirect type: <strong>301 Permanent</strong></li>
+    </ul>
+  </li>
+  <li>Click <strong>Apply</strong>.</li>
+</ol>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>13. Phase 12 — First Login &amp; Admin Account</h1>
+
+<p>After the app is running for the first time, the database is empty and there are no user accounts. Before handing the system to the client, at least one administrator account must be created.</p>
+
+<h2><span class="phase-badge">STEP 34</span> Create the First Admin User</h2>
+<p>Open PowerShell as Administrator on the server and run the Prisma seed script (if one exists in the project):</p>
+<pre>cd C:\apps\pump-intervention-manager
+npx prisma db seed</pre>
+
+<p>If there is no seed script, create the first admin user directly in the database:</p>
+<pre># Connect to the database
+$env:PGPASSWORD = "replace_with_strong_password"
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U pump_user -d pump_intervention_db</pre>
+
+<p>Then inside the psql prompt, ask the developer (Nuno Freitas) for the exact SQL to insert the first admin user, as it depends on the app's user table structure and password hashing method. It will look something like:</p>
+<pre>-- Example only — confirm the exact query with the developer
+INSERT INTO "User" (name, email, password, role)
+VALUES ('Admin', 'admin@guimabombas.com', 'hashed_password_here', 'ADMIN');
+\q</pre>
+
+<div class="warning"><strong>Important:</strong> Never store plain text passwords. The password must be hashed using the same method the app uses (bcrypt). Ask the developer to provide the exact insert command with a pre-hashed password for the initial admin account.</div>
+
+<h2><span class="phase-badge">STEP 35</span> Verify Login Works</h2>
+<ol>
+  <li>Open a browser and go to the app URL (e.g. <code>https://app.guimabombas.com</code>).</li>
+  <li>Log in with the admin credentials created above.</li>
+  <li>Confirm you can access the dashboard and all main sections.</li>
+  <li>Change the admin password immediately after first login.</li>
+</ol>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>14. Phase 13 — PM2 Log Rotation</h1>
+
+<p>By default, PM2 writes application logs to files that grow indefinitely. Over weeks or months these files can fill the server's disk and cause the app to crash. Log rotation automatically archives and deletes old logs.</p>
+
+<h2><span class="phase-badge">STEP 36</span> Install PM2 Log Rotate Module</h2>
+<pre>pm2 install pm2-logrotate</pre>
+
+<h2><span class="phase-badge">STEP 37</span> Configure Log Rotation</h2>
+<pre># Maximum size of a single log file before it is rotated
+pm2 set pm2-logrotate:max_size 50M
+
+# Number of rotated log files to keep (7 = one week of history)
+pm2 set pm2-logrotate:retain 7
+
+# Run rotation check every day at midnight
+pm2 set pm2-logrotate:rotateInterval "0 0 * * *"
+
+# Compress old log files to save disk space
+pm2 set pm2-logrotate:compress true</pre>
+
+<h2><span class="phase-badge">STEP 38</span> Check Log File Locations</h2>
+<pre># Show where PM2 stores logs
+pm2 info pump-app</pre>
+<p>Log files are typically stored in <code>C:\Users\Administrator\.pm2\logs\</code>.</p>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>15. Phase 14 — Post-Reboot Verification Checklist</h1>
+
+<p>After the initial setup is complete, <strong>reboot the server once</strong> and verify that everything comes back up automatically. Non-technical users will not think to test this — a reboot should be done before going live so any startup issues are found in advance rather than during real use.</p>
+
+<h2><span class="phase-badge">STEP 39</span> Reboot the Server</h2>
+<pre>Restart-Computer</pre>
+<p>Wait 2–3 minutes for the server to fully start up, then reconnect via Remote Desktop (see Phase 16).</p>
+
+<h2><span class="phase-badge">STEP 40</span> Run the Verification Checklist</h2>
+<p>Open PowerShell as Administrator and run each check:</p>
+
+<h4>1. PostgreSQL is running</h4>
+<pre>Get-Service -Name "postgresql*"</pre>
+<p>Expected: Status = <strong>Running</strong></p>
+
+<h4>2. GitHub Actions runner is running</h4>
+<pre>Get-Service | Where-Object { $_.DisplayName -like "*actions.runner*" }</pre>
+<p>Expected: Status = <strong>Running</strong></p>
+
+<h4>3. Next.js app is running</h4>
+<pre>pm2 list</pre>
+<p>Expected: <code>pump-app</code> shows status = <strong>online</strong></p>
+
+<h4>4. IIS is running</h4>
+<pre>Get-Service -Name "W3SVC"</pre>
+<p>Expected: Status = <strong>Running</strong></p>
+
+<h4>5. App is accessible in a browser</h4>
+<p>Open a browser and go to the app URL. You should see the login page.</p>
+
+<h4>6. Database connection works</h4>
+<pre>$env:PGPASSWORD = "replace_with_strong_password"
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U pump_user -d pump_intervention_db -c "SELECT COUNT(*) FROM information_schema.tables"</pre>
+<p>Expected: a number (not an error).</p>
+
+<div class="success"><strong>If all 6 checks pass:</strong> The server is correctly configured and the app will survive reboots without any manual intervention.</div>
+<div class="warning"><strong>If any check fails:</strong> Do not go live until it is fixed. Contact the developer with the output of the failing command.</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>16. Phase 15 — Manual Emergency Deploy</h1>
+
+<p>If GitHub Actions is unavailable or a deployment fails and an urgent fix needs to go live, use this procedure to deploy manually from the server.</p>
+
+<h2><span class="phase-badge">STEP 41</span> Pull and Deploy Manually</h2>
+<p>Open PowerShell as Administrator on the server and run these commands in order:</p>
+<pre># 1. Go to the app directory
+cd C:\apps\pump-intervention-manager
+
+# 2. Pull the latest code from GitHub
+git pull origin main
+
+# 3. Install any new dependencies
+npm ci
+
+# 4. Run any new database migrations
+npx prisma migrate deploy
+
+# 5. Rebuild the application
+npm run build
+
+# 6. Restart the app
+pm2 restart pump-app --update-env
+
+# 7. Confirm it restarted successfully
+pm2 list</pre>
+
+<div class="note"><strong>Note:</strong> This does exactly the same thing as the GitHub Actions workflow, but run manually. Use this only when GitHub Actions is broken or unavailable.</div>
+
+<h2>If the app fails to start after a manual deploy</h2>
+<pre># View the last 100 error lines
+pm2 logs pump-app --lines 100 --err
+
+# Roll back to the previous working version
+git log --oneline -10          # find the last good commit hash
+git checkout COMMIT_HASH_HERE  # replace with the hash
+npm run build
+pm2 restart pump-app</pre>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>17. Phase 16 — Remote Desktop (RDP) Access</h1>
+
+<p>Remote Desktop lets you manage the server from any Windows computer without being physically present. This is how the client (and you) will access the server for maintenance.</p>
+
+<h2><span class="phase-badge">STEP 42</span> Enable Remote Desktop on the Server</h2>
+<ol>
+  <li>Open <strong>Server Manager</strong>.</li>
+  <li>Click <strong>Local Server</strong> in the left panel.</li>
+  <li>Find <strong>Remote Desktop</strong> and click the link next to it (it says "Disabled").</li>
+  <li>Select <strong>Allow remote connections to this computer</strong>.</li>
+  <li>Uncheck <strong>Allow connections only from computers running Remote Desktop with Network Level Authentication</strong> if you need to connect from older Windows versions.</li>
+  <li>Click <strong>OK</strong>.</li>
+</ol>
+
+<h2><span class="phase-badge">STEP 43</span> Open the RDP Port in Windows Firewall</h2>
+<pre>New-NetFirewallRule -DisplayName "Remote Desktop" -Direction Inbound -Protocol TCP -LocalPort 3389 -Action Allow</pre>
+
+<div class="warning"><strong>Security:</strong> Port 3389 (RDP) is frequently targeted by automated attacks on the internet. To reduce risk, only allow RDP from specific IP addresses (your office or home IP): <code>New-NetFirewallRule -DisplayName "RDP" -Direction Inbound -Protocol TCP -LocalPort 3389 -RemoteAddress YOUR_IP -Action Allow</code></div>
+
+<h2><span class="phase-badge">STEP 44</span> Connect via Remote Desktop</h2>
+<p>From any Windows computer:</p>
+<ol>
+  <li>Press <strong>Win + R</strong>, type <code>mstsc</code> and press Enter.</li>
+  <li>In the <strong>Computer</strong> field, enter the server's public IP address or domain (e.g. <code>app.guimabombas.com</code>).</li>
+  <li>Click <strong>Connect</strong>.</li>
+  <li>Enter the Windows Server administrator username and password.</li>
+</ol>
+<div class="note"><strong>From a Mac:</strong> Download <strong>Microsoft Remote Desktop</strong> from the App Store (free). The connection steps are the same.</div>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>18. Phase 17 — Basic Uptime Monitoring</h1>
+
+<p>Without monitoring, no one will know the app has gone down until a user reports it. UptimeRobot is a free service that checks the app every 5 minutes and sends an email alert if it goes down.</p>
+
+<h2><span class="phase-badge">STEP 45</span> Set Up UptimeRobot</h2>
+<ol>
+  <li>Go to <strong>uptimerobot.com</strong> and create a free account.</li>
+  <li>Click <strong>Add New Monitor</strong>.</li>
+  <li>Fill in:
+    <ul>
+      <li>Monitor Type: <strong>HTTP(s)</strong></li>
+      <li>Friendly Name: <code>Pump Intervention Manager</code></li>
+      <li>URL: <code>https://app.guimabombas.com</code> (or the app URL)</li>
+      <li>Monitoring Interval: <strong>5 minutes</strong></li>
+    </ul>
+  </li>
+  <li>Under <strong>Alert Contacts</strong>, add the email addresses that should be notified when the app goes down.</li>
+  <li>Click <strong>Create Monitor</strong>.</li>
+</ol>
+<div class="success"><strong>Result:</strong> If the app stops responding for any reason, UptimeRobot will send an email within 5 minutes. The free plan supports up to 50 monitors with 5-minute checks.</div>
+
+<h2><span class="phase-badge">STEP 46</span> Set Up a Disk Space Alert (optional)</h2>
+<p>To avoid the server running out of disk space (from logs, backups, or Windows updates), create a scheduled alert:</p>
+<pre># Save this as C:\scripts\check-disk.ps1
+$drive = Get-PSDrive -Name C
+$freeGB = [math]::Round($drive.Free / 1GB, 1)
+$totalGB = [math]::Round(($drive.Used + $drive.Free) / 1GB, 1)
+$freePercent = [math]::Round(($drive.Free / ($drive.Used + $drive.Free)) * 100, 0)
+
+if ($freePercent -lt 20) {
+    $subject = "WARNING: Low disk space on server ($freeGB GB free of $totalGB GB)"
+    $body = "Server disk space is low. $freeGB GB free ($freePercent%). Please clean up old backups or logs."
+    Send-MailMessage -To "admin@guimabombas.com" -From "server@guimabombas.com" `
+        -Subject $subject -Body $body -SmtpServer "smtp.yourmailprovider.com"
+}</pre>
+<p>Schedule it to run daily (same way as the database backup — see Phase 9, STEP 25).</p>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>19. Ongoing Deployment Flow</h1>
+
+<p>After the initial setup is complete, deploying new versions of the app is fully automatic:</p>
+
+<table>
+  <tr><th>Step</th><th>Who does it</th><th>What happens</th></tr>
+  <tr><td>1. Push code to <code>main</code></td><td>Developer (you)</td><td><code>git push origin main</code></td></tr>
+  <tr><td>2. GitHub receives the push</td><td>GitHub</td><td>Triggers the Actions workflow</td></tr>
+  <tr><td>3. Runner picks up the job</td><td>GitHub Actions Runner (server)</td><td>Pulls the latest code</td></tr>
+  <tr><td>4. Install dependencies</td><td>Runner</td><td><code>npm ci</code></td></tr>
+  <tr><td>5. Run DB migrations</td><td>Runner</td><td><code>prisma migrate deploy</code></td></tr>
+  <tr><td>6. Build the app</td><td>Runner</td><td><code>npm run build</code></td></tr>
+  <tr><td>7. Restart the app</td><td>Runner</td><td><code>pm2 restart pump-app</code></td></tr>
+  <tr><td>8. App is live</td><td>—</td><td>New version available to users (~2-4 min total)</td></tr>
+</table>
+
+<p>You can monitor deployments in real time by going to your GitHub repository → <strong>Actions</strong> tab.</p>
+
+<!-- ============================================================ -->
+<h1>20. Services Summary</h1>
+
+<table>
+  <tr><th>Service</th><th>How it runs</th><th>Auto-starts on reboot</th><th>Management command</th></tr>
+  <tr><td>PostgreSQL database</td><td>Windows Service</td><td>Yes</td><td><code>Restart-Service postgresql-x64-16</code></td></tr>
+  <tr><td>Next.js application</td><td>PM2</td><td>Yes (via pm2-startup)</td><td><code>pm2 restart pump-app</code></td></tr>
+  <tr><td>IIS reverse proxy</td><td>Windows Service</td><td>Yes</td><td><code>iisreset</code></td></tr>
+  <tr><td>GitHub Actions Runner</td><td>Windows Service</td><td>Yes</td><td><code>Restart-Service actions.runner.*</code></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<div class="page-break"></div>
+<h1>21. Troubleshooting</h1>
+
+<h3>App is not responding / shows an error</h3>
+<pre># Check if the app process is running
+pm2 list
+
+# View recent error logs
+pm2 logs pump-app --lines 100 --err
+
+# Restart the app
+pm2 restart pump-app</pre>
+
+<h3>Database connection error</h3>
+<pre># Check PostgreSQL is running
+Get-Service -Name "postgresql*"
+
+# Start it if stopped
+Start-Service -Name "postgresql-x64-16"
+
+# Test connection manually
+$env:PGPASSWORD = "replace_with_strong_password"
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U pump_user -d pump_intervention_db -c "SELECT 1"</pre>
+
+<h3>GitHub Actions deployment failed</h3>
+<ol>
+  <li>Go to GitHub → your repo → <strong>Actions</strong> tab.</li>
+  <li>Click on the failed workflow run to see the detailed error log.</li>
+  <li>Common causes:
+    <ul>
+      <li>A GitHub secret is missing or has a typo — check Settings → Secrets.</li>
+      <li>The self-hosted runner is offline — check on the server that the runner service is running.</li>
+      <li>A build error in the code — the error will be shown in the Actions log.</li>
+    </ul>
+  </li>
+</ol>
+
+<h3>Check runner service status on the server</h3>
+<pre># Find the runner service name
+Get-Service | Where-Object { $_.DisplayName -like "*actions*" }
+
+# Start it if stopped
+Start-Service -Name "actions.runner.YOUR_REPO_NAME.windows-server-prod"</pre>
+
+<h3>Useful PM2 commands</h3>
+<pre># Show all running processes and their status
+pm2 list
+
+# View live logs (press Ctrl+C to exit)
+pm2 logs pump-app
+
+# Show CPU / memory usage
+pm2 monit
+
+# Restart after a manual config change
+pm2 restart pump-app --update-env</pre>
+
+<h3>Useful PostgreSQL commands</h3>
+<pre># Connect to the database
+$env:PGPASSWORD = "replace_with_strong_password"
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U pump_user -d pump_intervention_db
+
+# Inside psql — show all tables
+\dt
+
+# Inside psql — exit
+\q</pre>
+
+<hr style="margin-top: 60px; border-color: #ccc;">
+<p style="text-align:center; color: #999; font-size: 9pt;">Pump Intervention Manager — Deployment Guide — Generated June 2026</p>
+
+</body>
+</html>
