@@ -1,0 +1,53 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Pull latest code
+        working-directory: C:\apps\pump-intervention-manager
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
+
+      - name: Install dependencies
+        working-directory: C:\apps\pump-intervention-manager
+        run: npm ci
+
+      - name: Generate Prisma client
+        working-directory: C:\apps\pump-intervention-manager
+        run: npx prisma generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Run database migrations
+        working-directory: C:\apps\pump-intervention-manager
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
+      - name: Build Next.js application
+        working-directory: C:\apps\pump-intervention-manager
+        run: npm run build
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NEXTAUTH_URL: ${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          MICROSOFT_TENANT_ID: ${{ secrets.MICROSOFT_TENANT_ID }}
+          MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+          MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+          MICROSOFT_SENDER_EMAIL: ${{ secrets.MICROSOFT_SENDER_EMAIL }}
+
+      - name: Restart application
+        working-directory: C:\apps\pump-intervention-manager
+        run: |
+          pm2 restart pump-app --update-env
+          if ($LASTEXITCODE -ne 0) { pm2 start npm --name "pump-app" -- start }
+          pm2 save
