@@ -189,6 +189,7 @@ enum InterventionStatus {
   OPEN
   ASSIGNED
   IN_PROGRESS
+  PENDING_PARTS
   QUALITY_ASSESSMENT
   COMPLETED
   CANCELED
@@ -271,6 +272,7 @@ enum MovementType {
   REPAIR_OUT            // Returned from repair (back to main warehouse)
   DESTRUCTION           // Moved to destruction stock (irreparable)
   INVENTORY_ADJUSTMENT  // Stock correction after inventory count
+  REVERSAL              // Estorno — uso de peça cancelado, stock devolvido à origem
 }
 
 // Track individual serial numbers for items
@@ -423,6 +425,8 @@ model WorkOrderPart {
   serialNumberIds String[]
   usedById        String?
   usedBy          User?         @relation("WorkOrderPartUsedBy", fields: [usedById], references: [id])
+  stockSource        String?    // Origem do stock: TECHNICIAN | MAIN_WAREHOUSE | NO_STOCK
+  sourceTechnicianId String?    // Técnico de onde saiu a peça (quando stockSource = TECHNICIAN)
   createdAt       DateTime      @default(now())
 
   @@index([workOrderId])

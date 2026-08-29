@@ -60,7 +60,13 @@ export async function POST(
     data: { workOrderId, itemId, quantity, serialNumberIds: serialNumberIds || [] },
   })
 
-  await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+  await prisma.$executeRaw`
+    UPDATE "WorkOrderPart"
+    SET "usedById" = ${payload.userId},
+        "stockSource" = 'TECHNICIAN',
+        "sourceTechnicianId" = ${intervention.assignedToId}
+    WHERE id = ${part.id}
+  `
 
   await prisma.itemMovement.create({
     data: {

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import AddPartModal from './AddPartModal'
+import { MIN_SEARCH_CHARS } from '@/lib/search'
 
 interface WorkOrderSession {
   id: string
@@ -18,6 +19,7 @@ interface WorkOrderPart {
   serialNumberIds: string[]
   createdAt: string
   usedByName: string | null
+  stockSource: string | null
   item: { id: string; itemName: string; partNumber: string; value: number; tracksSerialNumbers: boolean }
   serialNumbers?: Array<{ id: string; serialNumber: string }>
 }
@@ -46,7 +48,7 @@ export interface WorkOrder {
 interface CompanyVehicle { id: string; plateNumber: string; brand: string | null; model: string | null; description: string | null }
 interface Technician { id: string; name: string; email: string }
 interface Equipment { id: string; model: string; serialNumber: string | null; equipmentType: { name: string }; brand: { name: string } }
-interface WarehouseItem { id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number }
+interface WarehouseItem { id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number; available?: number | null }
 interface SavedPdf { id: string; createdAt: string; clientSignature: string | null; techSignature: string | null }
 
 interface Props {
@@ -140,6 +142,31 @@ export default function WorkOrderPanel({
   const [sessionSaving, setSessionSaving] = useState(false)
 
   const [showAddPart, setShowAddPart] = useState(false)
+  const [cancellingPartId, setCancellingPartId] = useState<string | null>(null)
+
+  const handleCancelPart = async (part: WorkOrderPart) => {
+    if (!wo) return
+    const destino = part.stockSource === 'NO_STOCK'
+      ? ''
+      : part.stockSource === 'MAIN_WAREHOUSE'
+        ? ' A peça volta ao stock do armazém.'
+        : ' A peça volta ao stock do técnico.'
+    if (!confirm(`Cancelar o uso de ${part.item.itemName}?${destino}`)) return
+    setCancellingPartId(part.id)
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(
+        `/api/interventions/${interventionId}/work-orders/${wo.id}/parts/${part.id}`,
+        { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (res.ok) onRefresh()
+      else { const d = await res.json().catch(() => ({})); alert(d.error || 'Erro ao cancelar o uso da peça') }
+    } catch {
+      alert('Erro ao cancelar o uso da peça')
+    } finally {
+      setCancellingPartId(null)
+    }
+  }
 
   interface RepairJobGroup {
     repairJobId: string
@@ -609,8 +636,26 @@ export default function WorkOrderPanel({
                           <p className="text-xs text-gray-400 mt-0.5">{new Date(part.createdAt).toLocaleString()}{part.usedByName && ` — ${part.usedByName}`}</p>
                         )}
                       </div>
-                      <div className="text-right shrink-0">
+                      <div className="text-right shrink-0 flex flex-col items-end gap-1">
                         <p className="text-xs text-gray-500">{part.quantity} un.</p>
+                        {part.stockSource && (
+                          <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                            part.stockSource === 'TECHNICIAN' ? 'bg-purple-100 text-purple-700'
+                            : part.stockSource === 'MAIN_WAREHOUSE' ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {part.stockSource === 'TECHNICIAN' ? 'Técnico' : part.stockSource === 'MAIN_WAREHOUSE' ? 'Armazém' : 'Livre'}
+                          </span>
+                        )}
+                        {canEdit && (
+                          <button
+                            onClick={() => handleCancelPart(part)}
+                            disabled={cancellingPartId === part.id}
+                            className="text-xs text-red-600 hover:text-red-800 font-medium disabled:opacity-50"
+                          >
+                            {cancellingPartId === part.id ? 'A cancelar...' : 'Cancelar uso'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -718,10 +763,15 @@ export default function WorkOrderPanel({
                                 {technicianStockLoading
                                   ? <li className="px-3 py-2 text-sm text-gray-400">A carregar stock...</li>
                                   : (() => {
-                                      const q = collectItemSearch.toLowerCase()
-                                      const techItems = technicianStock.filter(i => !q || `${i.itemName} ${i.partNumber}`.toLowerCase().includes(q))
-                                      const whItems = warehouseItems.filter(i => i.mainWarehouse > 0 && (!q || `${i.itemName} ${i.partNumber}`.toLowerCase().includes(q)))
-                                      if (techItems.length === 0 && whItems.length === 0) return <li className="px-3 py-2 text-sm text-gray-400">Sem stock disponível</li>
+                                      const q = collectItemSearch.toLowerCase().trim()
+                                      // Só se pesquisa a partir de MIN_SEARCH_CHARS caracteres
+                                      const searching = q.length >= MIN_SEARCH_CHARS
+                                      const techItems = technicianStock.filter(i => !searching || `${i.itemName} ${i.partNumber}`.toLowerCase().includes(q))
+                                      // Sem limite de resultados enquanto se pesquisa
+                                      const whItems = searching
+                                        ? warehouseItems.filter(i => (i.available ?? i.mainWarehouse) > 0 && `${i.itemName} ${i.partNumber} ${i.ean13 ?? ''}`.toLowerCase().includes(q))
+                                        : []
+                                      if (techItems.length === 0 && whItems.length === 0) return <li className="px-3 py-2 text-sm text-gray-400">{searching ? 'Sem resultados' : `Escreva pelo menos ${MIN_SEARCH_CHARS} caracteres para pesquisar no armazém`}</li>
                                       return (
                                         <>
                                           {techItems.map(item => (
@@ -884,7 +934,13 @@ export default function WorkOrderPanel({
                                   className={`px-3 py-2 text-sm cursor-pointer hover:bg-amber-50 border-b border-gray-100 text-amber-700 font-medium ${collectForm.warehouseItemId === '__GENERIC__' ? 'bg-amber-100' : ''}`}>
                                   Artigo não catalogado
                                 </li>
-                                {warehouseItems.filter(i => `${i.itemName} ${i.partNumber}`.toLowerCase().includes(collectItemSearch.toLowerCase())).map(item => (
+                                {collectItemSearch.trim().length < MIN_SEARCH_CHARS && (
+                                  <li className="px-3 py-2 text-xs text-gray-400">Escreva pelo menos {MIN_SEARCH_CHARS} caracteres para pesquisar no armazém</li>
+                                )}
+                                {(collectItemSearch.trim().length < MIN_SEARCH_CHARS
+                                  ? []
+                                  : warehouseItems.filter(i => `${i.itemName} ${i.partNumber} ${i.ean13 ?? ''}`.toLowerCase().includes(collectItemSearch.toLowerCase()))
+                                ).map(item => (
                                   <li key={item.id} onMouseDown={() => { setCollectForm(f => ({ ...f, warehouseItemId: item.id })); setCollectItemOpen(false); setCollectItemSearch('') }}
                                     className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${collectForm.warehouseItemId === item.id ? 'bg-blue-100 text-blue-800 font-medium' : 'text-gray-800'}`}>
                                     {item.itemName} <span className="text-gray-400">({item.partNumber})</span>

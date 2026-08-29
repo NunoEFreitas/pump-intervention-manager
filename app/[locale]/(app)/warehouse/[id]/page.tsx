@@ -408,6 +408,8 @@ export default function WarehouseItemDetailPage() {
       USE: t('useStock'),
       REPAIR_IN: t('repairIn'),
       REPAIR_OUT: t('repairOut'),
+      INVENTORY_ADJUSTMENT: t('inventoryAdjustment'),
+      REVERSAL: t('reversal'),
     }
     return labels[type] || type
   }
@@ -416,6 +418,7 @@ export default function WarehouseItemDetailPage() {
     switch (type) {
       case 'ADD_STOCK':
       case 'REPAIR_OUT':
+      case 'REVERSAL':
         return '+'
       case 'REMOVE_STOCK':
       case 'USE':

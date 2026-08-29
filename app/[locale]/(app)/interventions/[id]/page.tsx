@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { getAvailableStatuses, getStatusColor, getStatusLabel, canEditIntervention } from '@/lib/permissions'
+import { MIN_SEARCH_CHARS } from '@/lib/search'
 import WorkOrderPanel, { type WorkOrder } from './WorkOrderPanel'
 import WorkOrderSignatureModal from './WorkOrderSignatureModal'
 import OVMForm, { type OVMData, migrateOVMData } from './OVMForm'
@@ -146,7 +147,7 @@ export default function InterventionDetailPage() {
   const [showDateForm, setShowDateForm] = useState(false)
   const [dateFormData, setDateFormData] = useState({ scheduledDate: '', scheduledTime: '' })
   const [clientParts, setClientParts] = useState<ClientPart[]>([])
-  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number; noStock?: boolean }[]>([])
+  const [warehouseItems, setWarehouseItems] = useState<{ id: string; itemName: string; partNumber: string; tracksSerialNumbers: boolean; ean13?: string | null; mainWarehouse: number; noStock?: boolean; available?: number | null }[]>([])
   const [editData, setEditData] = useState({
     status: '',
     breakdown: '',
@@ -575,12 +576,13 @@ export default function InterventionDetailPage() {
   const fetchWarehouseItems = async () => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/warehouse?limit=100', {
+      // Sem limite — devolve todos os artigos da base de dados
+      const response = await fetch('/api/warehouse/items/search', {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await response.json()
       const list = Array.isArray(data) ? data : (data.items ?? [])
-      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0, noStock: !!i.noStock })))
+      setWarehouseItems(list.map((i: any) => ({ id: i.id, itemName: i.itemName, partNumber: i.partNumber, tracksSerialNumbers: !!i.tracksSerialNumbers, ean13: i.ean13 ?? null, mainWarehouse: i.mainWarehouse ?? 0, noStock: !!i.noStock, available: i.available ?? null })))
     } catch (error) {
       console.error('Error fetching warehouse items:', error)
     }
@@ -1477,10 +1479,12 @@ export default function InterventionDetailPage() {
 
           {showPartRequestForm && (() => {
             const selectedItem = warehouseItems.find(i => i.id === partRequestForm.warehouseItemId)
-            const filteredWHItems = warehouseItems.filter(i =>
-              prItemSearch === '' ||
-              i.itemName.toLowerCase().includes(prItemSearch.toLowerCase()) ||
-              i.partNumber.toLowerCase().includes(prItemSearch.toLowerCase())
+            // Sem limite de resultados, mas só se pesquisa a partir de MIN_SEARCH_CHARS caracteres
+            const prQuery = prItemSearch.trim().toLowerCase()
+            const filteredWHItems = prQuery.length < MIN_SEARCH_CHARS ? [] : warehouseItems.filter(i =>
+              i.itemName.toLowerCase().includes(prQuery) ||
+              i.partNumber.toLowerCase().includes(prQuery) ||
+              (i.ean13 ?? '').toLowerCase().includes(prQuery)
             )
             return (
               <div className="border rounded-lg p-4 bg-gray-50 space-y-3">
@@ -1505,6 +1509,11 @@ export default function InterventionDetailPage() {
                         onFocus={() => setPrItemOpen(true)}
                         autoFocus
                       />
+                      {prItemOpen && prQuery.length > 0 && prQuery.length < MIN_SEARCH_CHARS && (
+                        <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs text-gray-400">
+                          Escreva pelo menos {MIN_SEARCH_CHARS} caracteres
+                        </div>
+                      )}
                       {prItemOpen && filteredWHItems.length > 0 && (
                         <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
                           {filteredWHItems.map(item => (

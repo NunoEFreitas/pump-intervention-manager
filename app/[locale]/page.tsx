@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import Image from 'next/image'
+import { APP_VERSION } from '@/lib/version'
 
 function LoginPageInner() {
   const router = useRouter()
@@ -64,7 +65,7 @@ function LoginPageInner() {
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex relative">
 
       {/* ── Left panel — background image ── */}
       <div className="hidden lg:flex lg:flex-1 relative overflow-hidden">
@@ -199,6 +200,11 @@ function LoginPageInner() {
           )}
         </div>
       </div>
+
+      {/* ── Marca de versão ── */}
+      <span className="absolute bottom-3 right-4 text-[11px] text-gray-400 select-none">
+        {APP_VERSION}
+      </span>
     </div>
   )
 }

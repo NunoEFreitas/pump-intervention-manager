@@ -104,6 +104,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   REMOVE_STOCK: 'Remoção de Stock',
   DESTRUCTION: 'Abate',
   INVENTORY_ADJUSTMENT: 'Ajuste de Inventário',
+  REVERSAL: 'Estorno',
 }
 
 const MOVEMENT_COLORS: Record<string, string> = {
@@ -116,6 +117,7 @@ const MOVEMENT_COLORS: Record<string, string> = {
   REMOVE_STOCK: 'bg-red-100 text-red-800',
   DESTRUCTION: 'bg-gray-100 text-gray-700',
   INVENTORY_ADJUSTMENT: 'bg-yellow-100 text-yellow-800',
+  REVERSAL: 'bg-pink-100 text-pink-800',
 }
 
 export default function TechnicianStockPage() {

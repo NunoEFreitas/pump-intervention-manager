@@ -34,7 +34,7 @@ export async function POST(
     const part = await (prisma as any).workOrderPart.create({
       data: { workOrderId, itemId, quantity, serialNumberIds: [] },
     })
-    await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+    await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId}, "stockSource" = 'NO_STOCK' WHERE id = ${part.id}`
     return NextResponse.json(part, { status: 201 })
   }
 
@@ -58,7 +58,7 @@ export async function POST(
     const part = await (prisma as any).workOrderPart.create({
       data: { workOrderId, itemId, quantity, serialNumberIds },
     })
-    await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+    await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId}, "stockSource" = 'MAIN_WAREHOUSE' WHERE id = ${part.id}`
 
     // Mark SNs as used
     await prisma.serialNumberStock.updateMany({
@@ -96,7 +96,7 @@ export async function POST(
   const part = await (prisma as any).workOrderPart.create({
     data: { workOrderId, itemId, quantity, serialNumberIds: [] },
   })
-  await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId} WHERE id = ${part.id}`
+  await prisma.$executeRaw`UPDATE "WorkOrderPart" SET "usedById" = ${payload.userId}, "stockSource" = 'MAIN_WAREHOUSE' WHERE id = ${part.id}`
 
   await prisma.warehouseItem.update({
     where: { id: itemId },

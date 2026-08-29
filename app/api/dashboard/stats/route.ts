@@ -66,6 +66,81 @@ export async function GET(request: NextRequest) {
       where: { status: { in: ['OPEN', 'ASSIGNED'] }, scheduledDate: null },
     })
 
+    // Em atraso: agendadas para um dia anterior a hoje e ainda por concluir
+    // (ATRIBUÍDA / EM CURSO / AGUARDA PEÇAS). No próprio dia agendado não conta como atraso.
+    // SQL raw com comparação em texto: não depende do enum InterventionStatus
+    // do cliente Prisma gerado, que pode estar em cache desalinhado do schema.
+    const overdueRows = await prisma.$queryRaw<Array<{
+      id: string
+      reference: string | null
+      status: string
+      scheduledDate: Date | null
+      scheduledTime: string | null
+      breakdown: string | null
+      comments: string | null
+      clientId: string
+      clientName: string
+      clientAddress: string | null
+      clientCity: string | null
+      clientPostalCode: string | null
+      clientPhone: string | null
+      clientContactPerson: string | null
+      locationId: string | null
+      locationName: string | null
+      locationAddress: string | null
+      locationCity: string | null
+      locationPostalCode: string | null
+      locationPhone: string | null
+      locationContactPerson: string | null
+      techId: string | null
+      techName: string | null
+    }>>`
+      SELECT i.id::text AS id, i.reference, i.status::text AS status,
+             i."scheduledDate", i."scheduledTime", i.breakdown, i.comments,
+             c.id::text AS "clientId", c.name AS "clientName", c.address AS "clientAddress",
+             c.city AS "clientCity", c."postalCode" AS "clientPostalCode",
+             c.phone AS "clientPhone", c."contactPerson" AS "clientContactPerson",
+             l.id::text AS "locationId", l.name AS "locationName", l.address AS "locationAddress",
+             l.city AS "locationCity", l."postalCode" AS "locationPostalCode",
+             l.phone AS "locationPhone", l."contactPerson" AS "locationContactPerson",
+             u.id::text AS "techId", u.name AS "techName"
+      FROM "Intervention" i
+      JOIN "Client" c ON c.id = i."clientId"
+      LEFT JOIN "CompanyLocation" l ON l.id = i."locationId"
+      LEFT JOIN "User" u ON u.id = i."assignedToId"
+      WHERE i.status::text IN ('ASSIGNED', 'IN_PROGRESS', 'PENDING_PARTS')
+        AND i."scheduledDate" IS NOT NULL
+        AND i."scheduledDate" < ${todayStart}::timestamptz
+      ORDER BY i."scheduledDate" ASC
+    `
+
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const overdue = overdueRows.map(r => {
+      const d = new Date(r.scheduledDate!)
+      const scheduledDayStart = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+      return {
+        id: r.id,
+        reference: r.reference,
+        status: r.status,
+        scheduledDate: r.scheduledDate,
+        scheduledTime: r.scheduledTime,
+        breakdown: r.breakdown,
+        comments: r.comments,
+        client: {
+          id: r.clientId, name: r.clientName, address: r.clientAddress, city: r.clientCity,
+          postalCode: r.clientPostalCode, phone: r.clientPhone, contactPerson: r.clientContactPerson,
+        },
+        location: r.locationId
+          ? {
+              id: r.locationId, name: r.locationName ?? '', address: r.locationAddress, city: r.locationCity,
+              postalCode: r.locationPostalCode, phone: r.locationPhone, contactPerson: r.locationContactPerson,
+            }
+          : null,
+        assignedTo: r.techId ? { id: r.techId, name: r.techName ?? '' } : null,
+        daysLate: Math.round((todayStart.getTime() - scheduledDayStart.getTime()) / DAY_MS),
+      }
+    })
+
     // This week interventions (for week bar + tech load)
     const weekInterventions = await prisma.intervention.findMany({
       where: {
@@ -107,9 +182,9 @@ export async function GET(request: NextRequest) {
       take: 20,
     })
 
-    // Calendar: -30 days to +90 days (wide range to support navigation)
-    const calendarStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0)
-    const calendarEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 90, 23, 59, 59)
+    // Calendar: -45 days to +120 days (janela larga para a navegação de 2 semanas)
+    const calendarStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 45, 0, 0, 0)
+    const calendarEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 120, 23, 59, 59)
     const calendarInterventions = await prisma.intervention.findMany({
       where: {
         status: { notIn: ['CANCELED'] },
@@ -143,7 +218,9 @@ export async function GET(request: NextRequest) {
         scheduledToday: scheduledToday.length,
         completedToday,
         needsPlanning,
+        overdue: overdue.length,
       },
+      overdue,
       todayList: withComments(todayList),
       calendarInterventions: withComments(calendarInterventions),
       unassignedOpen: withComments(unassignedOpen),

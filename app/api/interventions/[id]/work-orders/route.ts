@@ -29,7 +29,7 @@ export async function GET(
   const partRows = woIds.length > 0
     ? await prisma.$queryRaw<any[]>`
         SELECT
-          wp.id, wp."workOrderId", wp."itemId", wp.quantity, wp."serialNumberIds", wp."usedById", wp."createdAt",
+          wp.id, wp."workOrderId", wp."itemId", wp.quantity, wp."serialNumberIds", wp."usedById", wp."createdAt", wp."stockSource",
           wi."itemName", wi."partNumber", wi.value, wi."tracksSerialNumbers"
         FROM "WorkOrderPart" wp
         JOIN "WarehouseItem" wi ON wi.id = wp."itemId"

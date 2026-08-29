@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { MIN_SEARCH_CHARS } from '@/lib/search'
 
 interface TechStockItem {
   itemId: string
@@ -21,6 +22,8 @@ interface WarehouseItem {
   ean13?: string | null
   mainWarehouse: number
   noStock?: boolean
+  /** Disponível no armazém central — contado a partir dos SN reais para artigos serializados */
+  available?: number | null
 }
 
 type UnifiedItem =
@@ -218,17 +221,32 @@ export default function AddPartModal({
   }
 
   const q = search.toLowerCase().trim()
+  // Só se pesquisa a partir de MIN_SEARCH_CHARS caracteres
+  const searching = q.length >= MIN_SEARCH_CHARS
+  const tooShort = q.length > 0 && !searching
+
+  const matches = (i: { itemName: string; partNumber: string; ean13?: string | null }) =>
+    !q ||
+    i.itemName.toLowerCase().includes(q) ||
+    i.partNumber.toLowerCase().includes(q) ||
+    (i.ean13 || '').toLowerCase().includes(q)
+
+  const whAvailable = (i: WarehouseItem) => i.available ?? i.mainWarehouse
 
   const techResults: UnifiedItem[] = techStock
     .filter(s => {
       const available = s.tracksSerialNumbers ? (s.serialNumbers?.length || 0) : s.quantity
-      return available > 0 && (!q || s.itemName.toLowerCase().includes(q) || s.partNumber.toLowerCase().includes(q))
+      return available > 0 && (!searching || matches(s))
     })
     .map(s => ({ source: 'tech' as const, item: s }))
 
-  const whResults: UnifiedItem[] = warehouseItems
-    .filter(i => (i.noStock || i.mainWarehouse > 0) && (!q || i.itemName.toLowerCase().includes(q) || i.partNumber.toLowerCase().includes(q)))
-    .map(i => ({ source: 'warehouse' as const, item: i }))
+  // Sem limite de resultados: mostra todos os artigos do armazém que correspondem à pesquisa.
+  // Enquanto não houver caracteres suficientes mostra-se apenas o stock do técnico.
+  const whResults: UnifiedItem[] = searching
+    ? warehouseItems
+        .filter(i => (i.noStock || whAvailable(i) > 0) && matches(i))
+        .map(i => ({ source: 'warehouse' as const, item: i }))
+    : []
 
   const results: UnifiedItem[] = [...techResults, ...whResults]
 
@@ -387,11 +405,15 @@ export default function AddPartModal({
                 onChange={e => setSearch(e.target.value)}
               />
 
+              {tooShort && (
+                <p className="text-xs text-gray-400">Escreva pelo menos {MIN_SEARCH_CHARS} caracteres para pesquisar no armazém.</p>
+              )}
+
               {loadingStock ? (
                 <p className="text-sm text-gray-500 text-center py-4">A carregar stock...</p>
               ) : results.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-4">
-                  {q ? 'Nenhum artigo encontrado.' : 'Escreva para pesquisar.'}
+                  {searching ? 'Nenhum artigo encontrado.' : `Escreva pelo menos ${MIN_SEARCH_CHARS} caracteres para pesquisar no armazém.`}
                 </p>
               ) : (
                 <div className="space-y-1.5">
@@ -399,7 +421,7 @@ export default function AddPartModal({
                     const itemIsNoStock = r.source === 'warehouse' && (r.item as WarehouseItem).noStock
                     const available = r.source === 'tech'
                       ? r.item.tracksSerialNumbers ? r.item.serialNumbers?.length || 0 : r.item.quantity
-                      : null
+                      : whAvailable(r.item as WarehouseItem)
                     return (
                       <button
                         key={i}

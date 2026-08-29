@@ -389,6 +389,8 @@
     "useStock": "Utilizar Stock",
     "repairIn": "Enviar para Reparação",
     "repairOut": "Devolver da Reparação",
+    "inventoryAdjustment": "Ajuste de Inventário",
+    "reversal": "Estorno",
     "inRepair": "Em Reparação",
     "repairBreakdownDesc": "Descrição da Avaria *",
     "repairFixDesc": "Descrição da Reparação / Trabalho Realizado *",
